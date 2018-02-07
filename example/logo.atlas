@@ -1,0 +1,3 @@
+images {
+  image: "/example/images/logo.png"
+}
