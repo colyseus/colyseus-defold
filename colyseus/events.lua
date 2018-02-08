@@ -29,7 +29,7 @@ function EventEmitter:new(object)
   end
 
   function object:emit (event, ...)
-    for _,listener in ipairs(self:listeners(event)) do
+    for _, listener in ipairs(self:listeners(event)) do
       if "function" == type(listener) then
         listener(...)
       end
@@ -37,7 +37,6 @@ function EventEmitter:new(object)
   end
 
   return object
-
 end
 
 return {

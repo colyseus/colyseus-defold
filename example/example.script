@@ -1,6 +1,34 @@
+local ColyseusClient = require "colyseus.client"
+
+local client
+local room
+
 function init(self)
     -- Add initialization code here
     -- Remove this function if not needed
+    client = ColyseusClient.new("ws://localhost:3553")
+    client:on("open", function()
+        print("onopen emitted")
+    end)
+
+    client:on("message", function(message)
+        print("message emitted")
+    end)
+
+    client:on("error", function(err)
+        print("error emitted")
+    end)
+
+    -- join chat room
+    room = client:join("chat")
+    room:on("join", function()
+      print("joined 'chat' successfully")
+    end)
+
+    room:on("update", function(state)
+      print("new state")
+      pprint(state)
+    end)
 end
 
 function final(self)
@@ -9,6 +37,7 @@ function final(self)
 end
 
 function update(self, dt)
+   client:loop()
     -- Add update code here
     -- Remove this function if not needed
 end

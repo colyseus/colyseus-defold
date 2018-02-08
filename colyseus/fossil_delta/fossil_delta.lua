@@ -501,7 +501,7 @@ function fossil_delta.outputSize (delta)
   local z_delta = Reader.new(delta)
   local size = z_delta.get_int()
   if (z_delta.get_char() ~= '\n') then
-    -- throw new Error('size integer not terminated by \'\\n\'')
+    print('size integer not terminated by \'\\n\'')
   end
   return size
 end
@@ -515,7 +515,7 @@ function fossil_delta.apply (src, delta, opts)
 
   limit = z_delta.get_int()
   if (z_delta.get_char() ~= '\n') then
-    -- throw new Error('size integer not terminated by \'\\n\'')
+    print('size integer not terminated by \'\\n\'')
   end
 
   local z_out = Writer.new()
@@ -526,20 +526,25 @@ function fossil_delta.apply (src, delta, opts)
     local next_char = z_delta.get_char()
     if next_char == '@' then
       ofst = z_delta.get_int();
-      if (z_delta.have_bytes() and z_delta.get_char() ~= ',') then -- throw new Error('copy command not terminated by \',\'')
+      if (z_delta.have_bytes() and z_delta.get_char() ~= ',') then
+        print('copy command not terminated by \',\'')
       end
       total = total + cnt;
-      if (total > limit) then -- throw new Error('copy exceeds output file size');
+      if (total > limit) then
+        print('copy exceeds output file size')
       end
-      if (ofst+cnt > len_src) then -- throw new Error('copy extends past end of input')
+      if (ofst+cnt > len_src) then
+        print('copy extends past end of input')
       end
       z_out.put_array(src, ofst, ofst+cnt);
 
     elseif next_char == ':' then
       total = total + cnt;
-      if (total > limit) then -- throw new Error('insert command gives an output larger than predicted');
+      if (total > limit) then
+        print('insert command gives an output larger than predicted')
       end
-      if (cnt > len_delta) then -- throw new Error('insert count exceeds size of delta');
+      if (cnt > len_delta) then
+        print('insert count exceeds size of delta')
       end
       z_out.put_array(z_delta.a, z_delta.pos, z_delta.pos+cnt);
       z_delta.pos = z_delta.pos + cnt;
@@ -547,19 +552,19 @@ function fossil_delta.apply (src, delta, opts)
     elseif next_char == ';' then
       local out = z_out.to_array();
       if ((not opts or opts.verifyChecksum ~= false) and cnt ~= checksum(out)) then
-        -- throw new Error('bad checksum');
+        print('bad checksum');
       end
       if total ~= limit then
-        -- throw new Error('generated size does not match predicted size');
+        print('generated size does not match predicted size');
       end
 
       return out
 
     else
-        -- throw new Error('unknown delta operator');
+        print('unknown delta operator');
     end
   end
-  -- throw new Error('unterminated delta');
+  print('unterminated delta');
 end
 
 return fossil_delta

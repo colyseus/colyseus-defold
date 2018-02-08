@@ -104,3 +104,4 @@ function generate(mirror, obj, patches, path)
   end
 end
 
+return compare

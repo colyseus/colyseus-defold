@@ -1,4 +1,5 @@
-local compare = require('colyseus.delta_listener.compare').compare
+local compare = require('colyseus.delta_listener.compare')
+local EventEmitter = require('colyseus.events').EventEmitter
 
 DeltaContainer = {}
 DeltaContainer.__index = DeltaContainer
@@ -12,14 +13,6 @@ function DeltaContainer.new ()
   instance:init()
   return instance
 end
-
-  -- private matcherPlaceholders: {[id: string]: RegExp} = {
-  --   ":id": /^$/,
-  --   ":number": /^([0-9]+)$/,
-  --   ":string": /^(\w+)$/,
-  --   ":axis": /^([xyz])$/,
-  --   ":*": /(.*)/,
-  -- }
 
 function DeltaContainer:init ()
   self.data = data;
@@ -167,3 +160,5 @@ local function map(func, array)
   end
   return new_array
 end
+
+return DeltaContainer
