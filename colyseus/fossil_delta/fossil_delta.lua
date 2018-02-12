@@ -161,8 +161,8 @@ function Reader:get_int()
   local v = 0
   local c
 
-  while self.have_bytes() do
-     c = z_value[ bit.band(0x7f, self.get_byte()) ]
+  while self:have_bytes() do
+     c = z_value[ bit.band(0x7f, self:get_byte()) ]
 
      if c <= 0 then break end
 
@@ -249,6 +249,16 @@ local function digit_count(v)
   return i
 end
 
+local function bit_logic_rshift(n, bits)
+ if n < 0 then
+  n = bit.bnot(math.abs(n)) + 1
+ end
+ for i=1, bits do
+  n = n/2
+ end
+ return math.floor(n)
+end
+
 -- Return a 32-bit checksum of the array.
 function checksum(arr)
   local sum0 = 0
@@ -261,35 +271,35 @@ function checksum(arr)
 
   -- TODO measure if self unrolling is helpful.
   while (N >= 16) do
-    sum0 = sum0 + bit.bor(arr[z + 1], 0)
-    sum1 = sum1 + bit.bor(arr[z + 2], 0)
-    sum2 = sum2 + bit.bor(arr[z + 3], 0)
-    sum3 = sum3 + bit.bor(arr[z + 4], 0)
+    sum0 = bit.bor(sum0 + arr[z + 1], 0)
+    sum1 = bit.bor(sum1 + arr[z + 2], 0)
+    sum2 = bit.bor(sum2 + arr[z + 3], 0)
+    sum3 = bit.bor(sum3 + arr[z + 4], 0)
 
-    sum0 = sum0 + bit.bor(arr[z + 5], 0)
-    sum1 = sum1 + bit.bor(arr[z + 6], 0)
-    sum2 = sum2 + bit.bor(arr[z + 7], 0)
-    sum3 = sum3 + bit.bor(arr[z + 8], 0)
+    sum0 = bit.bor(sum0 + arr[z + 5], 0)
+    sum1 = bit.bor(sum1 + arr[z + 6], 0)
+    sum2 = bit.bor(sum2 + arr[z + 7], 0)
+    sum3 = bit.bor(sum3 + arr[z + 8], 0)
 
-    sum0 = sum0 + bit.bor(arr[z + 9], 0)
-    sum1 = sum1 + bit.bor(arr[z + 10], 0)
-    sum2 = sum2 + bit.bor(arr[z + 11], 0)
-    sum3 = sum3 + bit.bor(arr[z + 12], 0)
+    sum0 = bit.bor(sum0 + arr[z + 9], 0)
+    sum1 = bit.bor(sum1 + arr[z + 10], 0)
+    sum2 = bit.bor(sum2 + arr[z + 11], 0)
+    sum3 = bit.bor(sum3 + arr[z + 12], 0)
 
-    sum0 = sum0 + bit.bor(arr[z + 13], 0)
-    sum1 = sum1 + bit.bor(arr[z + 14], 0)
-    sum2 = sum2 + bit.bor(arr[z + 15], 0)
-    sum3 = sum3 + bit.bor(arr[z + 16], 0)
+    sum0 = bit.bor(sum0 + arr[z + 13], 0)
+    sum1 = bit.bor(sum1 + arr[z + 14], 0)
+    sum2 = bit.bor(sum2 + arr[z + 15], 0)
+    sum3 = bit.bor(sum3 + arr[z + 16], 0)
 
     z = z + 16
     N = N - 16
   end
 
   while (N >= 4) do
-    sum0 = sum0 + bit.bor(arr[z + 1], 0)
-    sum1 = sum1 + bit.bor(arr[z + 2], 0)
-    sum2 = sum2 + bit.bor(arr[z + 3], 0)
-    sum3 = sum3 + bit.bor(arr[z + 4], 0)
+    sum0 = bit.bor(sum0 + arr[z + 1], 0)
+    sum1 = bit.bor(sum1 + arr[z + 2], 0)
+    sum2 = bit.bor(sum2 + arr[z + 3], 0)
+    sum3 = bit.bor(sum3 + arr[z + 4], 0)
     z = z + 4
     N = N - 4
   end
@@ -297,18 +307,19 @@ function checksum(arr)
   sum3 = ((bit.bor(sum3 + (bit.lshift(sum2, 8)), 0) + bit.bor(bit.lshift(sum1, 16), 0)) + bit.bor(bit.lshift(sum0, 24), 0))
 
   if N >= 3 then
-    sum3 = sum3 + bit.bor(bit.lshift(arr[z + 3], 8), 0)
+    sum3 = bit.bor(sum3 + bit.lshift(arr[z + 3], 8), 0)
   end
 
   if N >= 2 then
-    sum3 = sum3 + bit.bor(bit.lshift(arr[z + 2], 16), 0)
+    sum3 = bit.bor(sum3 + bit.lshift(arr[z + 2], 16), 0)
   end
 
   if N >= 1 then
-    sum3 = sum3 + bit.bor(bit.lshift(arr[z + 1], 24), 0)
+    sum3 = bit.bor(sum3 + bit.lshift(arr[z + 1], 24), 0)
   end
 
-  return bit.rshift(sum3, 0)
+  -- return bit.rshift(sum3, 0)
+  return bit.rshift(sum3, 1) * 2
 end
 
 -- Create a new delta from src to out.

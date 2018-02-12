@@ -7,6 +7,10 @@ function read_file(file)
     return content
 end
 
+function table.clone(org)
+  return {table.unpack(org)}
+end
+
 local function make_array_from_str(str)
   local arr = {}
   local i = 0
@@ -19,9 +23,17 @@ local function make_array_from_str(str)
   return arr
 end
 
-local origin = make_array_from_str( read_file("test/data/1/origin") )
-local target = make_array_from_str( read_file("test/data/1/target") )
-local delta  = make_array_from_str( read_file("test/data/1/delta") )
+local origin = {}
+local target = {}
+local delta = {}
+
+local i = 1
+while i <= 5 do
+  origin[i] = make_array_from_str( read_file("test/data/" .. i .. "/origin") )
+  target[i] = make_array_from_str( read_file("test/data/" .. i .. "/target") )
+  delta[i] = make_array_from_str( read_file("test/data/" .. i .. "/delta") )
+  i = i + 1
+end
 
 local function to_string(arr)
   local str = ""
@@ -39,25 +51,14 @@ describe("colyseus", function()
     end)
 
     it("should create delta", function()
-      local delta_created = fossil_delta.create(origin, target)
+      assert.are.same(fossil_delta.create(origin[1], target[1]), delta[1])
+      assert.are.same(fossil_delta.create(origin[2], target[2]), delta[2])
+      assert.are.same(fossil_delta.create(origin[3], target[3]), delta[3])
+    end)
 
-      print("delta: " .. to_string(delta))
-      print("delta created: " .. to_string(delta_created))
-      -- assert.are.same(delta_created, delta)
-
-      -- -- deep check comparisons!
-      -- assert.are.same({ table = "great"}, { table = "great" })
-      --
-      -- -- or check by reference!
-      -- assert.are_not.equal({ table = "great"}, { table = "great"})
-      --
-      -- assert.truthy("this is a string") -- truthy: not false or nil
-      --
-      -- assert.True(1 == 1)
-      -- assert.is_true(1 == 1)
-      --
-      -- assert.falsy(nil)
-      -- assert.has_error(function() error("Wat") end, "Wat")
+    it("should apply delta", function()
+      local origin1 = table.clone(origin[1])
+      assert.are.same(fossil_delta.apply(origin1, delta[1]), target[1])
     end)
 
     it("should provide some shortcuts to common functions", function()
