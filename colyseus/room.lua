@@ -26,6 +26,8 @@ function Room:connect (connection)
   self.connection = connection
 
   self.connection:on("message", function(message)
+    print("room message:")
+    pprint(message)
     self:on_message(message)
   end)
 
@@ -56,13 +58,18 @@ function Room:on_message (message)
 
   elseif (code == protocol.ROOM_STATE) then
     local state = message[3]
-    local remoteCurrentTime = message[4]
-    local remoteElapsedTime = message[5]
+    -- local remoteCurrentTime = message[4]
+    -- local remoteElapsedTime = message[5]
 
-    self:setState( state, remoteCurrentTime, remoteElapsedTime )
+    print("ROOM_STATE")
+    pprint(message[3])
+
+    -- self:setState( state, remoteCurrentTime, remoteElapsedTime )
 
   elseif (code == protocol.ROOM_STATE_PATCH) then
-    self:patch(message[3])
+    print("ROOM_STATE_PATCH")
+    pprint(message[3])
+    -- self:patch(message[3])
 
   elseif (code == protocol.ROOM_DATA) then
     self:emit("data", message[3])

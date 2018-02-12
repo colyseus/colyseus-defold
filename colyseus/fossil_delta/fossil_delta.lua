@@ -48,10 +48,12 @@
 -- as representing official policies, either expressed or implied, of anybody
 -- else.
 
+local bit = bit or require("bit")
+
 local fossil_delta = {}
 
 -- Hash window width in bytes. Must be a power of two.
-local NHASH = 16;
+local NHASH = 16
 
 RollingHash = {}
 RollingHash.__index = RollingHash
@@ -64,7 +66,6 @@ function RollingHash.new ()
     z = {} -- the values that have been hashed
   }
   setmetatable(instance, RollingHash)
-  -- instance:init(endpoint)
   return instance
 end
 
@@ -73,26 +74,28 @@ end
 function RollingHash:init (z, pos)
   local a = 0
   local b = 0
-  local i
-  local x;
+  local i = 0
+  local x
 
   -- for(i = 0; i < NHASH; i++){
-  for i = 1, NHASH do
-    x = z[pos+i]
+  while i < NHASH do
+    x = z[pos + i + 1]
     a = bit.band(a + x, 0xffff)
     b = bit.band(b + (NHASH - i) * x, 0xffff)
     self.z[i] = x
+
+    i = i + 1
   end
 
   self.a = bit.band(a, 0xffff)
   self.b = bit.band(b, 0xffff)
-  self.i = 0;
+  self.i = 0
 end
 
 -- Advance the rolling hash by a single byte "c".
 function RollingHash:next (c)
-  local old = self.z[self.i];
-  self.z[self.i] = c;
+  local old = self.z[self.i]
+  self.z[self.i] = c
   self.i = bit.band(self.i+1, NHASH-1)
   self.a = bit.band(self.a - old + c, 0xffff)
   self.b = bit.band(self.b - NHASH*old + self.a, 0xffff)
@@ -100,19 +103,19 @@ end
 
 -- Return a 32-bit hash value.
 function RollingHash:value()
-  return bit.rshift(bit.lshift(bit.bor(bit.band(self.a, 0xffff), bit.band(self.b, 0xffff)), 16), 0);
+  return bit.rshift(bit.bor(bit.band(self.a, 0xffff), bit.lshift(bit.band(self.b, 0xffff), 16)), 0)
 end
 
 -- "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~"
 local z_digits = {
-  48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 71, 72, 73,
+  [0] = 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 71, 72, 73,
   74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 95, 97, 98,
   99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114,
   115, 116, 117, 118, 119, 120, 121, 122, 126
 }
 
-local zValue = {
-  -1, -1, -1, -1, -1, -1, -1, -1,   -1, -1, -1, -1, -1, -1, -1, -1,
+local z_value = {
+  [0] = -1, -1, -1, -1, -1, -1, -1, -1,   -1, -1, -1, -1, -1, -1, -1, -1,
   -1, -1, -1, -1, -1, -1, -1, -1,   -1, -1, -1, -1, -1, -1, -1, -1,
   -1, -1, -1, -1, -1, -1, -1, -1,   -1, -1, -1, -1, -1, -1, -1, -1,
    0,  1,  2,  3,  4,  5,  6,  7,    8,  9, -1, -1, -1, -1, -1, -1,
@@ -120,7 +123,7 @@ local zValue = {
   25, 26, 27, 28, 29, 30, 31, 32,   33, 34, 35, -1, -1, -1, -1, 36,
   -1, 37, 38, 39, 40, 41, 42, 43,   44, 45, 46, 47, 48, 49, 50, 51,
   52, 53, 54, 55, 56, 57, 58, 59,   60, 61, 62, -1, -1, -1, 63, -1
-};
+}
 
 -- Reader reads bytes, chars, ints from array.
 Reader = {}
@@ -135,22 +138,22 @@ function Reader.new (array)
 end
 
 function Reader:have_bytes ()
-  return self.pos < table.getn(self.a)
+  return self.pos < #self.a
 end
 
-function Reader:getByte ()
+function Reader:get_byte ()
   local b = self.a[self.pos]
   self.pos = self.pos + 1
 
-  if (self.pos > table.getn(self.a)) then
-    -- throw new RangeError('out of bounds');
+  if (self.pos > #self.a) then
+    -- throw new RangeError('out of bounds')
   end
 
   return b
 end
 
 function Reader:get_char()
-  return string.char(self.getByte())
+  return string.char(self.get_byte())
 end
 
 -- Read base64-encoded unsigned integer.
@@ -159,11 +162,11 @@ function Reader:get_int()
   local c
 
   while self.have_bytes() do
-     c = zValue[ bit.band(0x7f, self.getByte()) ]
+     c = z_value[ bit.band(0x7f, self.get_byte()) ]
 
-     if not c >= 0 then break end
+     if c <= 0 then break end
 
-     v = bit.lshift(v, 6) + c;
+     v = bit.lshift(v, 6) + c
   end
 
   self.pos = self.pos - 1
@@ -188,12 +191,12 @@ function Writer:to_array()
 end
 
 function Writer:put_byte(b)
-  self.a.push(bit.band(b, 0xff))
+  table.insert(self.a, bit.band(b, 0xff))
 end
 
 -- Write an ASCII character (s is a one-char string).
 function Writer:put_char(s)
-  self.put_byte(string.char(s, 0));
+  self:put_byte(string.byte(s, 1))
 end
 
 -- Write a base64 unsigned integer.
@@ -203,30 +206,29 @@ function Writer:put_int(v)
   local z_buf = {}
 
   if (v == 0) then
-    self.put_char('0');
-    return;
+    self:put_char('0')
+    return
   end
 
   i = 0
   -- for (i = 0; v > 0; i++, v >>>= 6)
   while v > 0 do
+    z_buf[i] = z_digits[bit.band(v, 0x3f)]
     i = i + 1
     v = bit.rshift(v, 6)
-    table.insert(z_buf, z_digits[bit.band(v, 0x3f)])
   end
 
   -- for (j = i-1; j >= 0; j--)
-  --   self.put_byte(z_buf[j]);
+  --   self:put_byte(z_buf[j]);
   j = i-1
-  while j >=0 do
-    self.put_byte(z_buf[j]);
+  while j >= 0 do
+    self:put_byte(z_buf[j])
     j = j - 1
   end
 end
 
 -- Copy from array at start to end.
 function Writer:put_array(a, start, _end)
-  -- for (var i = start; i < _end; i++) self.a.push(a[i]);
   local i = start
   while i < _end do
     table.insert(self.a, a[i])
@@ -254,55 +256,56 @@ function checksum(arr)
   local sum2 = 0
   local sum3 = 0
   local z = 0
-  local N = table.getn(arr)
+
+  local N = #arr
 
   -- TODO measure if self unrolling is helpful.
   while (N >= 16) do
-    sum0 = sum0 + bit.bor(arr[z+0], 0)
-    sum1 = sum1 + bit.bor(arr[z+1], 0)
-    sum2 = sum2 + bit.bor(arr[z+2], 0)
-    sum3 = sum3 + bit.bor(arr[z+3], 0)
+    sum0 = sum0 + bit.bor(arr[z + 1], 0)
+    sum1 = sum1 + bit.bor(arr[z + 2], 0)
+    sum2 = sum2 + bit.bor(arr[z + 3], 0)
+    sum3 = sum3 + bit.bor(arr[z + 4], 0)
 
-    sum0 = sum0 + bit.bor(arr[z+4], 0)
-    sum1 = sum1 + bit.bor(arr[z+5], 0)
-    sum2 = sum2 + bit.bor(arr[z+6], 0)
-    sum3 = sum3 + bit.bor(arr[z+7], 0)
+    sum0 = sum0 + bit.bor(arr[z + 5], 0)
+    sum1 = sum1 + bit.bor(arr[z + 6], 0)
+    sum2 = sum2 + bit.bor(arr[z + 7], 0)
+    sum3 = sum3 + bit.bor(arr[z + 8], 0)
 
-    sum0 = sum0 + bit.bor(arr[z+8], 0)
-    sum1 = sum1 + bit.bor(arr[z+9], 0)
-    sum2 = sum2 + bit.bor(arr[z+10], 0)
-    sum3 = sum3 + bit.bor(arr[z+11], 0)
+    sum0 = sum0 + bit.bor(arr[z + 9], 0)
+    sum1 = sum1 + bit.bor(arr[z + 10], 0)
+    sum2 = sum2 + bit.bor(arr[z + 11], 0)
+    sum3 = sum3 + bit.bor(arr[z + 12], 0)
 
-    sum0 = sum0 + bit.bor(arr[z+12], 0)
-    sum1 = sum1 + bit.bor(arr[z+13], 0)
-    sum2 = sum2 + bit.bor(arr[z+14], 0)
-    sum3 = sum3 + bit.bor(arr[z+15], 0)
+    sum0 = sum0 + bit.bor(arr[z + 13], 0)
+    sum1 = sum1 + bit.bor(arr[z + 14], 0)
+    sum2 = sum2 + bit.bor(arr[z + 15], 0)
+    sum3 = sum3 + bit.bor(arr[z + 16], 0)
 
-    z = z + 16;
-    N = N - 16;
+    z = z + 16
+    N = N - 16
   end
 
   while (N >= 4) do
-    sum0 = sum0 + bit.bor(arr[z+0], 0)
-    sum1 = sum1 + bit.bor(arr[z+1], 0)
-    sum2 = sum2 + bit.bor(arr[z+2], 0)
-    sum3 = sum3 + bit.bor(arr[z+3], 0)
-    z = z + 4;
-    N = N - 4;
+    sum0 = sum0 + bit.bor(arr[z + 1], 0)
+    sum1 = sum1 + bit.bor(arr[z + 2], 0)
+    sum2 = sum2 + bit.bor(arr[z + 3], 0)
+    sum3 = sum3 + bit.bor(arr[z + 4], 0)
+    z = z + 4
+    N = N - 4
   end
 
-  sum3 = ((bit.bor(sum3 + (bit.lshift(sum2, 8)), 0) + bit.bor(bit.lshift(sum1, 16), 0)) + bit.bor(bit.lshift(sum0, 24), 0));
+  sum3 = ((bit.bor(sum3 + (bit.lshift(sum2, 8)), 0) + bit.bor(bit.lshift(sum1, 16), 0)) + bit.bor(bit.lshift(sum0, 24), 0))
 
-  if N == 3 then
-    sum3 = sum3 + bit.bor(bit.lshift(arr[z+2], 8), 0)
+  if N >= 3 then
+    sum3 = sum3 + bit.bor(bit.lshift(arr[z + 3], 8), 0)
   end
 
-  if N == 2 then
-    sum3 = sum3 + bit.bor(bit.lshift(arr[z+1], 16), 0)
+  if N >= 2 then
+    sum3 = sum3 + bit.bor(bit.lshift(arr[z + 2], 16), 0)
   end
 
-  if N == 1 then
-    sum3 = sum3 + bit.bor(bit.lshift(arr[z+0], 24), 0)
+  if N >= 1 then
+    sum3 = sum3 + bit.bor(bit.lshift(arr[z + 1], 24), 0)
   end
 
   return bit.rshift(sum3, 0)
@@ -311,54 +314,56 @@ end
 -- Create a new delta from src to out.
 fossil_delta.create = function(src, out)
   local z_delta = Writer.new()
-  local len_out = table.getn(out)
-  local len_src = table.getn(src)
+  local len_out = #out
+  local len_src = #src
   local i
   local last_read = -1
 
-  z_delta.put_int(len_out);
-  z_delta.put_char('\n');
+  z_delta:put_int(len_out)
+  z_delta:put_char('\n')
 
   -- If the source is very small, it means that we have no
   -- chance of ever doing a copy command.  Just output a single
   -- literal segment for the entire target and exit.
   if (len_src <= NHASH) then
-    z_delta.put_int(len_out)
-    z_delta.put_char(':')
-    z_delta.put_array(out, 0, len_out)
-    z_delta.put_int(checksum(out))
-    z_delta.put_char(';')
-    return z_delta.to_array()
+    z_delta:put_int(len_out)
+    z_delta:put_char(':')
+    z_delta:put_array(out, 1, len_out + 1)
+    z_delta:put_int(checksum(out))
+    z_delta:put_char(';')
+    return z_delta:to_array()
   end
 
   -- Compute the hash table used to locate matching sections in the source.
   local n_hash = math.ceil(len_src / NHASH)
-  local collide =  new Array(n_hash)
-  local landmark = new Array(n_hash)
+  local collide = {}
+  local landmark = {}
 
   i = 0
   while i < n_hash do
-    i = i + 1
     collide[i] = -1
+    i = i + 1
   end
 
   i = 0
   while i < n_hash do
-    i = i + 1
     landmark[i] = -1
+    i = i + 1
   end
 
-  local hv, h = RollingHash.new()
+  local hv
+  local h = RollingHash.new()
+
   i = 0
   while i < len_src - NHASH do
-    i = i + NHASH
-    h.init(src, i)
-    hv = h.value() % n_hash
+    h:init(src, i)
+    hv = h:value() % n_hash
     collide[i/NHASH] = landmark[hv]
     landmark[hv] = i / NHASH
+    i = i + NHASH
   end
 
-  local base = 0;
+  local base = 0
   local i_src
   local i_block
   local best_cnt
@@ -368,17 +373,18 @@ fossil_delta.create = function(src, out)
   while base + NHASH < len_out do
     best_offset=0
     best_litsz=0
-    h.init(out, base)
+    h:init(out, base)
     i = 0 -- Trying to match a landmark against z_out[base+i]
     best_cnt = 0
 
     while true do
-      local limit = 250;
-      hv = h.value() % n_hash;
-      i_block = landmark[hv];
+      local limit = 250
+      hv = h:value() % n_hash
+
+      i_block = landmark[hv]
       while i_block >= 0 do
         limit = limit - 1
-        if not limit > 0 then break end
+        if limit <= 0 then break end
 
         --
         -- The hash window has identified a potential match against
@@ -401,14 +407,15 @@ fossil_delta.create = function(src, out)
 
         -- Beginning at i_src, match forwards as far as we can.
         -- j counts the number of characters that match.
-        i_src = i_block * NHASH;
-        -- for (j = 0, x = i_src, y = base+i; x < len_src && y < len_out; j++, x++, y++) {
+        i_src = i_block * NHASH
 
         j = 0
         x = i_src
         y = base+i
+        -- for (j = 0, x = i_src, y = base+i; x < len_src && y < len_out; j++, x++, y++) {
         while x < len_src and y < len_out do
-          if src[x] ~= out[y] then break end
+          -- if src[x] ~= out[y] then break end
+          if src[x+1] ~= out[y+1] then break end
           j = j + 1
           x = x + 1
           y = y + 1
@@ -419,7 +426,8 @@ fossil_delta.create = function(src, out)
         -- k counts the number of characters that match.
         k = 1
         while k < i_src and k <= i do
-          if (src[i_src-k] ~= out[base+i-k]) then break end
+          -- if (src[i_src-k] ~= out[base+i-k]) then break end
+          if (src[i_src-k + 1] ~= out[base+i-k + 1]) then break end
           k = k + 1
         end
         k = k - 1
@@ -448,16 +456,16 @@ fossil_delta.create = function(src, out)
       if best_cnt > 0 then
         if best_litsz > 0 then
           -- Add an insert command before the copy.
-          z_delta.put_int(best_litsz)
-          z_delta.put_char(':')
-          z_delta.put_array(out, base, base+best_litsz)
+          z_delta:put_int(best_litsz)
+          z_delta:put_char(':')
+          z_delta:put_array(out, base + 1, base+best_litsz+1)
           base = base + best_litsz
         end
         base = base + best_cnt
-        z_delta.put_int(best_cnt)
-        z_delta.put_char('@')
-        z_delta.put_int(best_offset)
-        z_delta.put_char(',')
+        z_delta:put_int(best_cnt)
+        z_delta:put_char('@')
+        z_delta:put_int(best_offset)
+        z_delta:put_char(',')
         if best_offset + best_cnt -1 > last_read then
           last_read = best_offset + best_cnt - 1
         end
@@ -469,38 +477,39 @@ fossil_delta.create = function(src, out)
       if base+i+NHASH >= len_out then
         -- We have reached the end and have not found any
         -- matches.  Do an "insert" for everything that does not match
-        z_delta.put_int(len_out-base)
-        z_delta.put_char(':')
-        z_delta.put_array(out, base, base+len_out-base)
+        z_delta:put_int(len_out-base)
+        z_delta:put_char(':')
+        z_delta:put_array(out, base+1, base+len_out-base+1)
         base = len_out
         break
       end
 
       -- Advance the hash by one character. Keep looking for a match.
-      h.next(out[base+i+NHASH])
-      i = i + 1;
+      h:next(out[base+i+NHASH+1])
+
+      i = i + 1
     end
   end
 
   -- Output a final "insert" record to get all the text at the end of
   -- the file that does not match anything in the source.
   if base < len_out then
-    z_delta.put_int(len_out - base)
-    z_delta.put_char(':')
-    z_delta.put_array(out, base, base+len_out-base)
+    z_delta:put_int(len_out - base)
+    z_delta:put_char(':')
+    z_delta:put_array(out, base+1, base+len_out-base+1)
   end
 
   -- Output the final checksum record.
-  z_delta.put_int(checksum(out))
-  z_delta.put_char(';')
-  return z_delta.to_array()
+  z_delta:put_int(checksum(out))
+  z_delta:put_char(';')
+  return z_delta:to_array()
 end
 
 -- Return the size (in bytes) of the output from applying a delta.
-function fossil_delta.outputSize (delta)
+function fossil_delta.output_size (delta)
   local z_delta = Reader.new(delta)
-  local size = z_delta.get_int()
-  if (z_delta.get_char() ~= '\n') then
+  local size = z_delta:get_int()
+  if (z_delta:get_char() ~= '\n') then
     print('size integer not terminated by \'\\n\'')
   end
   return size
@@ -510,61 +519,61 @@ end
 function fossil_delta.apply (src, delta, opts)
   local limit, total = 0
   local z_delta = Reader.new(delta)
-  local len_src = table.getn(src)
-  local len_delta = table.getn(delta)
+  local len_src = #src
+  local len_delta = #delta
 
-  limit = z_delta.get_int()
-  if (z_delta.get_char() ~= '\n') then
+  limit = z_delta:get_int()
+  if (z_delta:get_char() ~= '\n') then
     print('size integer not terminated by \'\\n\'')
   end
 
   local z_out = Writer.new()
-  while z_delta.have_bytes() do
+  while z_delta:have_bytes() do
     local cnt, ofst
-    cnt = z_delta.get_int()
+    cnt = z_delta:get_int()
 
-    local next_char = z_delta.get_char()
+    local next_char = z_delta:get_char()
     if next_char == '@' then
-      ofst = z_delta.get_int();
-      if (z_delta.have_bytes() and z_delta.get_char() ~= ',') then
+      ofst = z_delta:get_int()
+      if (z_delta:have_bytes() and z_delta:get_char() ~= ',') then
         print('copy command not terminated by \',\'')
       end
-      total = total + cnt;
+      total = total + cnt
       if (total > limit) then
         print('copy exceeds output file size')
       end
       if (ofst+cnt > len_src) then
         print('copy extends past end of input')
       end
-      z_out.put_array(src, ofst, ofst+cnt);
+      z_out:put_array(src, ofst+1, ofst+cnt+1)
 
     elseif next_char == ':' then
-      total = total + cnt;
+      total = total + cnt
       if (total > limit) then
         print('insert command gives an output larger than predicted')
       end
       if (cnt > len_delta) then
         print('insert count exceeds size of delta')
       end
-      z_out.put_array(z_delta.a, z_delta.pos, z_delta.pos+cnt);
-      z_delta.pos = z_delta.pos + cnt;
+      z_out:put_array(z_delta.a, z_delta.pos+1, z_delta.pos+cnt+1)
+      z_delta.pos = z_delta.pos + cnt
 
     elseif next_char == ';' then
-      local out = z_out.to_array();
-      if ((not opts or opts.verifyChecksum ~= false) and cnt ~= checksum(out)) then
-        print('bad checksum');
+      local out = z_out.to_array()
+      if ((not opts or opts.verify_checksum ~= false) and cnt ~= checksum(out)) then
+        print('bad checksum')
       end
       if total ~= limit then
-        print('generated size does not match predicted size');
+        print('generated size does not match predicted size')
       end
 
       return out
 
     else
-        print('unknown delta operator');
+        print('unknown delta operator')
     end
   end
-  print('unterminated delta');
+  print('unterminated delta')
 end
 
 return fossil_delta

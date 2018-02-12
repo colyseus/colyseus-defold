@@ -1,9 +1,3 @@
-function compare(tree1, tree2)
-  local patches = {}
-  generate(tree1, tree2, patches, {})
-  return patches;
-end
-
 local function concat(arr, value)
   local newArr = { table.unpack(arr) } -- copy array
   table.insert(newArr, value)
@@ -41,10 +35,10 @@ local function table_keys (obj)
 end
 
 -- Dirty check if obj is different from mirror, generate patches and update mirror
-function generate(mirror, obj, patches, path)
+local function generate(mirror, obj, patches, path)
   local newKeys = table_keys(obj)
   local oldKeys = table_keys(mirror)
-  local changed = false
+  -- local changed = false
   local deleted = false
 
   -- for (local t = oldKeys.length - 1; t >= 0; t--) {
@@ -60,7 +54,7 @@ function generate(mirror, obj, patches, path)
 
           else
               if oldVal ~= newVal then
-                  changed = true
+                  -- changed = true
 
                   patches.push({
                     operation = "replace",
@@ -102,6 +96,12 @@ function generate(mirror, obj, patches, path)
       })
     end
   end
+end
+
+local function compare(tree1, tree2)
+  local patches = {}
+  generate(tree1, tree2, patches, {})
+  return patches;
 end
 
 return compare

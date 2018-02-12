@@ -8,14 +8,14 @@ local msgpack = require('colyseus.messagepack.MessagePack')
 -- Utility functions
 --
 local colyseus_id_file = sys.get_save_file("colyseus", "colyseusid")
-function get_colyseus_id ()
+local function get_colyseus_id ()
   local data = sys.load(colyseus_id_file)
   -- if not next(my_table) then
   -- end
   return data[1] or ""
 end
 
-function set_colyseus_id(colyseus_id)
+local function set_colyseus_id(colyseus_id)
   local data = {}
   table.insert(data, colyseus_id)
   if not sys.save(colyseus_id_file, data) then
@@ -23,23 +23,23 @@ function set_colyseus_id(colyseus_id)
   end
 end
 
-Client = {}
-Client.__index = Client
+local client = { VERSION = "0.8.0" }
+client.__index = client
 
-function Client.new (endpoint)
+function client.new (endpoint)
   local instance = EventEmitter:new({
-    id = nil ,
+    id = get_colyseus_id(),
     roomStates = {}, -- object
     rooms = {}, -- object
     connectingRooms = {}, -- object
     joinRequestId = 0, -- number
   })
-  setmetatable(instance, Client)
+  setmetatable(instance, client)
   instance:init(endpoint)
   return instance
 end
 
-function Client:init(endpoint)
+function client:init(endpoint)
   self.hostname = endpoint
   self.connection = Connection.new(self.hostname .. "/?colyseusid=" .. get_colyseus_id())
 
@@ -56,7 +56,7 @@ function Client:init(endpoint)
   end)
 end
 
-function Client:loop()
+function client:loop()
   self.connection:loop()
 
   for k, room in pairs(self.rooms) do
@@ -64,19 +64,15 @@ function Client:loop()
   end
 end
 
-function Client:close()
+function client:close()
   self.connection:close()
 end
 
-function Client:join(...)
+function client:join(...)
   local args = {...}
 
   local roomName = args[1]
   local options = args[2] or {}
-
-  -- if not options then
-  --   options = {}
-  -- end
 
   self.joinRequestId = self.joinRequestId + 1
   options.requestId = self.joinRequestId;
@@ -93,10 +89,10 @@ function Client:join(...)
 
   self.connection:send({ protocol.JOIN_ROOM, roomName, options });
 
-  return self.connectingRooms[options.requestId]
+  return room
 end
 
-function Client:on_message(msg)
+function client:on_message(msg)
   local message = msgpack.unpack( msg )
 
   if type(message[1]) == "number" then
@@ -134,4 +130,4 @@ function Client:on_message(msg)
   end
 end
 
-return Client
+return client
