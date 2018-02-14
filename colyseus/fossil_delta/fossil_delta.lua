@@ -142,18 +142,18 @@ function Reader:have_bytes ()
 end
 
 function Reader:get_byte ()
-  local b = self.a[self.pos]
+  local b = self.a[self.pos + 1]
   self.pos = self.pos + 1
 
-  if (self.pos > #self.a) then
-    -- throw new RangeError('out of bounds')
+  if self.pos > #self.a then
+    error('out of bounds')
   end
 
   return b
 end
 
 function Reader:get_char()
-  return string.char(self.get_byte())
+  return string.char(self:get_byte())
 end
 
 -- Read base64-encoded unsigned integer.
@@ -163,15 +163,21 @@ function Reader:get_int()
 
   while self:have_bytes() do
      c = z_value[ bit.band(0x7f, self:get_byte()) ]
-
-     if c <= 0 then break end
-
+     if c < 0 then break end
      v = bit.lshift(v, 6) + c
   end
 
   self.pos = self.pos - 1
 
-  return bit.rshift(v, 0)
+  local v = bit.rshift(v, 0)
+
+  -- TODO: this check shoulnd't be necessary.
+  -- return v >>> 0
+  if v < 0 then
+    return bit.rshift(v, 1) * 2
+  else
+    return v
+  end
 end
 
 
@@ -247,16 +253,6 @@ local function digit_count(v)
   end
 
   return i
-end
-
-local function bit_logic_rshift(n, bits)
- if n < 0 then
-  n = bit.bnot(math.abs(n)) + 1
- end
- for i=1, bits do
-  n = n/2
- end
- return math.floor(n)
 end
 
 -- Return a 32-bit checksum of the array.
@@ -521,21 +517,22 @@ function fossil_delta.output_size (delta)
   local z_delta = Reader.new(delta)
   local size = z_delta:get_int()
   if (z_delta:get_char() ~= '\n') then
-    print('size integer not terminated by \'\\n\'')
+    error('size integer not terminated by \'\\n\'')
   end
   return size
 end
 
 -- Apply a delta.
 function fossil_delta.apply (src, delta, opts)
-  local limit, total = 0
+  local limit
+  local total = 0
   local z_delta = Reader.new(delta)
   local len_src = #src
   local len_delta = #delta
 
   limit = z_delta:get_int()
   if (z_delta:get_char() ~= '\n') then
-    print('size integer not terminated by \'\\n\'')
+    error('size integer not terminated by \'\\n\'')
   end
 
   local z_out = Writer.new()
@@ -547,44 +544,45 @@ function fossil_delta.apply (src, delta, opts)
     if next_char == '@' then
       ofst = z_delta:get_int()
       if (z_delta:have_bytes() and z_delta:get_char() ~= ',') then
-        print('copy command not terminated by \',\'')
+        error('copy command not terminated by \',\'')
       end
       total = total + cnt
+
       if (total > limit) then
-        print('copy exceeds output file size')
+        error('copy exceeds output file size')
       end
       if (ofst+cnt > len_src) then
-        print('copy extends past end of input')
+        error('copy extends past end of input')
       end
       z_out:put_array(src, ofst+1, ofst+cnt+1)
 
     elseif next_char == ':' then
       total = total + cnt
       if (total > limit) then
-        print('insert command gives an output larger than predicted')
+        error('insert command gives an output larger than predicted')
       end
       if (cnt > len_delta) then
-        print('insert count exceeds size of delta')
+        error('insert count exceeds size of delta')
       end
       z_out:put_array(z_delta.a, z_delta.pos+1, z_delta.pos+cnt+1)
       z_delta.pos = z_delta.pos + cnt
 
     elseif next_char == ';' then
-      local out = z_out.to_array()
+      local out = z_out:to_array()
       if ((not opts or opts.verify_checksum ~= false) and cnt ~= checksum(out)) then
-        print('bad checksum')
+        error('bad checksum')
       end
       if total ~= limit then
-        print('generated size does not match predicted size')
+        error('generated size does not match predicted size')
       end
 
       return out
 
     else
-        print('unknown delta operator')
+        error('unknown delta operator')
     end
   end
-  print('unterminated delta')
+  error('unterminated delta')
 end
 
 return fossil_delta
