@@ -15,86 +15,80 @@ end
 
 local function table_keys (obj)
   local keys = {}
-  local length = 0
 
-  if (is_array(obj)) then
-    for k, v in pairs(obj) do
-      table.insert(keys, tostring(k-1))
-      length = length + 1
-    end
-
-  else
-    for k, v in pairs(obj) do
-      table.insert(keys, k)
-      length = length + 1
-    end
+  for k, v in pairs(obj) do
+    table.insert(keys, k)
   end
 
-  keys["length"] = length
   return keys
 end
 
 -- Dirty check if obj is different from mirror, generate patches and update mirror
 local function generate(mirror, obj, patches, path)
-  local newKeys = table_keys(obj)
-  local oldKeys = table_keys(mirror)
-  -- local changed = false
+  local new_keys = table_keys(obj)
+  local old_keys = table_keys(mirror)
+  local changed = false
   local deleted = false
 
-  -- for (local t = oldKeys.length - 1; t >= 0; t--) {
-  for t = oldKeys["length"], 1, -1 do
-      local key = oldKeys[t]
-      local oldVal = mirror[key]
+  -- for (local t = old_keys.length - 1; t >= 0; t--) {
+  local t = #old_keys - 1
+  while t >= 0 do
+    local key = old_keys[t + 1]
+    local old_val = mirror[key]
 
-      if obj[key] ~= nil and not (obj[key] == nil and oldVal ~= nil and not is_array(obj)) then
-          local newVal = obj[key]
+    if obj[key] ~= nil and not (obj[key] == nil and old_val ~= nil and not is_array(obj)) then
+        local new_val = obj[key]
 
-          if type(oldVal) == "table" and oldVal ~= nil and type(newVal) == "table" and newVal ~= nil then
-              generate(oldVal, newVal, patches, concat(path, key));
+        if type(old_val) == "table" and old_val ~= nil and type(new_val) == "table" and new_val ~= nil then
+          generate(old_val, new_val, patches, concat(path, key))
 
-          else
-              if oldVal ~= newVal then
-                  -- changed = true
+        elseif old_val ~= new_val then
+          changed = true
 
-                  patches.push({
-                    operation = "replace",
-                    path = concat(path, key),
-                    value = newVal
-                  })
-              end
-          end
-      else
-          patches.push({
-            operation = "remove",
-            path = concat(path, key)
+          table.insert(patches, {
+            operation = "replace",
+            path = concat(path, key),
+            value = new_val
           })
-          deleted = true -- property has been deleted
-      end
+        end
+
+    else
+      table.insert(patches, {
+        operation = "remove",
+        path = concat(path, key)
+      })
+      deleted = true -- property has been deleted
+    end
+
+    t = t - 1
   end
 
-  if not deleted and newKeys["length"] == oldKeys["length"] then
+  if not deleted and #new_keys == #old_keys then
       return
   end
 
-  -- for (local t = 0; t < newKeys.length; t++) {
-  for t = 1, newKeys["length"] do
-    local key = newKeys[t]
+  -- for (local t = 0; t < new_keys.length; t++) {
+  t = 1
+  while t <= #new_keys do
+    local key = new_keys[t]
 
     if mirror[key] == nil and obj[key] ~= nil then
-      local newVal = obj[key]
-      local addPath = concat(path, key)
+      local new_val = obj[key]
+      local add_path = concat(path, key)
 
       -- compare deeper additions
-      if type(newVal) == "table" and newVal ~= nil then
-          generate({}, newVal, patches, addPath)
+      if type(new_val) == "table" and new_val ~= nil then
+          generate({}, new_val, patches, add_path)
       end
 
-      patches.push({
+      table.insert(patches, {
         operation = "add",
-        path = addPath,
-        value = newVal
+        path = add_path,
+        value = new_val
       })
     end
+
+    t = t + 1
   end
 end
 

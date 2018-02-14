@@ -1,21 +1,41 @@
 local compare = require('colyseus.delta_listener.compare')
 local EventEmitter = require('colyseus.events').EventEmitter
 
+local function split(str, delimiter)
+  local result = { }
+  local from  = 1
+  local delim_from, delim_to = string.find( str, delimiter, from  )
+  while delim_from do
+    table.insert( result, string.sub( str, from , delim_from-1 ) )
+    from  = delim_to + 1
+    delim_from, delim_to = string.find( str, delimiter, from  )
+  end
+  table.insert( result, string.sub( str, from  ) )
+  return result
+end
+
+local function map(array, func)
+  local new_array = {}
+  for i, v in ipairs(array) do
+    new_array[i] = func(v)
+  end
+  return new_array
+end
+
 DeltaContainer = {}
 DeltaContainer.__index = DeltaContainer
 
-function DeltaContainer.new ()
+function DeltaContainer.new (data)
   local instance = EventEmitter:new({
-    data = {},
     defaultListener = nil,
   })
   setmetatable(instance, DeltaContainer)
-  instance:init()
+  instance:init(data)
   return instance
 end
 
-function DeltaContainer:init ()
-  self.data = data;
+function DeltaContainer:init (data)
+  self.data = data or {}
 
   self.matcherPlaceholders = {}
   self.matcherPlaceholders[":id"] = "^([%a%d-_]+)$"
@@ -27,10 +47,10 @@ function DeltaContainer:init ()
   self:reset()
 end
 
-function DeltaContainer:set (newData)
-  local patches = compare(self.data, newData);
-  self.check_patches(patches)
-  self.data = newData
+function DeltaContainer:set (new_data)
+  local patches = compare(self.data, new_data)
+  self:check_patches(patches)
+  self.data = new_data
   return patches
 end
 
@@ -49,10 +69,6 @@ function DeltaContainer:listen (segments, callback)
     rules = split(segments, "/")
   end
 
-  if table.getn(callback) > 1 then
-    console.warn(".listen() accepts only one parameter.");
-  end
-
   local listener = {
     callback = callback,
     rawRules = rules,
@@ -66,13 +82,13 @@ function DeltaContainer:listen (segments, callback)
         return segment
       end
     end)
-  };
+  }
 
-  if (table.getn(rules) == 0) then
+  if (#rules == 0) then
     self.defaultListener = listener
 
   else
-    table.push(self.listeners, listener)
+    table.insert(self.listeners, listener)
   end
 
   return listener
@@ -81,7 +97,7 @@ end
 function DeltaContainer:remove_listener (listener)
   for k, l in ipairs(self.listeners) do
     if l == listener then
-      self.listeners[k] = nil
+      table.remove(self.listeners, k)
     end
   end
 end
@@ -92,23 +108,27 @@ end
 
 function DeltaContainer:check_patches (patches)
   -- for (let i = patches.length - 1; i >= 0; i--) {
-  for i = table.getn(patches), 1, -1 do
+  for i = #patches, 1, -1 do
     local matched = false
 
     -- for (let j = 0, len = this.listeners.length; j < len; j++) {
-    for j = table.getn(self.listeners), 1 do
+    local j = 1
+    local total = #self.listeners
+    while j <= total do
       local listener = self.listeners[j]
-      local pathVariables = listener and self.get_path_variables(patches[i], listener);
+      local path_variables = listener and self:get_path_variables(patches[i], listener)
 
-      if (pathVariables ~= nil) then
+      if path_variables then
         listener.callback({
-          path = pathVariables,
-          rawPath = patches[i].path,
+          path = path_variables,
+          raw_path = patches[i].path,
           operation = patches[i].operation,
           value = patches[i].value
         })
-        matched = true;
+        matched = true
       end
+
+      j = j + 1
     end
 
     -- check for fallback listener
@@ -122,22 +142,26 @@ end
 function DeltaContainer:get_path_variables (patch, listener)
   -- skip if rules count differ from patch
 
-  if table.getn(patch.path) ~= table.getn(listener.rules) then
+  if #patch.path ~= #listener.rules then
     return false
   end
 
   local path = {}
 
   -- for (var i = 0, len = listener.rules.length; i < len; i++) {
-  for i = table.getn(listener["rules"]), 1 do
-    local matches = patch.path[i].match(listener.rules[i]);
+  local i = 1
+  local len = #listener.rules
+  while i <= len do
+    local match = string.match(patch.path[i], listener.rules[i])
 
-    if (not matches or matches.length == 0 or matches.length > 2) then
+    if match == nil then
       return false
 
-    elseif (string.sub(listener.rawRules[i], 1, 2) == ":") then
-      path[ string.sub(listener.rawRules[i], 2) ] = matches[1]
+    elseif (string.sub(listener.rawRules[i], 1, 1) == ":") then
+      path[ string.sub(listener.rawRules[i], 2) ] = match
     end
+
+    i = i + 1
   end
 
   return path
@@ -145,20 +169,6 @@ end
 
 function DeltaContainer:reset ()
   self.listeners = {}
-end
-
-local function split(str,pat)
-  local tbl={}
-  str:gsub(pat,function(x) tbl[#tbl+1]=x end)
-  return tbl
-end
-
-local function map(func, array)
-  local new_array = {}
-  for i,v in ipairs(array) do
-    new_array[i] = func(v)
-  end
-  return new_array
 end
 
 return DeltaContainer
