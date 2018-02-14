@@ -1,7 +1,7 @@
 local function concat(arr, value)
-  local newArr = { table.unpack(arr) } -- copy array
-  table.insert(newArr, value)
-  return newArr
+  local new_arr = { table.unpack(arr) } -- copy array
+  table.insert(new_arr, value)
+  return new_arr
 end
 
 local function is_array(t)
@@ -30,7 +30,6 @@ local function generate(mirror, obj, patches, path)
   local changed = false
   local deleted = false
 
-  -- for (local t = old_keys.length - 1; t >= 0; t--) {
   local t = #old_keys - 1
   while t >= 0 do
     local key = old_keys[t + 1]
@@ -67,7 +66,6 @@ local function generate(mirror, obj, patches, path)
       return
   end
 
-  -- for (local t = 0; t < new_keys.length; t++) {
   t = 1
   while t <= #new_keys do
     local key = new_keys[t]
