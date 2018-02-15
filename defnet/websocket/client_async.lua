@@ -121,7 +121,7 @@ local new = function(emscripten)
 		local co = coroutine.create(function(self, ws_url, ws_protocol)
 			if emscripten then
   				local protocol, host, port, uri = tools.parse_url(ws_url)
-				self.sock_connect(self, host, port)
+				self.sock_connect(self, host .. uri, port)
 				self.state = "OPEN"
 				if on_connected_fn then on_connected_fn(ok, err) end
 			else
@@ -146,6 +146,7 @@ local new = function(emscripten)
 	end
 
 	self.receive = function(...)
+		print("RECEIVE...")
 		local co = coroutine.create(function(...)
 			if emscripten then
 				local data, err = self.sock_receive(...)
@@ -181,6 +182,7 @@ local new = function(emscripten)
 		on_message_fn = fn
 		local co = coroutine.create(function()
 			while true do
+				print("MESSAGE COROUTINE...")
 				if self.sock then
 					if emscripten then
 						-- I haven't figured out how to know the length of the received data
@@ -201,6 +203,7 @@ local new = function(emscripten)
 						if data and on_message_fn then on_message_fn(data) end
 					else
 						local message, opcode, was_clean, code, reason = sync_receive(self)
+						print("data:", message)
 						if message then on_message_fn(message) end
 					end
 				end

@@ -29,6 +29,10 @@ This project's dependencies may need to be updated manually.
 - [/socket](https://github.com/britzl/defold-luasocket)
 - [/colyseus/messagepack](https://github.com/fperrad/lua-MessagePack)
 
+## TODO
+
+Allow to require this project using library sharing https://www.defold.com/manuals/libraries/
+
 ## License
 
 MIT

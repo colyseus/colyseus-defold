@@ -1,4 +1,5 @@
 local ColyseusClient = require "colyseus.client"
+-- local websocket_client = require"websocket.websocket-client"
 
 local client
 local room
@@ -17,18 +18,25 @@ function init(self)
 
     client:on("error", function(err)
         print("error emitted")
+print(err)
     end)
 
     -- join chat room
     room = client:join("chat")
+
     room:on("join", function()
-      print("joined 'chat' successfully")
+      print("joined 'chat'")
+    end)
+
+    room:on("leave", function()
+      print("left 'chat'")
     end)
 
     room:on("update", function(state)
       print("new state")
       pprint(state)
     end)
+
 end
 
 function final(self)
@@ -38,21 +46,22 @@ end
 
 function update(self, dt)
    client:loop()
-    -- Add update code here
-    -- Remove this function if not needed
+
+   -- Add update code here
+   -- Remove this function if not needed
 end
 
 function on_message(self, message_id, message, sender)
-    -- Add message-handling code here
-    -- Remove this function if not needed
+   -- Add message-handling code here
+   -- Remove this function if not needed
 end
 
 function on_input(self, action_id, action)
-    -- Add input-handling code here
-    -- Remove this function if not needed
+   -- Add input-handling code here
+   -- Remove this function if not needed
 end
 
 function on_reload(self)
-    -- Add reload-handling code here
-    -- Remove this function if not needed
+   -- Add reload-handling code here
+   -- Remove this function if not needed
 end

@@ -2,7 +2,7 @@ local protocol = require('colyseus.protocol')
 local EventEmitter = require('colyseus.events').EventEmitter
 
 local msgpack = require('colyseus.messagepack.MessagePack')
--- local websocket_async = require "defnet.websocket.client_async"
+local websocket_async = require "defnet.websocket.client_async"
 -- local websocket_async = require "websocket.client_sync"
 
 local connection = {}
@@ -18,13 +18,10 @@ end
 function connection:init(endpoint)
   self._enqueuedCalls = {}
 
-  -- local is_html5 = sys.get_sys_info().system_name == "HTML5"
-  local is_html5 = true
-  self.ws = websocket_async(is_html5)
+  self.is_html5 = sys.get_sys_info().system_name == "HTML5"
+  self.ws = websocket_async(self.is_html5)
 
   self.ws:on_connected(function(ok, err)
-    print("connected!")
-
     if err then
       self:emit('error', err)
       self:close()
@@ -46,19 +43,24 @@ function connection:init(endpoint)
   end)
 
   self.ws:connect(endpoint)
-  print("ws:connect")
-  print(endpoint)
 end
 
-function connection:loop(data)
+function connection:loop()
   if self.ws then
-    self.ws:step()
+    self.ws.step()
   end
 end
 
 function connection:send(data)
   if self.ws and self.ws.state == "OPEN" then
-    self.ws:send( msgpack.pack(data) )
+    if self.is_html5 then
+      -- binary frames are sent by default on HTML5
+      self.ws:send(msgpack.pack(data))
+
+    else
+      -- force binary frame on native platforms
+      self.ws:send(msgpack.pack(data), 0x2)
+    end
 
   else
     -- WebSocket not connected.

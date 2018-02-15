@@ -26,8 +26,6 @@ function Room:connect (connection)
   self.connection = connection
 
   self.connection:on("message", function(message)
-    print("room message:")
-    pprint(message)
     self:on_message(message)
   end)
 
@@ -43,11 +41,14 @@ function Room:loop ()
 end
 
 function Room:on_message (message)
-  local message = msgpack.unpack( message )
-  local code = message[1];
-
   print("Room:on_message!")
+print("let's decode")
+pprint(message)
+  local message = msgpack.unpack( message )
+print("decoded")
   pprint(message)
+
+  local code = message[1];
 
   if (code == protocol.JOIN_ROOM) then
     self.sessionId = message[2]
@@ -64,12 +65,12 @@ function Room:on_message (message)
     print("ROOM_STATE")
     pprint(message[3])
 
-    -- self:setState( state, remoteCurrentTime, remoteElapsedTime )
+    self:setState( state, remoteCurrentTime, remoteElapsedTime )
 
   elseif (code == protocol.ROOM_STATE_PATCH) then
     print("ROOM_STATE_PATCH")
     pprint(message[3])
-    -- self:patch(message[3])
+    self:patch(message[3])
 
   elseif (code == protocol.ROOM_DATA) then
     self:emit("data", message[3])
