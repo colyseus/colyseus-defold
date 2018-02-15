@@ -48,6 +48,7 @@ end
 function connection:loop()
   if self.ws then
     self.ws.step()
+    socket.select(nil, nil, 0.5)
   end
 end
 
