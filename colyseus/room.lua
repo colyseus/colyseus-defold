@@ -4,6 +4,8 @@ local fossil_delta = require('colyseus.fossil_delta.fossil_delta')
 local protocol = require('colyseus.protocol')
 local DeltaContainer = require('colyseus.delta_listener.delta_container')
 
+local utils = require('colyseus.utils')
+
 Room = {}
 Room.__index = Room
 
@@ -13,6 +15,9 @@ function Room.create(name)
   room:init(name)
   return room
 end
+
+-- inherits from DeltaContainer
+setmetatable(Room, { __index = DeltaContainer })
 
 function Room:init(name)
   self.id = nil
@@ -41,14 +46,8 @@ function Room:loop ()
 end
 
 function Room:on_message (message)
-  print("Room:on_message!")
-print("let's decode")
-pprint(message)
   local message = msgpack.unpack( message )
-print("decoded")
-  pprint(message)
-
-  local code = message[1];
+  local code = message[1]
 
   if (code == protocol.JOIN_ROOM) then
     self.sessionId = message[2]
@@ -62,14 +61,9 @@ print("decoded")
     -- local remoteCurrentTime = message[4]
     -- local remoteElapsedTime = message[5]
 
-    print("ROOM_STATE")
-    pprint(message[3])
-
     self:setState( state, remoteCurrentTime, remoteElapsedTime )
 
   elseif (code == protocol.ROOM_STATE_PATCH) then
-    print("ROOM_STATE_PATCH")
-    pprint(message[3])
     self:patch(message[3])
 
   elseif (code == protocol.ROOM_DATA) then
@@ -84,18 +78,24 @@ end
 function Room:setState (encodedState, remoteCurrentTime, remoteElapsedTime)
   local state = msgpack.unpack(encodedState)
 
-  self:set(state)
-  self._previousState = encodedState
+print("Room:setState")
 
-  this:emit("update", state)
+  self:set(state)
+  self._previousState = utils.string_to_byte_array(encodedState)
+
+  self:emit("update", state)
 end
 
 function Room:patch ( binaryPatch )
+print("Room:patch")
+
   -- apply patch
-  this._previousState = fossil_delta.apply( this._previousState, binaryPatch);
+  self._previousState = fossil_delta.apply(self._previousState, binaryPatch)
+
+  local data = msgpack.unpack( utils.byte_array_to_string(self._previousState) )
 
   -- trigger state callbacks
-  this:set( msgpack.unpack( this._previousState ) );
+  self:set( data )
 
   self:emit("update", self.data)
 end

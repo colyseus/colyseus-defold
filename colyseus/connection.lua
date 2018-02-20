@@ -2,7 +2,7 @@ local protocol = require('colyseus.protocol')
 local EventEmitter = require('colyseus.events').EventEmitter
 
 local msgpack = require('colyseus.messagepack.MessagePack')
-local websocket_async = require "defnet.websocket.client_async"
+local websocket_async = require "websocket.client_async"
 -- local websocket_async = require "websocket.client_sync"
 
 local connection = {}
@@ -19,7 +19,7 @@ function connection:init(endpoint)
   self._enqueuedCalls = {}
 
   self.is_html5 = sys.get_sys_info().system_name == "HTML5"
-  self.ws = websocket_async(self.is_html5)
+  self.ws = websocket_async()
 
   self.ws:on_connected(function(ok, err)
     if err then
@@ -38,7 +38,6 @@ function connection:init(endpoint)
   end)
 
   self.ws:on_message(function(message)
-    print("on_message triggered successfully!")
     self:emit("message", message)
   end)
 

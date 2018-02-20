@@ -18,23 +18,22 @@ function init(self)
 
     client:on("error", function(err)
         print("error emitted")
-print(err)
+        print(err)
     end)
 
     -- join chat room
     room = client:join("chat")
-
     room:on("join", function()
       print("joined 'chat'")
     end)
 
-    room:on("leave", function()
-      print("left 'chat'")
+    room:on("update", function(state)
+      print("UPDATE")
+      pprint(state)
     end)
 
-    room:on("update", function(state)
-      print("new state")
-      pprint(state)
+    room:on("leave", function()
+      print("left 'chat'")
     end)
 
 end

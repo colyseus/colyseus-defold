@@ -1,6 +1,12 @@
 local function concat(arr, value)
-  local new_arr = { table.unpack(arr) } -- copy array
+  local new_arr = {}
+
+  for key, value in pairs(arr) do
+    new_arr[key] = value
+  end
+
   table.insert(new_arr, value)
+
   return new_arr
 end
 

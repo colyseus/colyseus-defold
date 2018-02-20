@@ -23,13 +23,13 @@ local function map(array, func)
 end
 
 DeltaContainer = {}
-DeltaContainer.__index = DeltaContainer
+local DeltaContainer_mt = { __index = DeltaContainer }
 
 function DeltaContainer.new (data)
   local instance = EventEmitter:new({
     defaultListener = nil,
   })
-  setmetatable(instance, DeltaContainer)
+  setmetatable(instance, DeltaContainer_mt)
   instance:init(data)
   return instance
 end
@@ -88,16 +88,16 @@ function DeltaContainer:listen (segments, callback)
     self.defaultListener = listener
 
   else
-    table.insert(self.listeners, listener)
+    table.insert(self._listeners, listener)
   end
 
   return listener
 end
 
 function DeltaContainer:remove_listener (listener)
-  for k, l in ipairs(self.listeners) do
+  for k, l in ipairs(self._listeners) do
     if l == listener then
-      table.remove(self.listeners, k)
+      table.remove(self._listeners, k)
     end
   end
 end
@@ -111,11 +111,11 @@ function DeltaContainer:check_patches (patches)
   for i = #patches, 1, -1 do
     local matched = false
 
-    -- for (let j = 0, len = this.listeners.length; j < len; j++) {
+    -- for (let j = 0, len = this._listeners.length; j < len; j++) {
     local j = 1
-    local total = #self.listeners
+    local total = #self._listeners
     while j <= total do
-      local listener = self.listeners[j]
+      local listener = self._listeners[j]
       local path_variables = listener and self:get_path_variables(patches[i], listener)
 
       if path_variables then
@@ -168,7 +168,7 @@ function DeltaContainer:get_path_variables (patch, listener)
 end
 
 function DeltaContainer:reset ()
-  self.listeners = {}
+  self._listeners = {}
 end
 
 return DeltaContainer
