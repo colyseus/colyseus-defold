@@ -21,17 +21,22 @@
   <h3>
 </div>
 
+# Installation
+You can use the modules from this project in your own project by adding this project as a [Defold library dependency](http://www.defold.com/manuals/libraries/). Open your game.project file and in the `dependencies` field under `project` add:
+
+	https://github.com/gamestdio/colyseus-defold/archive/master.zip
+
+Or point to the ZIP file of a [specific release](https://github.com/gamestdio/colyseus-defold/releases).
+
 ## Dependencies
 
-This project's dependencies may need to be updated manually.
+This project depends on the WebSocket, LuaSocket and LuaSec projects:
 
-- [/defnet](https://github.com/britzl/defnet)
-- [/socket](https://github.com/britzl/defold-luasocket)
-- [/colyseus/messagepack](https://github.com/fperrad/lua-MessagePack)
+* [defold-websocket](https://github.com/britzl/defold-websocket/archive/master.zip)
+* [defold-luasocket](https://github.com/britzl/defold-luasocket/archive/0.11.zip)
+* [defold-luasec](https://github.com/sonountaleban/defold-luasec/archive/master.zip)
 
-## TODO
-
-Allow to require this project using library sharing https://www.defold.com/manuals/libraries/
+You need to add these as dependencies in your game.project file, along with the dependency to this project itself.
 
 ## License
 
