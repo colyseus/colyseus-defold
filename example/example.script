@@ -27,9 +27,13 @@ function init(self)
       print("joined 'chat'")
     end)
 
+    room:listen("players/:id/:axis", function(change)
+      -- pprint(change)
+    end)
+
     room:on("update", function(state)
-      print("UPDATE")
-      pprint(state)
+      -- print("UPDATE")
+      -- pprint(state)
     end)
 
     room:on("leave", function()

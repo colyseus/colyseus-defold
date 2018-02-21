@@ -1,7 +1,7 @@
 [project]
 title = My project
 version = 0.1
-dependencies = https://github.com/britzl/defold-websocket/archive/master.zip https://github.com/britzl/defold-luasocket/archive/0.11.zip https://github.com/sonountaleban/defold-luasec/archive/master.zip
+dependencies = https://github.com/britzl/defold-luasocket/archive/0.11.zip
 
 [bootstrap]
 main_collection = /example/main.collectionc
@@ -13,6 +13,12 @@ use_accelerometer = 0
 [display]
 width = 1280
 height = 720
+
+[script]
+shared_state = 1
+
+[library]
+include_dirs = colyseus
 
 [physics]
 scale = 0.02

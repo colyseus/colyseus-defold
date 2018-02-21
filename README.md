@@ -38,6 +38,34 @@ This project depends on the WebSocket, LuaSocket and LuaSec projects:
 
 You need to add these as dependencies in your game.project file, along with the dependency to this project itself.
 
+# Usage
+
+```lua
+local ColyseusClient = require "colyseus.client"
+
+local client
+local room
+
+function init(self)
+    -- Add initialization code here
+    client = ColyseusClient.new("ws://localhost:3553")
+
+    -- join chat room
+    room = client:join("chat")
+end
+
+function update(self, dt)
+   client:loop()
+end
+```
+
+See [client-side documentation](http://colyseus.io/docs/client-overview/).
+
+## Contributors
+
+Big thanks to [Björn Ritzl](https://github.com/britzl). Without his efforts on
+the WebSocket library this client wouldn't exist.
+
 ## License
 
 MIT

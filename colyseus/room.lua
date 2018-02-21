@@ -76,9 +76,8 @@ function Room:on_message (message)
 end
 
 function Room:setState (encodedState, remoteCurrentTime, remoteElapsedTime)
+  print("Room:setState")
   local state = msgpack.unpack(encodedState)
-
-print("Room:setState")
 
   self:set(state)
   self._previousState = utils.string_to_byte_array(encodedState)
@@ -88,7 +87,6 @@ end
 
 function Room:patch ( binaryPatch )
 print("Room:patch")
-
   -- apply patch
   self._previousState = fossil_delta.apply(self._previousState, binaryPatch)
 

@@ -1,0 +1,1 @@
+return _G.bit

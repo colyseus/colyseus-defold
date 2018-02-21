@@ -15,7 +15,7 @@ class ChatRoom extends Room {
   }
 
   onInit (options) {
-    this.setPatchRate( 2000 );
+    // this.setPatchRate( 2000 );
     this.setSimulationInterval( this.update.bind(this) );
 
     this.clock.setInterval(() => {
