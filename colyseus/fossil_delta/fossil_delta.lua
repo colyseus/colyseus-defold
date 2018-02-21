@@ -53,6 +53,18 @@ local bit = bit
 
 local fossil_delta = {}
 
+-- TODO: this shoulnd't be necessary.
+-- return value >>> 0
+function bit_rshift(value, n)
+  local r = bit.rshift(value, n)
+
+  if r < 0 and n == 0 then
+    return bit.rshift(r, 1) * 2
+  else
+    return r
+  end
+end
+
 -- Hash window width in bytes. Must be a power of two.
 local NHASH = 16
 
@@ -104,7 +116,7 @@ end
 
 -- Return a 32-bit hash value.
 function RollingHash:value()
-  return bit.rshift(bit.bor(bit.band(self.a, 0xffff), bit.lshift(bit.band(self.b, 0xffff), 16)), 0)
+  return bit_rshift(bit.bor(bit.band(self.a, 0xffff), bit.lshift(bit.band(self.b, 0xffff), 16)), 0)
 end
 
 -- "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~"
@@ -170,15 +182,7 @@ function Reader:get_int()
 
   self.pos = self.pos - 1
 
-  local v = bit.rshift(v, 0)
-
-  -- TODO: this check shoulnd't be necessary.
-  -- return v >>> 0
-  if v < 0 then
-    return bit.rshift(v, 1) * 2
-  else
-    return v
-  end
+  return bit_rshift(v, 0)
 end
 
 
@@ -315,8 +319,7 @@ function checksum(arr)
     sum3 = bit.bor(sum3 + bit.lshift(arr[z + 1], 24), 0)
   end
 
-  -- return bit.rshift(sum3, 0)
-  return bit.rshift(sum3, 1) * 2
+  return bit_rshift(sum3, 0)
 end
 
 -- Create a new delta from src to out.
