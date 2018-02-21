@@ -17,7 +17,7 @@
     <img src="https://badges.gitter.im/gamestdio/colyseus.svg">
   </a>
   <h3>
-     Multiplayer Game Client for <a href="https://www.defold.com/">Defold Engine</a>.
+     Multiplayer Game Client for <a href="https://www.defold.com/">Defold Engine</a>. <br/><a href="http://colyseus.io/docs/">View documentation</a>
   <h3>
 </div>
 
