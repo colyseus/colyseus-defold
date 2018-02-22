@@ -31,7 +31,7 @@ function Room:connect (connection)
   self.connection = connection
 
   self.connection:on("message", function(message)
-    self:on_message(message)
+    self:on_batch_message(message)
   end)
 
   self.connection:on("close", function(e)
@@ -45,8 +45,13 @@ function Room:loop ()
   end
 end
 
+function Room:on_batch_message (messages)
+  for _, message in msgpack.unpacker(messages) do
+    self:on_message(message)
+  end
+end
+
 function Room:on_message (message)
-  local message = msgpack.unpack( message )
   local code = message[1]
 
   if (code == protocol.JOIN_ROOM) then
@@ -76,7 +81,6 @@ function Room:on_message (message)
 end
 
 function Room:setState (encodedState, remoteCurrentTime, remoteElapsedTime)
-  print("Room:setState")
   local state = msgpack.unpack(encodedState)
 
   self:set(state)
@@ -86,7 +90,6 @@ function Room:setState (encodedState, remoteCurrentTime, remoteElapsedTime)
 end
 
 function Room:patch ( binaryPatch )
-print("Room:patch")
   -- apply patch
   self._previousState = fossil_delta.apply(self._previousState, binaryPatch)
 

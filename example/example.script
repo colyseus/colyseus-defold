@@ -28,7 +28,7 @@ function init(self)
     end)
 
     room:listen("players/:id/:axis", function(change)
-      -- pprint(change)
+      pprint(change)
     end)
 
     room:on("update", function(state)

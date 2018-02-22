@@ -41,6 +41,10 @@ function connection:init(endpoint)
     self:emit("message", message)
   end)
 
+  self.ws:on_disconnected(function(e)
+    self:emit("close", e)
+  end)
+
   self.ws:connect(endpoint)
 end
 

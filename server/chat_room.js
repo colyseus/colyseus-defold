@@ -15,7 +15,6 @@ class ChatRoom extends Room {
   }
 
   onInit (options) {
-    // this.setPatchRate( 2000 );
     this.setSimulationInterval( this.update.bind(this) );
 
     this.clock.setInterval(() => {
@@ -42,7 +41,6 @@ class ChatRoom extends Room {
   }
 
   onMessage (client, data) {
-	  console.log("data",data.command,data.x,data.y);
     console.log(data, "received from", client.sessionId);
     this.state.messages.push(client.sessionId + " sent " + data);
   }
