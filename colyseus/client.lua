@@ -44,7 +44,7 @@ function client:init(endpoint)
   self.connection = Connection.new(self.hostname .. "/?colyseusid=" .. get_colyseus_id())
 
   self.connection:on("message", function(message)
-    self:on_message(message)
+    self:on_batch_message(message)
   end)
 
   self.connection:on("close", function(message)
@@ -92,8 +92,13 @@ function client:join(...)
   return room
 end
 
-function client:on_message(msg)
-  local message = msgpack.unpack( msg )
+function client:on_batch_message(messages)
+  for _, message in msgpack.unpacker(messages) do
+    self:on_message(message)
+  end
+end
+
+function client:on_message(message)
 
   if type(message[1]) == "number" then
     local roomId = message[2]
