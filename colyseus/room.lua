@@ -19,9 +19,10 @@ end
 -- inherits from DeltaContainer
 setmetatable(Room, { __index = DeltaContainer })
 
-function Room:init(name)
+function Room:init(name, options)
   self.id = nil
   self.name = name
+  self.options = options or {}
 
   -- remove all listeners on leave
   self:on('leave', self.off)
@@ -35,6 +36,7 @@ function Room:connect (connection)
   end)
 
   self.connection:on("close", function(e)
+     -- TODO: check for handshake errors to emit "error" event?
     self:emit("leave", e)
   end)
 end
@@ -59,20 +61,20 @@ function Room:on_message (message)
     self:emit("join")
 
   elseif (code == protocol.JOIN_ERROR) then
-    self:emit("error", message[3])
+    self:emit("error", message[2])
 
   elseif (code == protocol.ROOM_STATE) then
-    local state = message[3]
-    -- local remoteCurrentTime = message[4]
-    -- local remoteElapsedTime = message[5]
+    local state = message[2]
+    -- local remoteCurrentTime = message[3]
+    -- local remoteElapsedTime = message[4]
 
     self:setState( state, remoteCurrentTime, remoteElapsedTime )
 
   elseif (code == protocol.ROOM_STATE_PATCH) then
-    self:patch(message[3])
+    self:patch(message[2])
 
   elseif (code == protocol.ROOM_DATA) then
-    self:emit("data", message[3])
+    self:emit("data", message[2])
 
   elseif (code == protocol.LEAVE_ROOM) then
     self:leave()
@@ -92,6 +94,9 @@ end
 function Room:patch ( binaryPatch )
   -- apply patch
   self._previousState = fossil_delta.apply(self._previousState, binaryPatch)
+
+  print("LETS APPLY PATCH")
+  pprint(utils.byte_array_to_string(self._previousState))
 
   local data = msgpack.unpack( utils.byte_array_to_string(self._previousState) )
 

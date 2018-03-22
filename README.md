@@ -61,6 +61,13 @@ end
 
 See [client-side documentation](http://colyseus.io/docs/client-overview/).
 
+## Caveats
+
+When running on localhost, make sure you don't have any service running on port
+80, otherwise the client won't connect into the specified port number.
+
+Alternatively, you can bind the Colyseus server to port 80.
+
 ## Contributors
 
 Big thanks to [Björn Ritzl](https://github.com/britzl). Without his efforts on

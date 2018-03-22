@@ -1,5 +1,5 @@
 local compare = require('colyseus.delta_listener.compare')
-local EventEmitter = require('colyseus.events').EventEmitter
+local EventEmitter = require('colyseus.eventemitter')
 
 local function split(str, delimiter)
   local result = { }

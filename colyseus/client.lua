@@ -1,7 +1,7 @@
 local Connection = require('colyseus.connection')
 local Room = require('colyseus.room')
 local protocol = require('colyseus.protocol')
-local EventEmitter = require('colyseus.events').EventEmitter
+local EventEmitter = require('colyseus.eventemitter')
 local msgpack = require('colyseus.messagepack.MessagePack')
 
 --
@@ -41,7 +41,13 @@ end
 
 function client:init(endpoint)
   self.hostname = endpoint
-  self.connection = Connection.new(self.hostname .. "/?colyseusid=" .. get_colyseus_id())
+
+  -- ensure the ends with "/", to concat with path during createConnection.
+  if string.sub(self.hostname, -1) ~= "/" then
+    self.hostname = self.hostname .. "/"
+  end
+  
+  self.connection = self:createConnection()
 
   self.connection:on("message", function(message)
     self:on_batch_message(message)
@@ -54,6 +60,19 @@ function client:init(endpoint)
   self.connection:on("error", function(message)
     self:emit("error", message)
   end)
+end
+
+function client:createConnection(path, options) 
+  path = path or ""
+  options = options or {}
+  
+  local params = { "colyseusid=" .. get_colyseus_id() }
+  for k, options in pairs(options) do
+    table.insert(params, k .. "=" .. options[k])
+  end
+
+  pprint(self.hostname .. path .. "?" .. table.concat(params, "&"))
+  return Connection.new(self.hostname .. path .. "?" .. table.concat(params, "&"))
 end
 
 function client:loop()
@@ -77,7 +96,7 @@ function client:join(...)
   self.joinRequestId = self.joinRequestId + 1
   options.requestId = self.joinRequestId;
 
-  local room = Room.create(roomName);
+  local room = Room.create(roomName, options);
 
   -- remove references on leaving
   room:on("leave", function()
@@ -119,7 +138,7 @@ function client:on_message(message)
       end
 
       room.id = roomId;
-      room:connect( Connection.new(self.hostname .. "/" .. room.id .. "?colyseusid=" .. self.id) );
+      room:connect( self:createConnection(room.id, room.options) );
 
       self.rooms[room.id] = room
       self.connectingRooms[ requestId ] = nil;

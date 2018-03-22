@@ -1,5 +1,5 @@
 local protocol = require('colyseus.protocol')
-local EventEmitter = require('colyseus.events').EventEmitter
+local EventEmitter = require('colyseus.eventemitter')
 
 local msgpack = require('colyseus.messagepack.MessagePack')
 local websocket_async = require "websocket.client_async"
@@ -42,6 +42,8 @@ function connection:init(endpoint)
   end)
 
   self.ws:on_disconnected(function(e)
+    print("DISCONNECTED!")
+    pprint(e)
     self:emit("close", e)
   end)
 
