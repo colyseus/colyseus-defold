@@ -29,10 +29,11 @@ client.__index = client
 function client.new (endpoint)
   local instance = EventEmitter:new({
     id = get_colyseus_id(),
-    roomStates = {}, -- object
-    rooms = {}, -- object
-    connectingRooms = {}, -- object
-    joinRequestId = 0, -- number
+    roomStates = {}, -- table
+    rooms = {}, -- table
+    connectingRooms = {}, -- table
+    roomsAvailableRequests = {}, -- table
+    requestId = 0, -- number
   })
   setmetatable(instance, client)
   instance:init(endpoint)
@@ -42,12 +43,12 @@ end
 function client:init(endpoint)
   self.hostname = endpoint
 
-  -- ensure the ends with "/", to concat with path during createConnection.
+  -- ensure the ends with "/", to concat with path during create_connection.
   if string.sub(self.hostname, -1) ~= "/" then
     self.hostname = self.hostname .. "/"
   end
-  
-  self.connection = self:createConnection()
+
+  self.connection = self:create_connection()
 
   self.connection:on("message", function(message)
     self:on_batch_message(message)
@@ -62,10 +63,24 @@ function client:init(endpoint)
   end)
 end
 
-function client:createConnection(path, options) 
+function client:get_available_rooms(roomName, callback)
+  local requestId = self.requestId + 1
+  self.connection:send({ protocol.ROOM_LIST, requestId, roomName })
+
+  -- TODO: add timeout to cancel request.
+
+  self.roomsAvailableRequests[requestId] = function(rooms)
+    self.roomsAvailableRequests[requestId] = nil
+    callback(rooms)
+  end
+
+  self.requestId = requestId
+end
+
+function client:create_connection(path, options)
   path = path or ""
   options = options or {}
-  
+
   local params = { "colyseusid=" .. get_colyseus_id() }
   for k, options in pairs(options) do
     table.insert(params, k .. "=" .. options[k])
@@ -93,8 +108,8 @@ function client:join(...)
   local roomName = args[1]
   local options = args[2] or {}
 
-  self.joinRequestId = self.joinRequestId + 1
-  options.requestId = self.joinRequestId;
+  self.requestId = self.requestId + 1
+  options.requestId = self.requestId;
 
   local room = Room.create(roomName, options);
 
@@ -106,7 +121,7 @@ function client:join(...)
 
   self.connectingRooms[options.requestId] = room
 
-  self.connection:send({ protocol.JOIN_ROOM, roomName, options });
+  self.connection:send({ protocol.JOIN_ROOM, roomName, options })
 
   return room
 end
@@ -138,14 +153,19 @@ function client:on_message(message)
       end
 
       room.id = roomId;
-      room:connect( self:createConnection(room.id, room.options) );
+      room:connect( self:create_connection(room.id, room.options) );
 
       self.rooms[room.id] = room
       self.connectingRooms[ requestId ] = nil;
 
     elseif (message[1] == protocol.JOIN_ERROR) then
       self:emit("error", message[3])
-      table.remove(self.rooms, roomId)
+      self.rooms[roomId] = nil
+
+    elseif (message[1] == protocol.ROOM_LIST) then
+      if self.roomsAvailableRequests[self.requestId] ~= nil then
+        self.roomsAvailableRequests[message[2]](message[3])
+      end
 
     else
       self:emit('message', message)

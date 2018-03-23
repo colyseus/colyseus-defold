@@ -95,9 +95,6 @@ function Room:patch ( binaryPatch )
   -- apply patch
   self._previousState = fossil_delta.apply(self._previousState, binaryPatch)
 
-  print("LETS APPLY PATCH")
-  pprint(utils.byte_array_to_string(self._previousState))
-
   local data = msgpack.unpack( utils.byte_array_to_string(self._previousState) )
 
   -- trigger state callbacks
