@@ -74,7 +74,7 @@ function Room:on_message (message)
     self:patch(message[2])
 
   elseif (code == protocol.ROOM_DATA) then
-    self:emit("data", message[2])
+    self:emit("message", message[2])
 
   elseif (code == protocol.LEAVE_ROOM) then
     self:leave()
