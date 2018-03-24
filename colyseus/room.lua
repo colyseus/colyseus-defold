@@ -88,7 +88,7 @@ function Room:setState (encodedState, remoteCurrentTime, remoteElapsedTime)
   self:set(state)
   self._previousState = utils.string_to_byte_array(encodedState)
 
-  self:emit("update", state)
+  self:emit("statechange", state)
 end
 
 function Room:patch ( binaryPatch )
@@ -100,7 +100,7 @@ function Room:patch ( binaryPatch )
   -- trigger state callbacks
   self:set( data )
 
-  self:emit("update", self.data)
+  self:emit("statechange", self.data)
 end
 
 function Room:leave()
