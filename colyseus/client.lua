@@ -50,6 +50,12 @@ function client:init(endpoint)
 
   self.connection = self:create_connection()
 
+  self.connection:on("open", function()
+    if get_colyseus_id() ~= nil then
+      self:emit("open")
+    end
+  end)
+
   self.connection:on("message", function(message)
     self:on_batch_message(message)
   end)
@@ -90,11 +96,11 @@ function client:create_connection(path, options)
   return Connection.new(self.hostname .. path .. "?" .. table.concat(params, "&"))
 end
 
-function client:loop()
-  self.connection:loop()
+function client:loop(timeout)
+  self.connection:loop(timeout)
 
   for k, room in pairs(self.rooms) do
-    room:loop()
+    room:loop(timeout)
   end
 end
 
@@ -111,7 +117,7 @@ function client:join(...)
   self.requestId = self.requestId + 1
   options.requestId = self.requestId;
 
-  local room = Room.create(roomName, options);
+  local room = Room.create(roomName, options)
 
   -- remove references on leaving
   room:on("leave", function()
@@ -133,7 +139,6 @@ function client:on_batch_message(messages)
 end
 
 function client:on_message(message)
-
   if type(message[1]) == "number" then
     local roomId = message[2]
 
@@ -152,8 +157,8 @@ function client:on_message(message)
         return
       end
 
-      room.id = roomId;
-      room:connect( self:create_connection(room.id, room.options) );
+      room.id = roomId
+      room:connect( self:create_connection(room.id, room.options) )
 
       self.rooms[room.id] = room
       self.connectingRooms[ requestId ] = nil;

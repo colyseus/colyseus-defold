@@ -2,7 +2,7 @@ local msgpack = require('colyseus.messagepack.MessagePack')
 local fossil_delta = require('colyseus.fossil_delta.fossil_delta')
 
 local protocol = require('colyseus.protocol')
-local DeltaContainer = require('colyseus.delta_listener.delta_container')
+local StateContainer = require('colyseus.state_listener.state_container')
 
 local utils = require('colyseus.utils')
 
@@ -10,14 +10,14 @@ Room = {}
 Room.__index = Room
 
 function Room.create(name)
-  local room = DeltaContainer.new()
+  local room = StateContainer.new()
   setmetatable(room, Room)
   room:init(name)
   return room
 end
 
--- inherits from DeltaContainer
-setmetatable(Room, { __index = DeltaContainer })
+-- inherits from StateContainer
+setmetatable(Room, { __index = StateContainer })
 
 function Room:init(name, options)
   self.id = nil
@@ -41,9 +41,9 @@ function Room:connect (connection)
   end)
 end
 
-function Room:loop ()
+function Room:loop (timeout)
   if self.connection ~= nil then
-    self.connection:loop()
+    self.connection:loop(timeout)
   end
 end
 

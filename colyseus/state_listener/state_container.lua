@@ -1,4 +1,4 @@
-local compare = require('colyseus.delta_listener.compare')
+local compare = require('colyseus.state_listener.compare')
 local EventEmitter = require('colyseus.eventemitter')
 
 local function split(str, delimiter)
@@ -22,19 +22,19 @@ local function map(array, func)
   return new_array
 end
 
-DeltaContainer = {}
-local DeltaContainer_mt = { __index = DeltaContainer }
+StateContainer = {}
+local StateContainer_mt = { __index = StateContainer }
 
-function DeltaContainer.new (data)
+function StateContainer.new (data)
   local instance = EventEmitter:new({
     defaultListener = nil,
   })
-  setmetatable(instance, DeltaContainer_mt)
+  setmetatable(instance, StateContainer_mt)
   instance:init(data)
   return instance
 end
 
-function DeltaContainer:init (data)
+function StateContainer:init (data)
   self.data = data or {}
 
   self.matcherPlaceholders = {}
@@ -47,18 +47,18 @@ function DeltaContainer:init (data)
   self:reset()
 end
 
-function DeltaContainer:set (new_data)
+function StateContainer:set (new_data)
   local patches = compare(self.data, new_data)
   self:check_patches(patches)
   self.data = new_data
   return patches
 end
 
-function DeltaContainer:register_placeholder (placeholder, matcher)
+function StateContainer:register_placeholder (placeholder, matcher)
   self.matcherPlaceholders[placeholder] = matcher
 end
 
-function DeltaContainer:listen (segments, callback)
+function StateContainer:listen (segments, callback)
   local rules
 
   if type(segments) == "function" then
@@ -94,7 +94,7 @@ function DeltaContainer:listen (segments, callback)
   return listener
 end
 
-function DeltaContainer:remove_listener (listener)
+function StateContainer:remove_listener (listener)
   for k, l in ipairs(self._listeners) do
     if l == listener then
       table.remove(self._listeners, k)
@@ -102,11 +102,11 @@ function DeltaContainer:remove_listener (listener)
   end
 end
 
-function DeltaContainer:remove_all_listeners ()
+function StateContainer:remove_all_listeners ()
   self:reset()
 end
 
-function DeltaContainer:check_patches (patches)
+function StateContainer:check_patches (patches)
   -- for (let i = patches.length - 1; i >= 0; i--) {
   for i = #patches, 1, -1 do
     local matched = false
@@ -139,7 +139,7 @@ function DeltaContainer:check_patches (patches)
   end
 end
 
-function DeltaContainer:get_path_variables (patch, listener)
+function StateContainer:get_path_variables (patch, listener)
   -- skip if rules count differ from patch
 
   if #patch.path ~= #listener.rules then
@@ -167,8 +167,8 @@ function DeltaContainer:get_path_variables (patch, listener)
   return path
 end
 
-function DeltaContainer:reset ()
+function StateContainer:reset ()
   self._listeners = {}
 end
 
-return DeltaContainer
+return StateContainer

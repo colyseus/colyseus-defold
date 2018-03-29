@@ -3,7 +3,6 @@ local EventEmitter = require('colyseus.eventemitter')
 
 local msgpack = require('colyseus.messagepack.MessagePack')
 local websocket_async = require "websocket.client_async"
--- local websocket_async = require "websocket.client_sync"
 
 local connection = {}
 connection.__index = connection
@@ -23,6 +22,7 @@ function connection:init(endpoint)
 
   self.ws:on_connected(function(ok, err)
     if err then
+      print(err);
       self:emit('error', err)
       self:close()
 
@@ -42,18 +42,16 @@ function connection:init(endpoint)
   end)
 
   self.ws:on_disconnected(function(e)
-    print("DISCONNECTED!")
-    pprint(e)
     self:emit("close", e)
   end)
 
   self.ws:connect(endpoint)
 end
 
-function connection:loop()
+function connection:loop(timeout)
   if self.ws then
     self.ws.step()
-    socket.select(nil, nil, 0.5)
+    socket.select(nil, nil, timeout or 0.001)
   end
 end
 

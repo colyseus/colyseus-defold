@@ -36,9 +36,9 @@ local function generate(mirror, obj, patches, path)
   local changed = false
   local deleted = false
 
-  local t = #old_keys - 1
-  while t >= 0 do
-    local key = old_keys[t + 1]
+  local t = #old_keys
+  while t > 0 do
+    local key = old_keys[t]
     local old_val = mirror[key]
 
     if obj[key] ~= nil and not (obj[key] == nil and old_val ~= nil and not is_array(obj)) then
@@ -72,8 +72,8 @@ local function generate(mirror, obj, patches, path)
       return
   end
 
-  t = 1
-  while t <= #new_keys do
+  t = #new_keys
+  while t > 0 do
     local key = new_keys[t]
 
     if mirror[key] == nil and obj[key] ~= nil then
@@ -92,7 +92,7 @@ local function generate(mirror, obj, patches, path)
       })
     end
 
-    t = t + 1
+    t = t - 1
   end
 end
 
