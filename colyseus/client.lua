@@ -3,32 +3,14 @@ local Room = require('colyseus.room')
 local protocol = require('colyseus.protocol')
 local EventEmitter = require('colyseus.eventemitter')
 local msgpack = require('colyseus.messagepack.MessagePack')
-
---
--- Utility functions
---
-local colyseus_id_file = sys.get_save_file("colyseus", "colyseusid")
-local function get_colyseus_id ()
-  local data = sys.load(colyseus_id_file)
-  -- if not next(my_table) then
-  -- end
-  return data[1] or ""
-end
-
-local function set_colyseus_id(colyseus_id)
-  local data = {}
-  table.insert(data, colyseus_id)
-  if not sys.save(colyseus_id_file, data) then
-    print("colyseus.client: set_colyseus_id couldn't set colyseus_id locally.")
-  end
-end
+local storage = require('colyseus.storage')
 
 local client = { VERSION = "0.8.0" }
 client.__index = client
 
 function client.new (endpoint)
   local instance = EventEmitter:new({
-    id = get_colyseus_id(),
+    id = storage.get_item("colyseusid"),
     roomStates = {}, -- table
     rooms = {}, -- table
     connectingRooms = {}, -- table
@@ -51,7 +33,7 @@ function client:init(endpoint)
   self.connection = self:create_connection()
 
   self.connection:on("open", function()
-    if get_colyseus_id() ~= nil then
+    if storage.get_item("colyseusid") ~= nil then
       self:emit("open")
     end
   end)
@@ -87,7 +69,7 @@ function client:create_connection(path, options)
   path = path or ""
   options = options or {}
 
-  local params = { "colyseusid=" .. get_colyseus_id() }
+  local params = { "colyseusid=" .. storage.get_item("colyseusid") }
   for k, options in pairs(options) do
     table.insert(params, k .. "=" .. options[k])
   end
@@ -117,6 +99,12 @@ function client:join(...)
   self.requestId = self.requestId + 1
   options.requestId = self.requestId;
 
+  -- get last session id for reconnection
+  local reconnectionSessionId = storage.get_item("reconnection")
+  if reconnectionSessionId ~= nil then
+    options.sessionId = reconnectionSessionId
+  end
+
   local room = Room.create(roomName, options)
 
   -- remove references on leaving
@@ -143,9 +131,9 @@ function client:on_message(message)
     local roomId = message[2]
 
     if message[1] == protocol.USER_ID then
-      set_colyseus_id(message[2])
-
       self.id = message[2]
+      storage.set_item("colyseusid", self.id)
+
       self:emit('open')
 
     elseif (message[1] == protocol.JOIN_ROOM) then

@@ -25,7 +25,10 @@ function Room:init(name, options)
   self.options = options or {}
 
   -- remove all listeners on leave
-  self:on('leave', self.off)
+  self:on('leave', function()
+    self:refresh_auto_reconnection()
+    self:off()
+  end)
 end
 
 function Room:connect (connection)
@@ -58,6 +61,8 @@ function Room:on_message (message)
 
   if (code == protocol.JOIN_ROOM) then
     self.sessionId = message[2]
+    self.allow_reconnection = message[3]
+    self:refresh_auto_reconnection()
     self:emit("join")
 
   elseif (code == protocol.JOIN_ERROR) then
@@ -80,6 +85,12 @@ function Room:on_message (message)
     self:leave()
   end
 
+end
+
+function Room:refresh_auto_reconnection()
+  if self.allow_reconnection then
+    storage.set_item("reconnection", self.sessionId)
+  end
 end
 
 function Room:setState (encodedState, remoteCurrentTime, remoteElapsedTime)
