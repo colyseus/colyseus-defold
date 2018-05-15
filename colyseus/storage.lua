@@ -6,7 +6,7 @@ local storage_file_path = sys.get_save_file("colyseus", "storage")
 
 function storage.get_item (key)
   data = sys.load(storage_file_path)
-  return data[key] or nil
+  return data[key] or ""
 end
 
 function storage.set_item (key, value)

@@ -5,6 +5,7 @@ local protocol = require('colyseus.protocol')
 local StateContainer = require('colyseus.state_listener.state_container')
 
 local utils = require('colyseus.utils')
+local storage = require('colyseus.storage')
 
 Room = {}
 Room.__index = Room
@@ -61,7 +62,6 @@ function Room:on_message (message)
 
   if (code == protocol.JOIN_ROOM) then
     self.sessionId = message[2]
-    self.allow_reconnection = message[3]
     self:refresh_auto_reconnection()
     self:emit("join")
 
@@ -88,9 +88,7 @@ function Room:on_message (message)
 end
 
 function Room:refresh_auto_reconnection()
-  if self.allow_reconnection then
-    storage.set_item("reconnection", self.sessionId)
-  end
+  storage.set_item("reconnection", self.sessionId)
 end
 
 function Room:setState (encodedState, remoteCurrentTime, remoteElapsedTime)
