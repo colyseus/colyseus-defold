@@ -10,10 +10,10 @@ local storage = require('colyseus.storage')
 Room = {}
 Room.__index = Room
 
-function Room.create(name)
+function Room.create(name, options)
   local room = StateContainer.new()
   setmetatable(room, Room)
-  room:init(name)
+  room:init(name, options)
   return room
 end
 
