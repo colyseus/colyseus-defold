@@ -70,8 +70,8 @@ function client:create_connection(path, options)
   options = options or {}
 
   local params = { "colyseusid=" .. storage.get_item("colyseusid") }
-  for k, options in pairs(options) do
-    table.insert(params, k .. "=" .. options[k])
+  for k, v in pairs(options) do
+    table.insert(params, k .. "=" .. v)
   end
 
   pprint(self.hostname .. path .. "?" .. table.concat(params, "&"))
