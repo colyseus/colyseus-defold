@@ -16,36 +16,10 @@ end
 
 function connection:init(endpoint)
   self._enqueuedCalls = {}
+  self.endpoint = endpoint
 
   self.is_html5 = sys.get_sys_info().system_name == "HTML5"
-  self.ws = websocket_async()
-
-  self.ws:on_connected(function(ok, err)
-    if err then
-      print(err);
-      self:emit('error', err)
-      self:close()
-
-    else
-      for i,cmd in ipairs(self._enqueuedCalls) do
-        local method = self[ cmd[1] ]
-        local arguments = cmd[2]
-        method(self, unpack(arguments))
-      end
-
-      self:emit("open")
-    end
-  end)
-
-  self.ws:on_message(function(message)
-    self:emit("message", message)
-  end)
-
-  self.ws:on_disconnected(function(e)
-    self:emit("close", e)
-  end)
-
-  self.ws:connect(endpoint)
+  self:open()
 end
 
 function connection:loop(timeout)
@@ -71,6 +45,39 @@ function connection:send(data)
     -- Enqueue data to be sent when readyState is OPEN
     table.insert(self._enqueuedCalls, { 'send', { data } })
   end
+end
+
+function connection:open()
+  self.ws = websocket_async()
+
+  self.ws:on_connected(function(ok, err)
+    if err then
+      self.state = self.ws.state
+
+      self:emit('error', err)
+      self:close()
+
+    else
+      for i,cmd in ipairs(self._enqueuedCalls) do
+        local method = self[ cmd[1] ]
+        local arguments = cmd[2]
+        method(self, unpack(arguments))
+      end
+
+      self:emit("open")
+    end
+  end)
+
+  self.ws:on_message(function(message)
+    self:emit("message", message)
+  end)
+
+  self.ws:on_disconnected(function(e)
+    self.state = self.ws.state
+    self:emit("close", e)
+  end)
+
+  self.ws:connect(self.endpoint)
 end
 
 function connection:close()

@@ -27,7 +27,6 @@ function Room:init(name, options)
 
   -- remove all listeners on leave
   self:on('leave', function()
-    self:refresh_auto_reconnection()
     self:off()
   end)
 end
@@ -62,7 +61,6 @@ function Room:on_message (message)
 
   if (code == protocol.JOIN_ROOM) then
     self.sessionId = message[2]
-    self:refresh_auto_reconnection()
     self:emit("join")
 
   elseif (code == protocol.JOIN_ERROR) then
@@ -87,10 +85,6 @@ function Room:on_message (message)
 
 end
 
-function Room:refresh_auto_reconnection()
-  storage.set_item("reconnection", self.sessionId)
-end
-
 function Room:setState (encodedState, remoteCurrentTime, remoteElapsedTime)
   local state = msgpack.unpack(encodedState)
 
@@ -104,12 +98,12 @@ function Room:patch ( binaryPatch )
   -- apply patch
   self._previousState = fossil_delta.apply(self._previousState, binaryPatch)
 
-  local data = msgpack.unpack( utils.byte_array_to_string(self._previousState) )
+  local new_state = msgpack.unpack( utils.byte_array_to_string(self._previousState) )
 
   -- trigger state callbacks
-  self:set( data )
+  self:set( new_state )
 
-  self:emit("statechange", self.data)
+  self:emit("statechange", self.state)
 end
 
 function Room:leave()

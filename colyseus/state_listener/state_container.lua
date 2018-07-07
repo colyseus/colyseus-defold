@@ -25,17 +25,17 @@ end
 StateContainer = {}
 local StateContainer_mt = { __index = StateContainer }
 
-function StateContainer.new (data)
+function StateContainer.new (state)
   local instance = EventEmitter:new({
     defaultListener = nil,
   })
   setmetatable(instance, StateContainer_mt)
-  instance:init(data)
+  instance:init(state)
   return instance
 end
 
-function StateContainer:init (data)
-  self.data = data or {}
+function StateContainer:init (state)
+  self.state = state or {}
 
   self.matcherPlaceholders = {}
   self.matcherPlaceholders[":id"] = "^([%a%d-_]+)$"
@@ -47,10 +47,10 @@ function StateContainer:init (data)
   self:reset()
 end
 
-function StateContainer:set (new_data)
-  local patches = compare(self.data, new_data)
-  self:check_patches(patches)
-  self.data = new_data
+function StateContainer:set (new_state)
+  local patches = compare(self.state, new_state)
+  self:check_patches(patches, self._listeners, self.defaultListener)
+  self.state = new_state
   return patches
 end
 
@@ -58,7 +58,7 @@ function StateContainer:register_placeholder (placeholder, matcher)
   self.matcherPlaceholders[placeholder] = matcher
 end
 
-function StateContainer:listen (segments, callback)
+function StateContainer:listen (segments, callback, immediate)
   local rules
 
   if type(segments) == "function" then
@@ -91,6 +91,10 @@ function StateContainer:listen (segments, callback)
     table.insert(self._listeners, listener)
   end
 
+  if immediate then
+    self:check_patches(compare({}, self.state), { listener })
+  end
+
   return listener
 end
 
@@ -106,16 +110,14 @@ function StateContainer:remove_all_listeners ()
   self:reset()
 end
 
-function StateContainer:check_patches (patches)
-  -- for (let i = patches.length - 1; i >= 0; i--) {
+function StateContainer:check_patches (patches, listeners, default_listener)
   for i = #patches, 1, -1 do
     local matched = false
 
-    -- for (let j = 0, len = this._listeners.length; j < len; j++) {
     local j = 1
-    local total = #self._listeners
+    local total = #listeners
     while j <= total do
-      local listener = self._listeners[j]
+      local listener = listeners[j]
       local path_variables = listener and self:get_path_variables(patches[i], listener)
 
       if path_variables then
@@ -132,8 +134,8 @@ function StateContainer:check_patches (patches)
     end
 
     -- check for fallback listener
-    if (not matched and self.defaultListener) then
-      self.defaultListener["callback"](patches[i])
+    if (not matched and default_listener) then
+      default_listener["callback"](patches[i])
     end
 
   end

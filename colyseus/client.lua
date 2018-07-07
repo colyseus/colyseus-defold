@@ -71,7 +71,7 @@ function client:create_connection(path, options)
 
   local params = { "colyseusid=" .. storage.get_item("colyseusid") }
   for k, v in pairs(options) do
-    table.insert(params, k .. "=" .. v)
+    table.insert(params, k .. "=" .. tostring(v))
   end
 
   pprint(self.hostname .. path .. "?" .. table.concat(params, "&"))
@@ -99,12 +99,6 @@ function client:join(...)
   self.requestId = self.requestId + 1
   options.requestId = self.requestId;
 
-  -- get last session id for reconnection
-  local reconnectionSessionId = storage.get_item("reconnection")
-  if reconnectionSessionId ~= nil then
-    options.sessionId = reconnectionSessionId
-  end
-
   local room = Room.create(roomName, options)
 
   -- remove references on leaving
@@ -118,6 +112,17 @@ function client:join(...)
   self.connection:send({ protocol.JOIN_ROOM, roomName, options })
 
   return room
+end
+
+function client:rejoin(roomName, sessionId)
+  -- reopen client connection if it's closed
+  if self.connection.state == "CLOSED" then
+    self.connection:open()
+  end
+
+  return self:join(roomName, {
+    sessionId = sessionId
+  })
 end
 
 function client:on_batch_message(messages)
