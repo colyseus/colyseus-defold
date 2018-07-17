@@ -48,6 +48,11 @@ function connection:send(data)
 end
 
 function connection:open()
+  -- skip if connection is already open
+  if self.state == 'OPEN' then
+    return
+  end
+
   self.ws = websocket_async()
 
   self.ws:on_connected(function(ok, err)

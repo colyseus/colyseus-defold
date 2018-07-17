@@ -108,7 +108,7 @@ end
 
 function Room:leave()
   if (self.connection) then
-    self.connection:close()
+    self.connection:send({ protocol.LEAVE_ROOM })
 
   else
     self:emit("leave")
