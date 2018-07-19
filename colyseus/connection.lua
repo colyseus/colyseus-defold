@@ -14,17 +14,15 @@ function connection.new (endpoint)
   return instance
 end
 
-function connection:init(endpoint)
+function connection:init()
   self._enqueuedCalls = {}
-  self.endpoint = endpoint
-
+  self.state = "CONNECTING"
   self.is_html5 = sys.get_sys_info().system_name == "HTML5"
-  self:open()
 end
 
 function connection:loop(timeout)
   if self.ws then
-    self.ws.step()
+    self.ws:step()
     socket.select(nil, nil, timeout or 0.001)
   end
 end
@@ -47,7 +45,9 @@ function connection:send(data)
   end
 end
 
-function connection:open()
+function connection:open(endpoint)
+  self.endpoint = endpoint
+
   -- skip if connection is already open
   if self.state == 'OPEN' then
     return
@@ -56,9 +56,8 @@ function connection:open()
   self.ws = websocket_async()
 
   self.ws:on_connected(function(ok, err)
+    self.state = self.ws.state
     if err then
-      self.state = self.ws.state
-
       self:emit('error', err)
       self:close()
 
@@ -78,11 +77,11 @@ function connection:open()
   end)
 
   self.ws:on_disconnected(function(e)
-    self.state = self.ws.state
+    self.state = "CLOSED"
     self:emit("close", e)
   end)
 
-  self.ws:connect(self.endpoint)
+  self.ws:connect(endpoint)
 end
 
 function connection:close()

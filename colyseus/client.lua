@@ -30,7 +30,7 @@ function client:init(endpoint)
     self.hostname = self.hostname .. "/"
   end
 
-  self.connection = self:create_connection()
+  self.connection = Connection.new()
 
   self.connection:on("open", function()
     if storage.get_item("colyseusid") ~= nil then
@@ -49,6 +49,8 @@ function client:init(endpoint)
   self.connection:on("error", function(message)
     self:emit("error", message)
   end)
+
+  self.connection:open(self:_build_endpoint())
 end
 
 function client:get_available_rooms(roomName, callback)
@@ -65,7 +67,7 @@ function client:get_available_rooms(roomName, callback)
   self.requestId = requestId
 end
 
-function client:create_connection(path, options)
+function client:_build_endpoint(path, options)
   path = path or ""
   options = options or {}
 
@@ -73,9 +75,8 @@ function client:create_connection(path, options)
   for k, v in pairs(options) do
     table.insert(params, k .. "=" .. tostring(v))
   end
-
-  pprint(self.hostname .. path .. "?" .. table.concat(params, "&"))
-  return Connection.new(self.hostname .. path .. "?" .. table.concat(params, "&"))
+  
+  return self.hostname .. path .. "?" .. table.concat(params, "&")
 end
 
 function client:loop(timeout)
@@ -116,9 +117,9 @@ end
 
 function client:rejoin(roomName, sessionId)
   -- reopen client connection if it's closed
-  if self.connection.state == "CLOSED" then
-    self.connection:open()
-  end
+  -- if self.connection.state == "CLOSED" then
+  --  self.connection:open()
+  --end
 
   return self:join(roomName, {
     sessionId = sessionId
@@ -151,7 +152,7 @@ function client:on_message(message)
       end
 
       room.id = roomId
-      room:connect( self:create_connection(room.id, room.options) )
+      room:connect( self:_build_endpoint(room.id, room.options) )
 
       self.rooms[room.id] = room
       self.connectingRooms[ requestId ] = nil;

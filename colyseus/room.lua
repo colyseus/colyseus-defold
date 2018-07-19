@@ -1,6 +1,7 @@
 local msgpack = require('colyseus.messagepack.MessagePack')
 local fossil_delta = require('colyseus.fossil_delta.fossil_delta')
 
+local Connection = require('colyseus.connection')
 local protocol = require('colyseus.protocol')
 local StateContainer = require('colyseus.state_listener.state_container')
 
@@ -24,6 +25,7 @@ function Room:init(name, options)
   self.id = nil
   self.name = name
   self.options = options or {}
+  self.connection = Connection.new()
 
   -- remove all listeners on leave
   self:on('leave', function()
@@ -31,9 +33,7 @@ function Room:init(name, options)
   end)
 end
 
-function Room:connect (connection)
-  self.connection = connection
-
+function Room:connect (endpoint)
   self.connection:on("message", function(message)
     self:on_batch_message(message)
   end)
@@ -42,6 +42,8 @@ function Room:connect (connection)
      -- TODO: check for handshake errors to emit "error" event?
     self:emit("leave", e)
   end)
+
+  self.connection:open(endpoint)
 end
 
 function Room:loop (timeout)
@@ -107,7 +109,7 @@ function Room:patch ( binaryPatch )
 end
 
 function Room:leave()
-  if (self.connection) then
+  if self.connection.state == "OPEN" then
     self.connection:send({ protocol.LEAVE_ROOM })
 
   else
