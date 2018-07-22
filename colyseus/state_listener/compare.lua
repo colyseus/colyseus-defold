@@ -53,7 +53,8 @@ local function generate(mirror, obj, patches, path)
           table.insert(patches, {
             operation = "replace",
             path = concat(path, key),
-            value = new_val
+            value = new_val,
+            previous_value = old_val
           })
         end
 

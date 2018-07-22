@@ -49,8 +49,8 @@ end
 
 function StateContainer:set (new_state)
   local patches = compare(self.state, new_state)
-  self:check_patches(patches, self._listeners, self.defaultListener)
   self.state = new_state
+  self:check_patches(patches, self._listeners, self.defaultListener)
   return patches
 end
 
