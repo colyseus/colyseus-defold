@@ -81,7 +81,19 @@ function connection:open(endpoint)
     self:emit("close", e)
   end)
 
-  self.ws:connect(endpoint)
+  local ws_protocol = nil
+  local ssl_params = nil
+
+  if string.find(endpoint, "wss://") ~= nil then
+    ssl_params = {
+      mode = "client",
+      protocol = "tlsv1_2",
+      verify = "none",
+      options = "all",
+    }
+  end
+
+  self.ws:connect(endpoint, ws_protocol, ssl_params)
 end
 
 function connection:close()
