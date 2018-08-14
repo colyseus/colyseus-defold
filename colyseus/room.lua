@@ -43,6 +43,10 @@ function Room:connect (endpoint)
     self:emit("leave", e)
   end)
 
+  self.connection:on("error", function(e)
+    self:emit("error", e)
+  end)
+
   self.connection:open(endpoint)
 end
 
