@@ -7,7 +7,7 @@ local room
 function init(self)
     -- Add initialization code here
     -- Remove this function if not needed
-    client = ColyseusClient.new("ws://localhost:8080")
+    client = ColyseusClient.new("ws://localhost:2657")
     client:on("open", function()
         print("onopen emitted")
     end)
@@ -22,7 +22,7 @@ function init(self)
     end)
 
     -- join chat room
-    room = client:join("chat")
+    room = client:join("chat", { create = true })
     room:on("join", function()
       print("joined 'chat'")
     end)
@@ -31,8 +31,8 @@ function init(self)
       pprint(change)
     end)
 
-    room:on("update", function(state)
-      -- print("UPDATE")
+    room:on("statechange", function(state)
+      -- print("STATE CHANGE")
       -- pprint(state)
     end)
 

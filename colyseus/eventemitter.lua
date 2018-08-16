@@ -4,6 +4,14 @@
 
 local EventEmitter = {}
 
+function table_find(tab,el)
+  for index, value in pairs(tab) do
+    if value == el then
+      return index
+    end
+  end
+end
+
 function EventEmitter:new(object)
 
   object = object or {}
@@ -14,9 +22,13 @@ function EventEmitter:new(object)
     table.insert(self._on[event], listener)
   end
 
-  function object:off (event)
+  function object:off (event, listener)
     if event then
-      table.remove(self._on[event])
+      if not listener then
+        table.remove(self._on[event])
+      else
+        table.remove(self._on[event], table_find(self._on[event], listener))
+      end
     else
       for event, listener in ipairs(self._on) do
         self:off(event)

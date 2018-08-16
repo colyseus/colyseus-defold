@@ -50,6 +50,10 @@ function Room:connect (endpoint)
   self.connection:open(endpoint)
 end
 
+function Room:has_joined ()
+  return self.sessionId ~= nil
+end
+
 function Room:loop (timeout)
   if self.connection ~= nil then
     self.connection:loop(timeout)

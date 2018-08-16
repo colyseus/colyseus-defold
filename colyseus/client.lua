@@ -53,9 +53,9 @@ function client:init(endpoint)
   self.connection:open(self:_build_endpoint())
 end
 
-function client:get_available_rooms(roomName, callback)
+function client:get_available_rooms(room_name, callback)
   local requestId = self.requestId + 1
-  self.connection:send({ protocol.ROOM_LIST, requestId, roomName })
+  self.connection:send({ protocol.ROOM_LIST, requestId, room_name })
 
   -- TODO: add timeout to cancel request.
 
@@ -75,7 +75,7 @@ function client:_build_endpoint(path, options)
   for k, v in pairs(options) do
     table.insert(params, k .. "=" .. tostring(v))
   end
-  
+
   return self.hostname .. path .. "?" .. table.concat(params, "&")
 end
 
@@ -91,39 +91,49 @@ function client:close()
   self.connection:close()
 end
 
-function client:join(...)
-  local args = {...}
+function client:join(room_name, options)
+  return self:create_room_request(room_name, options or {})
+end
 
-  local roomName = args[1]
-  local options = args[2] or {}
+function client:rejoin(room_name, sessionId)
+  return self:join(room_name, {
+    sessionId = sessionId
+  })
+end
 
+function client:create_room_request(room_name, options, reuse_room_instance, retry_count)
   self.requestId = self.requestId + 1
   options.requestId = self.requestId;
 
-  local room = Room.create(roomName, options)
+  local room = reuse_room_instance or Room.create(room_name, options)
 
-  -- remove references on leaving
-  room:on("leave", function()
+  local on_room_leave = function()
+    room:off("error", on_room_leave)
     self.rooms[room.id] = nil
     self.connectingRooms[options.requestId] = nil
-  end)
+  end
+
+  local on_room_error = function()
+    room:off("error", on_room_error)
+    if not room:has_joined() then
+      on_room_leave()
+
+      retry_count = (retry_count or 0) + 1
+      if options['retry_times'] and retry_count <= options['retry_times'] then
+        self:create_room_request(room_name, options, room, retry_count)
+      end
+    end
+  end
+
+  -- remove references on leaving
+  room:on("leave", on_room_leave)
+  room:on("error", on_room_error)
 
   self.connectingRooms[options.requestId] = room
 
-  self.connection:send({ protocol.JOIN_ROOM, roomName, options })
+  self.connection:send({ protocol.JOIN_ROOM, room_name, options })
 
   return room
-end
-
-function client:rejoin(roomName, sessionId)
-  -- reopen client connection if it's closed
-  -- if self.connection.state == "CLOSED" then
-  --  self.connection:open()
-  --end
-
-  return self:join(roomName, {
-    sessionId = sessionId
-  })
 end
 
 function client:on_batch_message(messages)
