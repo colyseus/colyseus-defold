@@ -8,7 +8,7 @@ local storage = require('colyseus.storage')
 local client = { VERSION = "0.8.0" }
 client.__index = client
 
-function client.new (endpoint)
+function client.new (endpoint, connect_on_init)
   local instance = EventEmitter:new({
     id = storage.get_item("colyseusid"),
     roomStates = {}, -- table
@@ -18,11 +18,11 @@ function client.new (endpoint)
     requestId = 0, -- number
   })
   setmetatable(instance, client)
-  instance:init(endpoint)
+  instance:init(endpoint, connect_on_init)
   return instance
 end
 
-function client:init(endpoint)
+function client:init(endpoint, connect_on_init)
   self.hostname = endpoint
 
   -- ensure the ends with "/", to concat with path during create_connection.
@@ -50,6 +50,12 @@ function client:init(endpoint)
     self:emit("error", message)
   end)
 
+  if connect_on_init or connect_on_init == nil then
+    self:connect()
+  end
+end
+
+function client:connect()
   self.connection:open(self:_build_endpoint())
 end
 
@@ -109,7 +115,11 @@ function client:create_room_request(room_name, options, reuse_room_instance, ret
 
   local on_room_leave = function()
     room:off("error", on_room_leave)
-    self.rooms[room.id] = nil
+
+    if room.id then
+      self.rooms[room.id] = nil
+    end
+
     self.connectingRooms[options.requestId] = nil
   end
 
