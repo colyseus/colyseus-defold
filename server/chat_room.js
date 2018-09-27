@@ -2,9 +2,7 @@ var Room = require('colyseus').Room;
 
 class ChatRoom extends Room {
 
-  constructor () {
-    super();
-
+  onInit (options) {
     this.setState({
       n: null,
       u: undefined,
@@ -12,9 +10,7 @@ class ChatRoom extends Room {
       messages: [],
       turn: "none"
     });
-  }
 
-  onInit (options) {
     this.setSimulationInterval( this.update.bind(this) );
 
     this.clock.setInterval(() => {
