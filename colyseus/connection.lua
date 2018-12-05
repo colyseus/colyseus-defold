@@ -58,7 +58,8 @@ function connection:open(endpoint)
   self.ws:on_connected(function(ok, err)
     self.state = self.ws.state
     if err then
-      self:emit('error', err)
+      self:emit("error", err)
+      self:emit("close", e)
       self:close()
 
     else
@@ -97,6 +98,7 @@ function connection:open(endpoint)
 end
 
 function connection:close()
+  self.state = "CLOSED"
   self.ws:close()
   self.ws = nil
 end
