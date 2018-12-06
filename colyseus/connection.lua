@@ -53,7 +53,7 @@ function connection:open(endpoint)
     return
   end
 
-  self.ws = websocket_async()
+  self.ws = websocket_async({})
 
   self.ws:on_connected(function(ok, err)
     self.state = self.ws.state
