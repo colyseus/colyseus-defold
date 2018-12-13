@@ -1,8 +1,11 @@
 local ColyseusClient = require "colyseus.client"
--- local websocket_client = require"websocket.websocket-client"
 
 local client
 local room
+
+-- OPTIONAL: defold-websocket allows to set a `connect_timeout` option.
+local ColyseusConnection = require "colyseus.connection"
+ColyseusConnection.config = { connect_timeout = 10 }
 
 function init(self)
     -- Add initialization code here
@@ -10,15 +13,19 @@ function init(self)
     client = ColyseusClient.new("ws://localhost:2657")
 
     client:on("open", function()
-        print("onopen emitted")
+        print("colyseus-defold: connection opened!")
+    end)
+
+    client:on("close", function()
+        print("colyseus-defold: connection closed!")
     end)
 
     client:on("message", function(message)
-        print("message emitted")
+        print("colyseus-defold: message received!")
     end)
 
     client:on("error", function(err)
-        print("error emitted")
+        print("colyseus-defold: error")
         print(err)
     end)
 
