@@ -4,7 +4,7 @@ const express = require("express");
 const colyseus = require("colyseus");
 const ChatRoom = require('./chat_room');
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 2657;
 
 process.on('unhandledRejection', r => console.log(r));
 
