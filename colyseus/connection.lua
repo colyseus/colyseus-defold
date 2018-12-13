@@ -99,8 +99,10 @@ end
 
 function connection:close()
   self.state = "CLOSED"
-  self.ws:close()
-  self.ws = nil
+  if self.ws then
+    self.ws:close()
+    self.ws = nil
+  end
 end
 
 return connection

@@ -8,6 +8,7 @@ function init(self)
     -- Add initialization code here
     -- Remove this function if not needed
     client = ColyseusClient.new("ws://localhost:2657")
+
     client:on("open", function()
         print("onopen emitted")
     end)
@@ -39,7 +40,6 @@ function init(self)
     room:on("leave", function()
       print("left 'chat'")
     end)
-
 end
 
 function final(self)
