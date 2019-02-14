@@ -20,6 +20,7 @@ function EventEmitter:new(object)
   function object:on (event, listener)
     self._on[event] = self._on[event] or {}
     table.insert(self._on[event], listener)
+    return listener
   end
 
   function object:off (event, listener)
