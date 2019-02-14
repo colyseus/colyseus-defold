@@ -24,7 +24,7 @@
 # Installation
 You can use the modules from this project in your own project by adding this project as a [Defold library dependency](http://www.defold.com/manuals/libraries/). Open your game.project file and in the `dependencies` field under `project` add:
 
-	https://github.com/gamestdio/colyseus-defold/archive/master.zip
+	https://github.com/colyseus/colyseus-defold/archive/master.zip
 
 Or point to the ZIP file of a [specific release](https://github.com/gamestdio/colyseus-defold/releases).
 
