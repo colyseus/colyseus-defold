@@ -61,12 +61,29 @@ end
 
 See [client-side documentation](http://colyseus.io/docs/client-overview/).
 
-## Caveats
+## FAQ
+
+### "I can't connect to the local server!"
 
 When running on localhost, make sure you don't have any service running on port
 80, otherwise the client won't connect into the specified port number.
 
 Alternatively, you can bind the Colyseus server to port 80.
+
+### "`rejoin()` is not working on iOS!"
+
+If you lock your phone, all WebSocket connections will be closed. You can call `rejoin()` to reestablish the session, which needs a workaround for iOS:
+
+```lua
+function window_callback(self, event, data)
+    if event == window.WINDOW_EVENT_FOCUS_GAINED then
+        -- iOS workaround to re-active WebSocket connection after phone is unlocked
+        room:send({"whatever"})
+    end
+end
+
+window.set_listener(window_callback)
+```
 
 ## Contributors
 
