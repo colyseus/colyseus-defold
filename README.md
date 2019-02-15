@@ -59,7 +59,7 @@ function update(self, dt)
 end
 ```
 
-See [client-side documentation](http://colyseus.io/docs/client-overview/).
+See [client-side documentation](https://docs.colyseus.io/client-overview/).
 
 ## FAQ
 
