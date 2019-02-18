@@ -61,6 +61,10 @@ end
 
 See [client-side documentation](https://docs.colyseus.io/client-overview/).
 
+## Example
+
+Check out the [tic-tac-toe example](https://github.com/selimanac/defold-colyseus-tic-tac-toe) made by [@selimanac](https://github.com/selimanac/)
+
 ## FAQ
 
 ### "I can't connect to the local server!"
