@@ -84,9 +84,6 @@ function client:_build_endpoint(path, options)
     table.insert(params, k .. "=" .. tostring(v))
   end
 
-  print("endpoint:")
-  print(self.hostname .. path .. "?" .. table.concat(params, "&"))
-
   return self.hostname .. path .. "?" .. table.concat(params, "&")
 end
 
@@ -152,7 +149,11 @@ function client:create_room_request(room_name, options, reuse_room_instance, ret
 end
 
 function client:on_batch_message(binary_string)
-  self:on_message(utils.string_to_byte_array(binary_string))
+  if self.previous_code then
+    self:on_message(binary_string)
+  else
+    self:on_message(utils.string_to_byte_array(binary_string))
+  end
 
   -- for _, message in msgpack.unpacker(messages) do
   --   if type(message[1]) == "number" then
@@ -162,9 +163,9 @@ function client:on_batch_message(binary_string)
 end
 
 function client:on_message(message)
-  local code = message[1]
-
   if self.previous_code == nil then
+    local code = message[1]
+
     if code == protocol.USER_ID then
       self.id = decode.string(message, { offset = 2 })
 
@@ -203,8 +204,8 @@ function client:on_message(message)
       local request_id = room_list[1]
       local rooms = room_list[2]
 
-      if self.rooms_available_request[self.requestId] ~= nil then
-        self.rooms_available_request[room_id](rooms)
+      if self.rooms_available_request[request_id] ~= nil then
+        self.rooms_available_request[request_id](rooms)
       end
     end
 
