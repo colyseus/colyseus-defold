@@ -1,25 +1,26 @@
 local msgpack = require('colyseus.messagepack.MessagePack')
-local fossil_delta = require('colyseus.fossil_delta.fossil_delta')
 
 local Connection = require('colyseus.connection')
 local protocol = require('colyseus.protocol')
-local StateContainer = require('colyseus.state_listener.state_container')
 
+local EventEmitter = require('colyseus.eventemitter')
 local utils = require('colyseus.utils')
+local decode = require('colyseus.serialization.schema.decode')
 local storage = require('colyseus.storage')
+local serialization = require('colyseus.serialization')
 
 Room = {}
 Room.__index = Room
 
 function Room.create(name, options)
-  local room = StateContainer.new()
+  local room = EventEmitter:new({
+    serializer_id = nil,
+    previous_code = nil
+  })
   setmetatable(room, Room)
   room:init(name, options)
   return room
 end
-
--- inherits from StateContainer
-setmetatable(Room, { __index = StateContainer })
 
 function Room:init(name, options)
   self.id = nil
@@ -54,66 +55,91 @@ function Room:has_joined ()
   return self.sessionId ~= nil
 end
 
+-- fossil-delta serializer only
+function Room:listen (segments, callback, immediate)
+  if self.serializer_id ~= "fossil-delta" then
+    error(tostring(self.serializer_id) .. " serializer doesn't support .listen() method.")
+    return
+  end
+  return self.serializer.state:listen(segments, callback, immediate)
+end
+
+-- fossil-delta serializer only
+function Room:remove_listener (listener)
+  return self.serializer.state:remove_listener(listener)
+end
+
 function Room:loop (timeout)
   if self.connection ~= nil then
     self.connection:loop(timeout)
   end
 end
 
-function Room:on_batch_message (messages)
-  for _, message in msgpack.unpacker(messages) do
-    self:on_message(message)
+function Room:on_batch_message(binary_string)
+  if self.previous_code then
+    self:on_message(binary_string)
+
+  else
+    self:on_message(utils.string_to_byte_array(binary_string))
   end
 end
 
 function Room:on_message (message)
-  local code = message[1]
+  if self.previous_code == nil then
+    local code = message[1]
 
-  if (code == protocol.JOIN_ROOM) then
-    self.sessionId = message[2]
-    self:emit("join")
+    if (code == protocol.JOIN_ROOM) then
+      local cursor = { offset = 2 }
 
-  elseif (code == protocol.JOIN_ERROR) then
-    self:emit("error", message[2])
+      self.sessionId = decode.string(message, cursor)
+      self.serializer_id = decode.string(message, cursor)
 
-  elseif (code == protocol.ROOM_STATE) then
-    local state = message[2]
-    -- local remoteCurrentTime = message[3]
-    -- local remoteElapsedTime = message[4]
+      local serializer = serialization.get_serializer(self.serializer_id)
+      if not serializer then
+        error("missing serializer: " .. self.serializer_id);
+      end
+      
+      self.serializer = serializer.new()
 
-    self:setState( state, remoteCurrentTime, remoteElapsedTime )
+      if self.serializer.handshake ~= nil then
+        self.serializer.handshake(utils.table_slice(message, cursor.offset))
+      end
 
-  elseif (code == protocol.ROOM_STATE_PATCH) then
-    self:patch(message[2])
+      self:emit("join")
 
-  elseif (code == protocol.ROOM_DATA) then
-    self:emit("message", message[2])
+    elseif (code == protocol.JOIN_ERROR) then
+      self:emit("error", message[2])
 
-  elseif (code == protocol.LEAVE_ROOM) then
-    self:leave()
+    elseif (code == protocol.LEAVE_ROOM) then
+      self:leave()
+
+    else 
+      self.previous_code = code
+    end
+
+  else 
+    if self.previous_code == protocol.ROOM_STATE then
+      self:set_state(message)
+
+    elseif self.previous_code == protocol.ROOM_STATE_PATCH then
+      self:patch(message)
+
+    elseif self.previous_code == protocol.ROOM_DATA then
+      self:emit("message", msgpack.unpack(message))
+    end
+
+    self.previous_code = nil
   end
-
 end
 
-function Room:setState (encodedState, remoteCurrentTime, remoteElapsedTime)
-  local state = msgpack.unpack(encodedState)
-
-  self:set(state)
-  self._previousState = utils.string_to_byte_array(encodedState)
-
+function Room:set_state (encoded_state)
+  self.serializer:set_state(encoded_state)
   self:emit("statechange", state)
 end
 
-function Room:patch ( binaryPatch )
-  -- apply patch
-  self._previousState = fossil_delta.apply(self._previousState, binaryPatch)
-
-  local new_state = msgpack.unpack( utils.byte_array_to_string(self._previousState) )
-
-  -- trigger state callbacks
-  self:set( new_state )
-
-  self:emit("statechange", self.state)
+function Room:patch ( binary_patch )
+  self.serializer:patch(binary_patch)
+  self:emit("statechange", state)
 end
 
 function Room:leave()

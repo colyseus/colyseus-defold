@@ -3,9 +3,15 @@ local ColyseusClient = require "colyseus.client"
 local client
 local room
 
+--[[ 
+--
 -- OPTIONAL: defold-websocket allows to set a `connect_timeout` option.
+--
+
 local ColyseusConnection = require "colyseus.connection"
 ColyseusConnection.config = { connect_timeout = 10 }
+
+--]]
 
 function init(self)
     -- Add initialization code here
@@ -31,12 +37,13 @@ function init(self)
 
     -- join chat room
     room = client:join("chat", { create = true })
+
     room:on("join", function()
       print("joined 'chat'")
-    end)
 
-    room:listen("players/:id/:axis", function(change)
-      pprint(change)
+      room:listen("players/:id/:axis", function(change)
+        pprint(change)
+      end)
     end)
 
     room:on("statechange", function(state)

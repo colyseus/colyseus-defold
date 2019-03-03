@@ -2,19 +2,21 @@ local Connection = require('colyseus.connection')
 local Room = require('colyseus.room')
 local protocol = require('colyseus.protocol')
 local EventEmitter = require('colyseus.eventemitter')
-local msgpack = require('colyseus.messagepack.MessagePack')
 local storage = require('colyseus.storage')
 
-local client = { VERSION = "0.8.0" }
+local utils = require('colyseus.utils')
+local decode = require('colyseus.serialization.schema.decode')
+local msgpack = require('colyseus.messagepack.MessagePack')
+
+local client = {}
 client.__index = client
 
 function client.new (endpoint, connect_on_init)
   local instance = EventEmitter:new({
-    id = storage.get_item("colyseusid"),
-    roomStates = {}, -- table
+    id = storage.get_item("colyseusid"), -- client id
     rooms = {}, -- table
-    connectingRooms = {}, -- table
-    roomsAvailableRequests = {}, -- table
+    connecting_rooms = {}, -- table
+    rooms_available_request = {}, -- table
     requestId = 0, -- number
   })
   setmetatable(instance, client)
@@ -65,8 +67,8 @@ function client:get_available_rooms(room_name, callback)
 
   -- TODO: add timeout to cancel request.
 
-  self.roomsAvailableRequests[requestId] = function(rooms)
-    self.roomsAvailableRequests[requestId] = nil
+  self.rooms_available_request[requestId] = function(rooms)
+    self.rooms_available_request[requestId] = nil
     callback(rooms)
   end
 
@@ -77,10 +79,13 @@ function client:_build_endpoint(path, options)
   path = path or ""
   options = options or {}
 
-  local params = { "colyseusid=" .. storage.get_item("colyseusid") }
+  local params = { "colyseusid=" .. (self.id or "") }
   for k, v in pairs(options) do
     table.insert(params, k .. "=" .. tostring(v))
   end
+
+  print("endpoint:")
+  print(self.hostname .. path .. "?" .. table.concat(params, "&"))
 
   return self.hostname .. path .. "?" .. table.concat(params, "&")
 end
@@ -120,7 +125,7 @@ function client:create_room_request(room_name, options, reuse_room_instance, ret
       self.rooms[room.id] = nil
     end
 
-    self.connectingRooms[options.requestId] = nil
+    self.connecting_rooms[options.requestId] = nil
   end
 
   local on_room_error = function()
@@ -139,57 +144,71 @@ function client:create_room_request(room_name, options, reuse_room_instance, ret
   room:on("leave", on_room_leave)
   room:on("error", on_room_error)
 
-  self.connectingRooms[options.requestId] = room
+  self.connecting_rooms[options.requestId] = room
 
-  self.connection:send({ protocol.JOIN_ROOM, room_name, options })
+  self.connection:send({ protocol.JOIN_REQUEST, room_name, options })
 
   return room
 end
 
-function client:on_batch_message(messages)
-  for _, message in msgpack.unpacker(messages) do
-    self:on_message(message)
-  end
+function client:on_batch_message(binary_string)
+  self:on_message(utils.string_to_byte_array(binary_string))
+
+  -- for _, message in msgpack.unpacker(messages) do
+  --   if type(message[1]) == "number" then
+  --     self:on_message(message)
+  --   end
+  -- end
 end
 
 function client:on_message(message)
-  if type(message[1]) == "number" then
-    local roomId = message[2]
+  local code = message[1]
 
-    if message[1] == protocol.USER_ID then
-      self.id = message[2]
+  if self.previous_code == nil then
+    if code == protocol.USER_ID then
+      self.id = decode.string(message, { offset = 2 })
+
       storage.set_item("colyseusid", self.id)
 
       self:emit('open')
 
-    elseif (message[1] == protocol.JOIN_ROOM) then
-      local requestId = message[3]
-      local room = self.connectingRooms[requestId]
+    elseif code == protocol.JOIN_REQUEST then
+      local requestId = message[2]
+      local room_id = decode.string(message, { offset = 3 })
+      local room = self.connecting_rooms[requestId]
 
       if not room then
         print("colyseus.client: client left room before receiving session id.")
         return
       end
 
-      room.id = roomId
+      room.id = room_id
       room:connect( self:_build_endpoint(room.id, room.options) )
 
       self.rooms[room.id] = room
-      self.connectingRooms[ requestId ] = nil;
+      self.connecting_rooms[requestId] = nil;
 
-    elseif (message[1] == protocol.JOIN_ERROR) then
-      self:emit("error", message[3])
-      self.rooms[roomId] = nil
+    elseif code == protocol.JOIN_ERROR then
+      local err = decode.string(message, { offset = 2 })
+      self:emit("error", err)
 
-    elseif (message[1] == protocol.ROOM_LIST) then
-      if self.roomsAvailableRequests[self.requestId] ~= nil then
-        self.roomsAvailableRequests[message[2]](message[3])
-      end
-
-    else
-      self:emit('message', message)
+    elseif code == protocol.ROOM_LIST then
+      self.previous_code = message[1]
 
     end
+
+  else
+    if self.previous_code == protocol.ROOM_LIST then
+      local room_list = msgpack.unpack(message)
+      local request_id = room_list[1]
+      local rooms = room_list[2]
+
+      if self.rooms_available_request[self.requestId] ~= nil then
+        self.rooms_available_request[room_id](rooms)
+      end
+    end
+
+    self.previous_code = nil
   end
 end
 

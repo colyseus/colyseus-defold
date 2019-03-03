@@ -11,6 +11,14 @@ class ChatRoom extends Room {
       turn: "none"
     });
 
+    // for "get_available_rooms" (ROOM_LIST protocol)
+    this.setMetadata({
+      bool: true,
+      str: "string",
+      int: 10,
+      nested: { hello: "world" }
+    });
+
     this.setSimulationInterval( this.update.bind(this) );
 
     this.clock.setInterval(() => {

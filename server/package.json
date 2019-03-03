@@ -1,5 +1,4 @@
 {
-  "name": "colyseus-unity3d",
   "private": true,
   "repository": {
     "type": "git",
@@ -12,7 +11,7 @@
     "node": ">= 5.x"
   },
   "dependencies": {
-    "colyseus": "^0.9.22",
+    "colyseus": "^0.10.0-alpha.7",
     "express": "^4.13.3"
   },
   "devDependencies": {

@@ -1,10 +1,11 @@
 -- Use codes between 0~127 for lesser throughput (1 byte)
 
 return {
-  -- User-related (0~10)
+  -- User-related (0~8)
   USER_ID = 1,
 
-  -- Room-related (10~20)
+  -- Room-related (9~19)
+  JOIN_REQUEST = 9,
   JOIN_ROOM = 10,
   JOIN_ERROR = 11,
   LEAVE_ROOM = 12,
