@@ -26,10 +26,6 @@ function init(self)
         print("colyseus-defold: connection closed!")
     end)
 
-    client:on("message", function(message)
-        print("colyseus-defold: message received!")
-    end)
-
     client:on("error", function(err)
         print("colyseus-defold: error")
         print(err)
@@ -42,8 +38,13 @@ function init(self)
       print("joined 'chat'")
 
       room:listen("players/:id/:axis", function(change)
-        pprint(change)
+        -- pprint(change)
       end)
+    end)
+
+    room:on("message", function(message)
+        print("colyseus-defold: message received!")
+        pprint(message)
     end)
 
     room:on("statechange", function(state)
