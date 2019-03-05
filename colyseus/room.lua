@@ -137,15 +137,18 @@ function Room:set_state (encoded_state)
   self:emit("statechange", state)
 end
 
-function Room:patch ( binary_patch )
+function Room:patch (binary_patch)
   self.serializer:patch(binary_patch)
   self:emit("statechange", state)
 end
 
-function Room:leave()
+function Room:leave(consented)
   if self.connection.state == "OPEN" then
-    self.connection:send({ protocol.LEAVE_ROOM })
-
+    if consented or consented == nil then
+      self.connection:send({ protocol.LEAVE_ROOM })
+    else
+      self.connection:close()
+    end
   else
     self:emit("leave")
   end
