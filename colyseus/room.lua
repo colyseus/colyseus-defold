@@ -27,6 +27,7 @@ function Room:init(name, options)
   self.name = name
   self.options = options or {}
   self.connection = Connection.new()
+  self.serializer = serialization.get_serializer('fossil-delta').new()
 
   -- remove all listeners on leave
   self:on('leave', function()
@@ -60,6 +61,9 @@ function Room:listen (segments, callback, immediate)
   if self.serializer_id ~= "fossil-delta" then
     error(tostring(self.serializer_id) .. " serializer doesn't support .listen() method.")
     return
+  end
+  if self.serializer_id == nil then
+    print("DEPRECATION WARNING: room:listen() should be called after join has been successful")
   end
   return self.serializer.state:listen(segments, callback, immediate)
 end
@@ -98,8 +102,10 @@ function Room:on_message (message)
       if not serializer then
         error("missing serializer: " .. self.serializer_id);
       end
-      
-      self.serializer = serializer.new()
+
+      if self.serializer_id ~= "fossil-delta" then
+        self.serializer = serializer.new()
+      end
 
       if self.serializer.handshake ~= nil then
         self.serializer.handshake(utils.table_slice(message, cursor.offset))

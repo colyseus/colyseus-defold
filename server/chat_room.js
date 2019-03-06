@@ -23,7 +23,6 @@ class ChatRoom extends Room {
 
     this.clock.setInterval(() => {
       this.state.turn = "turn" + Math.random()
-      console.log("Change turn:", this.state.turn);
     }, 1000);
 
     console.log("ChatRoom created!", options);
