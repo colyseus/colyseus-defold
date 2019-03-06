@@ -17,56 +17,9 @@
     <img src="https://img.shields.io/discord/525739117951320081.svg?style=for-the-badge&colorB=7581dc&logo=discord&logoColor=white">
   </a>
   <h3>
-     Multiplayer Game Client for <a href="https://www.defold.com/">Defold Engine</a>. <br/><a href="http://colyseus.io/docs/">View documentation</a>
+     Multiplayer Game Client for <a href="https://www.defold.com/">Defold Engine</a>. <br/><a href="https://docs.colyseus.io/getting-started/defold-client/">View documentation</a>
   </h3>
 </div>
-
-# Installation
-You can use the modules from this project in your own project by adding this project as a [Defold library dependency](http://www.defold.com/manuals/libraries/). Open your game.project file and in the `dependencies` field under `project` add:
-
-	https://github.com/gamestdio/colyseus-defold/archive/master.zip
-
-Or point to the ZIP file of a [specific release](https://github.com/gamestdio/colyseus-defold/releases).
-
-## Dependencies
-
-This project depends on the WebSocket, LuaSocket and LuaSec projects:
-
-* [defold-websocket](https://github.com/britzl/defold-websocket/archive/master.zip)
-* [defold-luasocket](https://github.com/britzl/defold-luasocket/archive/0.11.zip)
-* [defold-luasec](https://github.com/britzl/defold-luasec/archive/master.zip)
-
-You need to add these as dependencies in your game.project file, along with the dependency to this project itself.
-
-# Usage
-
-```lua
-local ColyseusClient = require "colyseus.client"
-
-local client
-local room
-
-function init(self)
-    -- Add initialization code here
-    client = ColyseusClient.new("ws://localhost:3553")
-
-    -- join chat room
-    room = client:join("chat")
-end
-
-function update(self, dt)
-   client:loop()
-end
-```
-
-See [client-side documentation](http://colyseus.io/docs/client-overview/).
-
-## Caveats
-
-When running on localhost, make sure you don't have any service running on port
-80, otherwise the client won't connect into the specified port number.
-
-Alternatively, you can bind the Colyseus server to port 80.
 
 ## Contributors
 
