@@ -10,7 +10,14 @@ local storage = require('colyseus.storage')
 local serialization = require('colyseus.serialization')
 
 Room = {}
-Room.__index = Room
+Room.__index = function (self, key)
+  if key == "state" then
+    -- state getter
+    return self.serializer:get_state() 
+  else
+    return Room[key]
+  end
+end
 
 function Room.create(name, options)
   local room = EventEmitter:new({
@@ -140,12 +147,12 @@ end
 
 function Room:set_state (encoded_state)
   self.serializer:set_state(encoded_state)
-  self:emit("statechange", state)
+  self:emit("statechange", self.serializer:get_state())
 end
 
 function Room:patch (binary_patch)
   self.serializer:patch(binary_patch)
-  self:emit("statechange", state)
+  self:emit("statechange", self.serializer:get_state())
 end
 
 function Room:leave(consented)

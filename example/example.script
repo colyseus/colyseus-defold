@@ -38,7 +38,7 @@ function init(self)
       print("joined 'chat'")
 
       room:listen("players/:id/:axis", function(change)
-        -- pprint(change)
+        pprint(change)
       end)
     end)
 
@@ -48,8 +48,7 @@ function init(self)
     end)
 
     room:on("statechange", function(state)
-      -- print("STATE CHANGE")
-      -- pprint(state)
+      print("STATE CHANGE")
     end)
 
     room:on("leave", function()
@@ -63,7 +62,7 @@ function final(self)
 end
 
 function update(self, dt)
-   client:loop()
+  client:loop()
 
    -- Add update code here
    -- Remove this function if not needed

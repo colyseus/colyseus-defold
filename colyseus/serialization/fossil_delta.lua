@@ -15,6 +15,10 @@ function fossil_delta.new ()
   return instance
 end
 
+function fossil_delta:get_state()
+  return self.state.state
+end
+
 function fossil_delta:set_state(encoded_state)
   local state = msgpack.unpack(encoded_state)
 
