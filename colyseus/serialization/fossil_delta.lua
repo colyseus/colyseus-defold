@@ -38,4 +38,8 @@ function fossil_delta:patch(binary_patch)
   self.state:set( new_state )
 end
 
+function fossil_delta:teardown()
+  return self.state:remove_all_listeners()
+end
+
 return fossil_delta

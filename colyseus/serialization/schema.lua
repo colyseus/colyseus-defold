@@ -1,4 +1,3 @@
-local utils = require('colyseus.utils')
 local Schema = require('colyseus.serialization.schema.schema')
 
 local schema_serializer = {}

@@ -38,6 +38,10 @@ function Room:init(name, options)
 
   -- remove all listeners on leave
   self:on('leave', function()
+    if self.serializer and self.serializer.teardown ~= nil then
+      self.serializer:teardown();
+    end
+    
     self:off()
   end)
 end
