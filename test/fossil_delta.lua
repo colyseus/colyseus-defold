@@ -1,4 +1,4 @@
-local fossil_delta = require 'colyseus.fossil_delta.fossil_delta'
+local fossil_delta = require 'colyseus.serialization.fossil_delta.fossil_delta'
 
 function read_file(file)
     local f = assert(io.open(file, "rb"))

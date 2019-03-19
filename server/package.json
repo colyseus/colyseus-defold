@@ -11,7 +11,7 @@
     "node": ">= 5.x"
   },
   "dependencies": {
-    "colyseus": "^0.10.0-alpha.7",
+    "colyseus": "^0.10.0-alpha.9",
     "express": "^4.13.3"
   },
   "devDependencies": {

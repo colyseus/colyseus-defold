@@ -4,13 +4,15 @@
 --
 -- This file is part of Colyseus: https://github.com/colyseus/colyseus
 --
-local bit = bit or require('bit')
+local bit = require 'colyseus.serialization.bit'
+local ldexp = math.ldexp or mathx.ldexp
 
 -- START SPEC --
 local spec = {
     END_OF_STRUCTURE = 193,
     NIL = 192,
-    INDEX_CHANGE = 212
+    INDEX_CHANGE = 212,
+    SHIFT_OUT_BUFFER = 14
 }
 -- END SPEC --
 
@@ -83,6 +85,7 @@ function utf8_read(bytes, offset, length)
             break
         end
 
+        pprint(str)
         error('invalid byte ' .. byte)
         break
     until true
@@ -91,18 +94,12 @@ function utf8_read(bytes, offset, length)
   return str
 end
 
----
--- Shift a number's bits to the right.
--- Roughly equivalent to (x / (2^bits)).
--- @param x  The number to shift (number).
--- @param bits  Number of positions to shift by (number).
--- @return  A number.
-local function brshift(x, bits)
-	return floor(floor(x) / (2^bits))
+function boolean (bytes, it) 
+    return uint8(bytes, it) == 1
 end
 
 function int8 (bytes, it) 
-    return brshift(bit.rshift(uint8(bytes, it), 24), 24)
+    return bit.rshift(bit.lshift(uint8(bytes, it), 24), 24)
 end
 
 function uint8 (bytes, it) 
@@ -112,7 +109,7 @@ function uint8 (bytes, it)
 end
 
 function int16 (bytes, it) 
-    return brshift(bit.rshift(uint16(bytes, it), 16), 16)
+    return bit.rshift(bit.lshift(uint16(bytes, it), 16), 16)
 end
 
 function uint16 (bytes, it) 
@@ -122,7 +119,7 @@ function uint16 (bytes, it)
     local n2 = bytes[it.offset]
     it.offset = it.offset + 1
 
-    return bit.rshift(bit.bor(n1, n2), 8)
+    return bit.bor(n1, bit.lshift(n2, 8))
 end
 
 function int32 (bytes, it) 
@@ -145,6 +142,80 @@ function uint32 (bytes, it)
     -- TODO:
     -- return int32(bytes, it) >>> 0
     return int32(bytes, it)
+end
+
+function float32(bytes, it)
+    local b1 = bytes[it.offset]
+    local b2 = bytes[it.offset + 1]
+    local b3 = bytes[it.offset + 2]
+    local b4 = bytes[it.offset + 3]
+    local sign = b1 > 0x7F
+    local expo = (b1 % 0x80) * 0x2 + math.floor(b2 / 0x80)
+    local mant = ((b2 % 0x80) * 0x100 + b3) * 0x100 + b4
+    if sign then
+        sign = -1
+    else
+        sign = 1
+    end
+    local n
+    if mant == 0 and expo == 0 then
+        n = sign * 0.0
+    elseif expo == 0xFF then
+        if mant == 0 then
+            n = sign * huge
+        else
+            n = 0.0/0.0
+        end
+    else
+        n = sign * ldexp(1.0 + mant / 0x800000, expo - 0x7F)
+    end
+    it.offset = it.offset + 4
+    return n
+end
+
+function float64(bytes, it)
+    local b1 = bytes[it.offset + 7]
+    local b2 = bytes[it.offset + 6]
+    local b3 = bytes[it.offset + 5]
+    local b4 = bytes[it.offset + 4]
+    local b5 = bytes[it.offset + 3]
+    local b6 = bytes[it.offset + 2]
+    local b7 = bytes[it.offset + 1]
+    local b8 = bytes[it.offset]
+
+    -- TODO: detect big/little endian?
+
+    -- local b1 = bytes[it.offset]
+    -- local b2 = bytes[it.offset + 1]
+    -- local b3 = bytes[it.offset + 2]
+    -- local b4 = bytes[it.offset + 3]
+    -- local b5 = bytes[it.offset + 4]
+    -- local b6 = bytes[it.offset + 5]
+    -- local b7 = bytes[it.offset + 6]
+    -- local b8 = bytes[it.offset + 7]
+
+    local sign = b1 > 0x7F
+    local expo = (b1 % 0x80) * 0x10 + math.floor(b2 / 0x10)
+    local mant = ((((((b2 % 0x10) * 0x100 + b3) * 0x100 + b4) * 0x100 + b5) * 0x100 + b6) * 0x100 + b7) * 0x100 + b8
+    if sign then
+        sign = -1
+    else
+        sign = 1
+    end
+    local n
+    if mant == 0 and expo == 0 then
+        n = sign * 0.0
+    elseif expo == 0x7FF then
+        if mant == 0 then
+            n = sign * huge
+        else
+            n = 0.0/0.0
+        end
+    else
+        n = sign * ldexp(1.0 + mant / 4503599627370496.0, expo - 0x3FF)
+    end
+    it.offset = it.offset + 8
+    return n
 end
 
 function _string (bytes, it) 
@@ -182,11 +253,11 @@ function number (bytes, it)
 
   elseif (prefix == 202) then
     -- float 32
-    return readFloat32(bytes, it)
+    return float32(bytes, it)
 
   elseif (prefix == 203) then
     -- float 64
-    return readFloat64(bytes, it)
+    return float64(bytes, it)
 
   elseif (prefix == 204) then
     -- uint 8
@@ -250,12 +321,15 @@ function index_change_check (bytes, it)
 end
 
 local decode = {
+    boolean = boolean,
     int8 = int8,
     uint8 = uint8,
     int16 = int16,
     uint1 = uint1,
     int32 = int32,
     uint32 = uint32,
+    float32 = float32,
+    float64 = float64,
     number = number,
     string = _string,
     string_check = string_check,
@@ -268,7 +342,7 @@ local decode = {
 
 
 -- START UTIL FUNCTIONS --
-function pprint(node)
+local pprint = pprint or function(node)
     -- to make output beautiful
     local function tab(amt)
         local str = ""
@@ -387,9 +461,11 @@ end
 -- START SCHEMA CLASS --
 local Schema = {}
 
-function Schema:new()
-    local obj = {}
-    return setmetatable(obj, { __index = self })
+function Schema:new(obj)
+    obj = obj or {}
+    setmetatable(obj, self)
+    self.__index = self
+    return obj
 end
 
 function Schema:decode(bytes, it)
@@ -400,7 +476,6 @@ function Schema:decode(bytes, it)
     end
 
     local schema = self._schema
-    local indexes = self._indexes
     local fields_by_index = self._order
 
     local total_bytes = #bytes
@@ -409,16 +484,24 @@ function Schema:decode(bytes, it)
         it.offset = it.offset + 1
 
         -- reached end of strucutre. skip.
-        if index == spec.END_OF_STRUCTURE then break end
+        if index == spec.END_OF_STRUCTURE then 
+            break 
+        end
 
         local field = fields_by_index[index + 1]
-        -- print("field: " .. tostring(field))
-
         local ftype = schema[field]
         local value = nil
 
         local change = nil
         local has_change = false
+
+        -- WORKAROUND for LUA on emscripten environment 
+        -- (reached end of buffer)
+        if not field then
+            print("FIELD IS NIL, previous byte:", bytes[it.offset - 2], "current byte:", bytes[it.offset - 1])
+            it.offset = it.offset - 1
+            break
+        end
 
         if type(ftype) == "table" and ftype['new'] ~= nil then
             if decode.nil_check(bytes, it) then
@@ -449,7 +532,7 @@ function Schema:decode(bytes, it)
             local has_index_change = false
 
             -- ensure current array has the same length as encoded one
-            if #value+1 > new_length then
+            if #value >= new_length then
                 local new_values = {}
                 for i, item in ipairs(value) do
                     if i > new_length then
@@ -471,21 +554,24 @@ function Schema:decode(bytes, it)
             end
 
             local i = 0
-            repeat
+            while i < num_changes do
                 local new_index = decode.number(bytes, it)
 
                 -- lua indexes start at 1
-                if new_index ~= nil then new_index = new_index + 1 end
-
-                if decode.nil_check(bytes, it) then
-                    -- const item = this[`_${field}`][new_index]
-                    -- TODO: trigger `onRemove` on Schema object being removed.
-                    it.offset = it.offset + 1
-                    goto continue_array
+                if new_index ~= nil then 
+                    new_index = new_index + 1 
                 end
+                -- 
 
-                -- do/end block is necessary due to `goto`
+                -- LUA: do/end block is necessary due to `break`
                 do
+                    if decode.nil_check(bytes, it) then
+                        -- const item = this[`_${field}`][new_index]
+                        -- TODO: trigger `onRemove` on Schema object being removed.
+                        it.offset = it.offset + 1
+                        break
+                    end
+
                     -- index change check
                     local index_change_from
                     if (decode.index_change_check(bytes, it)) then
@@ -521,7 +607,8 @@ function Schema:decode(bytes, it)
                                 value_ref['on_remove'](item, new_index)
                             end
 
-                            goto continue_array
+                            pritn("break; nil field")
+                            break
                         end
 
                         item:decode(bytes, it)
@@ -540,14 +627,14 @@ function Schema:decode(bytes, it)
                     table.insert(change, value[new_index])
                 end
 
-                ::continue_array::
                 i = i + 1
-            until i >= num_changes
+            end
 
         elseif type(ftype) == "table" and ftype['map'] ~= nil then
             -- decode map
             ftype = ftype['map']
 
+            local maporder_key = "_" .. field .. "_maporder"
             local value_ref = self[field] or {}
             value = table.clone(value_ref)
 
@@ -558,80 +645,91 @@ function Schema:decode(bytes, it)
             -- serializagion
             local has_index_change = false
 
-            local i = 0
-            repeat
-                -- `encodeAll` may indicate a higher number of indexes it actually encodes
-                if bytes[it.offset] == nil or bytes[it.offset] == spec.END_OF_STRUCTURE then
-                    break
-                end
-
-                -- index change check
-                local previous_key
-                if decode.index_change_check(bytes, it) then
-                    decode.uint8(bytes, it)
-                    previous_key = table.keys(value_ref)[decode.number(bytes, it)+1]
-                    has_index_change = true
-                end
-
-                local has_map_index = decode.number_check(bytes, it)
-                
-                local new_key
-                if has_map_index then 
-                    new_key = table.keys(value_ref)[decode.number(bytes, it)+1] 
-                else 
-                    new_key = decode.string(bytes, it)
-                end
-
-                local item
-                local is_new = (has_index_change and previous_key == nil and has_map_index)
-
-                if has_index_change and previous_key == nil and has_map_index then
-                    item = ftype:new()
-
-                elseif previous_key ~= nil then
-                    item = value_ref[previous_key]
-
-                else 
-                    item = value_ref[new_key]
-                end
-
-                if item == nil and ftype ~= "string" then
-                    item = ftype:new()
-                    is_new = true
-                end
-
-                if decode.nil_check(bytes, it) then
-                    it.offset = it.offset + 1
-
-                    if item ~= nil and item['on_remove'] ~= nil then
-                        item['on_remove']()
+            local i = 1
+            while i <= length do
+                do
+                    -- `encodeAll` may indicate a higher number of indexes it actually encodes
+                    if bytes[it.offset] == nil or bytes[it.offset] == spec.END_OF_STRUCTURE then
+                        break
                     end
 
-                    if value_ref['on_remove'] ~= nil then
-                        value_ref['on_remove'](item, new_key)
+                    -- index change check
+                    local previous_key
+                    if decode.index_change_check(bytes, it) then
+                        decode.uint8(bytes, it)
+                        previous_key = self[maporder_key][decode.number(bytes, it)+1]
+                        has_index_change = true
                     end
 
-                    value[new_key] = nil
-                    goto continue_map
+                    local has_map_index = decode.number_check(bytes, it)
 
-                elseif type == "string"  then
-                    value[new_key] = decode_primitive_type(type, bytes, it)
+                    local new_key
+                    if has_map_index then 
+                        local map_index = decode.number(bytes, it) + 1
+                        new_key = self[maporder_key][map_index] 
+                    else 
+                        new_key = decode.string(bytes, it)
+                    end
 
-                else 
-                    item:decode(bytes, it)
-                    value[new_key] = item
+                    local item
+                    local is_new = (has_index_change and previous_key == nil and has_map_index)
 
-                    if is_new and value_ref['on_add'] ~= nil then
-                        value_ref['on_add'](item, new_key)
+                    if has_index_change and previous_key == nil and has_map_index then
+                        item = ftype:new()
 
-                    elseif value_ref['on_change'] ~= nil then
-                        value_ref['on_change'](item, new_key)
+                    elseif previous_key ~= nil then
+                        item = value_ref[previous_key]
+
+                    else 
+                        item = value_ref[new_key]
+                    end
+
+                    if item == nil and ftype ~= "string" then
+                        item = ftype:new()
+                        is_new = true
+                    end
+
+                    if decode.nil_check(bytes, it) then
+                        it.offset = it.offset + 1
+
+                        if item ~= nil and item['on_remove'] ~= nil then
+                            item['on_remove']()
+                        end
+
+                        if value_ref['on_remove'] ~= nil then
+                            value_ref['on_remove'](item, new_key)
+                        end
+
+                        value[new_key] = nil
+                        break
+
+                    elseif type == "string"  then
+                        value[new_key] = decode_primitive_type(type, bytes, it)
+
+                    else 
+                        item:decode(bytes, it)
+                        value[new_key] = item
+
+                        if is_new and value_ref['on_add'] ~= nil then
+                            value_ref['on_add'](item, new_key)
+
+                        elseif value_ref['on_change'] ~= nil then
+                            value_ref['on_change'](item, new_key)
+                        end
+                    end
+
+                    if is_new then
+                        -- LUA-specific keep track of keys ordering (lua tables doesn't keep then)
+                        if self[maporder_key] == nil then
+                            self[maporder_key] = {}
+                        end
+                        table.insert(self[maporder_key], new_key)
+                        --
                     end
                 end
 
-                ::continue_map::
                 i = i + 1
-            until i >= length
+            end
 
         else
             -- decode primivite type
@@ -647,9 +745,7 @@ function Schema:decode(bytes, it)
             })
         end
 
-        if field ~= nil then
-            self[field] = value
-        end
+        self[field] = value
     end
 
     if self["on_change"] ~= nil and table.getn(changes) then
@@ -661,19 +757,12 @@ end
 -- END SCHEMA CLASS --
 
 local define = function(fields)
-    local DerivedSchema = setmetatable({}, { __index = Schema })
-
-    function DerivedSchema:new()
-        local obj = {}
-        return setmetatable(obj, { __index = Schema.new(self) })
-    end
+    local DerivedSchema = Schema:new()
 
     DerivedSchema._schema = {}
-    DerivedSchema._indexes = {}
     DerivedSchema._order = fields and fields['_order'] or {}
 
     for i, field in pairs(DerivedSchema._order) do
-        DerivedSchema._indexes[field] = i
         DerivedSchema._schema[field] = fields[field]
     end
 
@@ -699,29 +788,26 @@ local Reflection = define({
     ["_order"] = {"types"}
 })
 
-local reflection_decode = function (bytes)
+local reflection_decode = function (bytes, it)
     local reflection = Reflection:new()
-    reflection:decode(bytes)
+    reflection:decode(bytes, it)
 
-    local field_index = 1
     local add_field_to_schema = function(schema_class, field_name, field_type)
-        schema_class._indexes[field_name] = field_index
         schema_class._schema[field_name] = field_type
         table.insert(schema_class._order, field_name)
-        field_index = field_index + 1
     end
 
     local schema_types = {}
 
-    for i = #reflection.types, 1, -1 do
-        table.insert(schema_types, define({}))
+    for i, reflection_type in ipairs(reflection.types) do
+        schema_types[reflection_type.id + 1] = define({})
     end
 
     for i = 1, #reflection.types do
         local reflection_type = reflection.types[i]
 
         for j = 1, #reflection_type.fields do
-            local schema_type = schema_types[i]
+            local schema_type = schema_types[reflection_type.id + 1]
             local field = reflection_type.fields[j]
 
             if field.referenced_type ~= nil then
@@ -743,7 +829,7 @@ local reflection_decode = function (bytes)
         end
     end
 
-    local root_type = schema_types[#schema_types]
+    local root_type = schema_types[1]
     local root_instance = root_type:new()
 
     for i = 1, #root_type._order do
@@ -755,10 +841,11 @@ local reflection_decode = function (bytes)
             -- local is_map = field_type['map'] ~= nil
             -- local is_array = type(field_type) == "table" and (not is_schema) and (not is_map)
 
-            if type(field_type) == "table" then
-                root_instance[field_name] = {}
-            else
+            if field_type['new'] ~= nil then
                 root_instance[field_name] = field_type:new()
+
+            elseif type(field_type) == "table" then
+                root_instance[field_name] = {}
             end
         end
     end
@@ -769,5 +856,7 @@ end
 
 return {
     define = define,
-    reflection_decode = reflection_decode
+    reflection_decode = reflection_decode,
+    string = decode.string,
+    pprint = pprint
 }

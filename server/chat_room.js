@@ -1,6 +1,6 @@
-var Room = require('colyseus').Room;
+var colyseus = require('colyseus');
 
-class ChatRoom extends Room {
+class ChatRoom extends colyseus.Room {
 
   onInit (options) {
     this.setState({
@@ -59,5 +59,7 @@ class ChatRoom extends Room {
   }
 
 }
+
+colyseus.serialize(colyseus.FossilDeltaSerializer)(ChatRoom);
 
 module.exports = ChatRoom;

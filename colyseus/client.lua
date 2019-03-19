@@ -5,7 +5,7 @@ local EventEmitter = require('colyseus.eventemitter')
 local storage = require('colyseus.storage')
 
 local utils = require('colyseus.utils')
-local decode = require('colyseus.serialization.schema.decode')
+local decode = require('colyseus.serialization.schema.schema')
 local msgpack = require('colyseus.messagepack.MessagePack')
 
 local client = {}
@@ -49,6 +49,7 @@ function client:init(endpoint, connect_on_init)
   end)
 
   self.connection:on("error", function(message)
+    print("CONNECTION ERROR!")
     self:emit("error", message)
   end)
 
@@ -149,33 +150,35 @@ function client:create_room_request(room_name, options, reuse_room_instance, ret
 end
 
 function client:on_batch_message(binary_string)
-  if self.previous_code then
-    self:on_message(binary_string)
-  else
-    self:on_message(utils.string_to_byte_array(binary_string))
-  end
+  local total_bytes = #binary_string
 
-  -- for _, message in msgpack.unpacker(messages) do
-  --   if type(message[1]) == "number" then
-  --     self:on_message(message)
-  --   end
-  -- end
+  local cursor = { offset = 1 }
+  while cursor.offset <= total_bytes do
+    self:on_message(binary_string:sub(cursor.offset), cursor)
+  end
 end
 
-function client:on_message(message)
+function client:on_message(binary_string, cursor)
+  local it = { offset = 1 }
+
   if self.previous_code == nil then
-    local code = message[1]
+    local message = utils.string_to_byte_array(binary_string)
+
+    local code = message[it.offset]
+    it.offset = it.offset + 1
 
     if code == protocol.USER_ID then
-      self.id = decode.string(message, { offset = 2 })
+      self.id = decode.string(message, it)
 
       storage.set_item("colyseusid", self.id)
 
       self:emit('open')
 
     elseif code == protocol.JOIN_REQUEST then
-      local requestId = message[2]
-      local room_id = decode.string(message, { offset = 3 })
+      local requestId = message[it.offset]
+      it.offset = it.offset + 1
+
+      local room_id = decode.string(message, it)
       local room = self.connecting_rooms[requestId]
 
       if not room then
@@ -190,7 +193,8 @@ function client:on_message(message)
       self.connecting_rooms[requestId] = nil;
 
     elseif code == protocol.JOIN_ERROR then
-      local err = decode.string(message, { offset = 2 })
+      local err = decode.string(message, it)
+      print("JOIN_ERROR!")
       self:emit("error", err)
 
     elseif code == protocol.ROOM_LIST then
@@ -200,17 +204,23 @@ function client:on_message(message)
 
   else
     if self.previous_code == protocol.ROOM_LIST then
-      local room_list = msgpack.unpack(message)
-      local request_id = room_list[1]
-      local rooms = room_list[2]
+      for msg_length, room_list in msgpack.unpacker(message) do
+        local request_id = room_list[1]
+        local rooms = room_list[2]
 
-      if self.rooms_available_request[request_id] ~= nil then
-        self.rooms_available_request[request_id](rooms)
+        if self.rooms_available_request[request_id] ~= nil then
+          self.rooms_available_request[request_id](rooms)
+        end
+
+        it.offset = it.offset + msg_length
+        break
       end
     end
 
     self.previous_code = nil
   end
+
+  cursor.offset = cursor.offset + it.offset - 1
 end
 
 return client

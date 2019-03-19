@@ -1,5 +1,5 @@
-local compare = require('colyseus.delta_listener.compare')
-local DeltaContainer = require('colyseus.delta_listener.delta_container')
+local compare = require('colyseus.state_listener.compare')
+local DeltaContainer = require('colyseus.state_listener.state_container')
 
 function clone(orig)
     local orig_type = type(orig)

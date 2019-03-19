@@ -16,7 +16,7 @@ ColyseusConnection.config = { connect_timeout = 10 }
 function init(self)
     -- Add initialization code here
     -- Remove this function if not needed
-    client = ColyseusClient.new("ws://localhost:2657")
+    client = ColyseusClient.new("ws://localhost:2567", false)
 
     client:on("open", function()
         print("colyseus-defold: connection opened!")
@@ -32,14 +32,28 @@ function init(self)
     end)
 
     -- join chat room
-    room = client:join("chat", { create = true })
+    room = client:join("chat_schema", { create = true })
 
     room:on("join", function()
       print("joined 'chat'")
 
-      room:listen("players/:id/:axis", function(change)
-        pprint(change)
-      end)
+      print("PLAYERS:")
+      pprint(room.state.players)
+      pprint(room.state.messages)
+
+      room.state.players['on_add'] = function(player, i)
+        print("new player")
+        pprint(player)
+      end
+
+      room.state.messages['on_add'] = function(msg, i)
+        print("message arrived", msg.message)
+      end
+
+      -- room:listen("players/:id/:axis", function(change)
+      --   pprint(change)
+      -- end)
+
     end)
 
     room:on("message", function(message)
@@ -48,12 +62,15 @@ function init(self)
     end)
 
     room:on("statechange", function(state)
+      room:send("Hello world!")
       print("STATE CHANGE")
     end)
 
     room:on("leave", function()
       print("left 'chat'")
     end)
+
+    client:connect()
 end
 
 function final(self)

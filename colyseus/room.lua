@@ -5,7 +5,7 @@ local protocol = require('colyseus.protocol')
 
 local EventEmitter = require('colyseus.eventemitter')
 local utils = require('colyseus.utils')
-local decode = require('colyseus.serialization.schema.decode')
+local decode = require('colyseus.serialization.schema.schema')
 local storage = require('colyseus.storage')
 local serialization = require('colyseus.serialization')
 
@@ -91,23 +91,28 @@ function Room:loop (timeout)
 end
 
 function Room:on_batch_message(binary_string)
-  if self.previous_code then
-    self:on_message(binary_string)
-
-  else
-    self:on_message(utils.string_to_byte_array(binary_string))
+  print("on_batch_message, size =>", #binary_string)
+  local total_bytes = #binary_string
+  local cursor = { offset = 1 }
+  while cursor.offset <= total_bytes do
+  
+    print("on_message (", #binary_string, ") offset:", cursor.offset, "WITH BYTE:", string.byte(binary_string, cursor.offset, cursor.offset + 1), ", NEXT BYTE:", string.byte(binary_string, cursor.offset + 1, cursor.offset + 2))
+    self:on_message(binary_string:sub(cursor.offset), cursor)
   end
 end
 
-function Room:on_message (message)
+function Room:on_message (binary_string, cursor)
+  local it = { offset = 1 }
+
   if self.previous_code == nil then
-    local code = message[1]
+    local message = utils.string_to_byte_array(binary_string)
 
-    if (code == protocol.JOIN_ROOM) then
-      local cursor = { offset = 2 }
+    local code = message[it.offset]
+    it.offset = it.offset + 1
 
-      self.sessionId = decode.string(message, cursor)
-      self.serializer_id = decode.string(message, cursor)
+    if code == protocol.JOIN_ROOM then
+      self.sessionId = decode.string(message, it)
+      self.serializer_id = decode.string(message, it)
 
       local serializer = serialization.get_serializer(self.serializer_id)
       if not serializer then
@@ -118,16 +123,17 @@ function Room:on_message (message)
         self.serializer = serializer.new()
       end
 
-      if self.serializer.handshake ~= nil then
-        self.serializer.handshake(utils.table_slice(message, cursor.offset))
+      if #message > it.offset and self.serializer.handshake ~= nil then
+        self.serializer:handshake(message, it)
       end
 
       self:emit("join")
 
-    elseif (code == protocol.JOIN_ERROR) then
-      self:emit("error", message[2])
+    elseif code == protocol.JOIN_ERROR then
+      local err = decode.string(message, it)
+      self:emit("error", err)
 
-    elseif (code == protocol.LEAVE_ROOM) then
+    elseif code == protocol.LEAVE_ROOM then
       self:leave()
 
     else 
@@ -136,26 +142,33 @@ function Room:on_message (message)
 
   else 
     if self.previous_code == protocol.ROOM_STATE then
-      self:set_state(message)
+      self:set_state(binary_string, it)
 
     elseif self.previous_code == protocol.ROOM_STATE_PATCH then
-      self:patch(message)
+      self:patch(binary_string, it)
+      print("after patch, offset:", it.offset)
 
     elseif self.previous_code == protocol.ROOM_DATA then
-      self:emit("message", msgpack.unpack(message))
+      for msg_length, data in msgpack.unpacker(binary_string) do
+        it.offset = it.offset + msg_length
+        self:emit("message", data)
+        break
+      end
     end
 
     self.previous_code = nil
   end
+
+  cursor.offset = cursor.offset + it.offset - 1
 end
 
-function Room:set_state (encoded_state)
-  self.serializer:set_state(encoded_state)
+function Room:set_state (encoded_state, it)
+  self.serializer:set_state(encoded_state, it)
   self:emit("statechange", self.serializer:get_state())
 end
 
-function Room:patch (binary_patch)
-  self.serializer:patch(binary_patch)
+function Room:patch (binary_patch, it)
+  self.serializer:patch(binary_patch, it)
   self:emit("statechange", self.serializer:get_state())
 end
 
