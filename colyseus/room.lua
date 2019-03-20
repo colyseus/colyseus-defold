@@ -91,12 +91,11 @@ function Room:loop (timeout)
 end
 
 function Room:on_batch_message(binary_string)
-  print("on_batch_message, size =>", #binary_string)
   local total_bytes = #binary_string
   local cursor = { offset = 1 }
+  -- print("Room:on_batch_message, bytes =>", total_bytes)
   while cursor.offset <= total_bytes do
-  
-    print("on_message (", #binary_string, ") offset:", cursor.offset, "WITH BYTE:", string.byte(binary_string, cursor.offset, cursor.offset + 1), ", NEXT BYTE:", string.byte(binary_string, cursor.offset + 1, cursor.offset + 2))
+    -- print("Room:on_message (batch",total_bytes,"), offset =>", cursor.offset, ", byte on offset =>", string.byte(binary_string, cursor.offset))
     self:on_message(binary_string:sub(cursor.offset), cursor)
   end
 end
@@ -109,6 +108,8 @@ function Room:on_message (binary_string, cursor)
 
     local code = message[it.offset]
     it.offset = it.offset + 1
+
+    -- print("CURRENT CODE:", code)
 
     if code == protocol.JOIN_ROOM then
       self.sessionId = decode.string(message, it)
@@ -141,19 +142,25 @@ function Room:on_message (binary_string, cursor)
     end
 
   else 
+    -- print("PREVIOUS CODE", self.previous_code)
+
     if self.previous_code == protocol.ROOM_STATE then
       self:set_state(binary_string, it)
 
     elseif self.previous_code == protocol.ROOM_STATE_PATCH then
       self:patch(binary_string, it)
-      print("after patch, offset:", it.offset)
 
     elseif self.previous_code == protocol.ROOM_DATA then
-      for msg_length, data in msgpack.unpacker(binary_string) do
-        it.offset = it.offset + msg_length
-        self:emit("message", data)
-        break
-      end
+      local msgpack_cursor = {
+          s = binary_string,
+          i = 1,
+          j = #binary_string,
+          underflow = function() error "missing bytes" end,
+      }
+      local data = msgpack.unpack_cursor(msgpack_cursor)
+      it.offset = msgpack_cursor.i
+
+      self:emit("message", data)
     end
 
     self.previous_code = nil

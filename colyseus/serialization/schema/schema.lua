@@ -485,8 +485,11 @@ function Schema:decode(bytes, it)
 
         -- reached end of strucutre. skip.
         if index == spec.END_OF_STRUCTURE then 
+            -- print("END_OF_STRUCTURE, breaking at offset:", it.offset)
             break 
         end
+
+        -- print("Schema:decode, continuing at offset:", it.offset)
 
         local field = fields_by_index[index + 1]
         local ftype = schema[field]
@@ -495,10 +498,11 @@ function Schema:decode(bytes, it)
         local change = nil
         local has_change = false
 
+        -- FIXME: this may cause issues if the `index` provided actually matches a field.
         -- WORKAROUND for LUA on emscripten environment 
         -- (reached end of buffer)
         if not field then
-            print("FIELD IS NIL, previous byte:", bytes[it.offset - 2], "current byte:", bytes[it.offset - 1])
+            -- print("FIELD NOT FOUND, byte =>", index, ", previous byte =>", bytes[it.offset - 2])
             it.offset = it.offset - 1
             break
         end
@@ -563,23 +567,18 @@ function Schema:decode(bytes, it)
                 end
                 -- 
 
+                -- index change check
+                local index_change_from
+                if (decode.index_change_check(bytes, it)) then
+                    decode.uint8(bytes, it)
+                    index_change_from = decode.number(bytes, it) + 1
+                    has_index_change = true
+                end
+
                 -- LUA: do/end block is necessary due to `break`
-                do
-                    if decode.nil_check(bytes, it) then
-                        -- const item = this[`_${field}`][new_index]
-                        -- TODO: trigger `onRemove` on Schema object being removed.
-                        it.offset = it.offset + 1
-                        break
-                    end
-
-                    -- index change check
-                    local index_change_from
-                    if (decode.index_change_check(bytes, it)) then
-                        decode.uint8(bytes, it)
-                        index_change_from = decode.number(bytes, it) + 1
-                        has_index_change = true
-                    end
-
+                -- workaround because lack of `continue` statement in LUA
+                local break_outer_loop = false
+                repeat
                     if typeref['new'] ~= nil then -- is instance of Schema
                         local item
                         local is_new = (has_index_change and index_change_from == nil and new_index ~= nil);
@@ -607,8 +606,7 @@ function Schema:decode(bytes, it)
                                 value_ref['on_remove'](item, new_index)
                             end
 
-                            pritn("break; nil field")
-                            break
+                            break -- continue
                         end
 
                         item:decode(bytes, it)
@@ -625,7 +623,12 @@ function Schema:decode(bytes, it)
                     end
 
                     table.insert(change, value[new_index])
-                end
+
+                    break -- continue
+                until true
+
+                -- workaround because lack of `continue` statement in LUA
+                if break_outer_loop then break end
 
                 i = i + 1
             end
@@ -645,12 +648,14 @@ function Schema:decode(bytes, it)
             -- serializagion
             local has_index_change = false
 
-            local i = 1
-            while i <= length do
-                do
+            local i = 0
+            while i < length do
+                local break_outer_loop = false
+                repeat
                     -- `encodeAll` may indicate a higher number of indexes it actually encodes
                     if bytes[it.offset] == nil or bytes[it.offset] == spec.END_OF_STRUCTURE then
-                        break
+                        break_outer_loop = true
+                        break -- continue
                     end
 
                     -- index change check
@@ -701,7 +706,7 @@ function Schema:decode(bytes, it)
                         end
 
                         value[new_key] = nil
-                        break
+                        break -- continue
 
                     elseif type == "string"  then
                         value[new_key] = decode_primitive_type(type, bytes, it)
@@ -726,7 +731,11 @@ function Schema:decode(bytes, it)
                         table.insert(self[maporder_key], new_key)
                         --
                     end
-                end
+
+                    break -- continue
+                until true
+
+                if break_outer_loop then break end
 
                 i = i + 1
             end
@@ -745,7 +754,9 @@ function Schema:decode(bytes, it)
             })
         end
 
-        self[field] = value
+        if field ~= nil then
+            self[field] = value
+        end
     end
 
     if self["on_change"] ~= nil and table.getn(changes) then

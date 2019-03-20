@@ -204,16 +204,20 @@ function client:on_message(binary_string, cursor)
 
   else
     if self.previous_code == protocol.ROOM_LIST then
-      for msg_length, room_list in msgpack.unpacker(message) do
-        local request_id = room_list[1]
-        local rooms = room_list[2]
+      local msgpack_cursor = {
+          s = binary_string,
+          i = 1,
+          j = #binary_string,
+          underflow = function() error "missing bytes" end,
+      }
+      local room_list = msgpack.unpack_cursor(msgpack_cursor)
+      it.offset = msgpack_cursor.i
 
-        if self.rooms_available_request[request_id] ~= nil then
-          self.rooms_available_request[request_id](rooms)
-        end
+      local request_id = room_list[1]
+      local rooms = room_list[2]
 
-        it.offset = it.offset + msg_length
-        break
+      if self.rooms_available_request[request_id] ~= nil then
+        self.rooms_available_request[request_id](rooms)
       end
     end
 

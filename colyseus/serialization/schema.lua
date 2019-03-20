@@ -17,19 +17,19 @@ function schema_serializer:get_state()
 end
 
 function schema_serializer:set_state(encoded_state, it)
-  print("(first) set_state")
+  -- print("schema_serializer:set_state")
 
   self.state:decode(utils.string_to_byte_array(encoded_state), it)
 end
 
 function schema_serializer:patch(binary_patch, it)
-  print("(second) patch")
+  -- print("schema_serializer:patch")
 
   self.state:decode(utils.string_to_byte_array(binary_patch), it)
 end
 
 function schema_serializer:handshake(bytes, it)
-  print("handshake, #bytes =>", #bytes)
+  -- print("schema_serializer:handshake")
 
   self.state = Schema.reflection_decode(bytes, it)
 end

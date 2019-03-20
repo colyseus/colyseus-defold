@@ -32,27 +32,28 @@ function init(self)
     end)
 
     -- join chat room
-    room = client:join("chat_schema", { create = true })
+    -- room = client:join("chat_schema", { create = true })
+    room = client:join("chat", { create = true })
 
     room:on("join", function()
       print("joined 'chat'")
 
-      print("PLAYERS:")
-      pprint(room.state.players)
-      pprint(room.state.messages)
+      -- print("PLAYERS:")
+      -- pprint(room.state.players)
+      -- pprint(room.state.messages)
 
-      room.state.players['on_add'] = function(player, i)
-        print("new player")
-        pprint(player)
-      end
+      -- room.state.players['on_add'] = function(player, i)
+      --   print("new player")
+      --   pprint(player)
+      -- end
 
-      room.state.messages['on_add'] = function(msg, i)
-        print("message arrived", msg.message)
-      end
+      -- room.state.messages['on_add'] = function(msg, i)
+      --   print("message arrived", msg.message)
+      -- end
 
-      -- room:listen("players/:id/:axis", function(change)
-      --   pprint(change)
-      -- end)
+      room:listen("players/:id/:axis", function(change)
+        pprint(change)
+      end)
 
     end)
 
@@ -64,6 +65,7 @@ function init(self)
     room:on("statechange", function(state)
       room:send("Hello world!")
       print("STATE CHANGE")
+      pprint(state)
     end)
 
     room:on("leave", function()

@@ -19,17 +19,19 @@ function fossil_delta:get_state()
   return self.state.state
 end
 
-function fossil_delta:set_state(encoded_state)
-  local state = msgpack.unpack(encoded_state)
+function fossil_delta:set_state(encoded_state, it)
+  local state_length, state = msgpack.unpacker(encoded_state)()
+  it.offset = it.offset + state_length
 
   self.state:set(state)
 
-  self.previous_state = utils.string_to_byte_array(encoded_state)
+  self.previous_state = utils.string_to_byte_array(encoded_state:sub(1, state_length))
 end
 
-function fossil_delta:patch(binary_patch)
+function fossil_delta:patch(binary_patch, it)
   -- apply patch
   self.previous_state = delta.apply(self.previous_state, utils.string_to_byte_array(binary_patch))
+  it.offset = it.offset + #self.previous_state
 
   -- decode patched state
   local new_state = msgpack.unpack( utils.byte_array_to_string(self.previous_state) )

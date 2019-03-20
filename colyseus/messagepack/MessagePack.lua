@@ -852,8 +852,7 @@ function m.unpacker (src)
         local cursor = cursor_string(src)
         return function ()
             if cursor.i <= cursor.j then
-                return cursor.j, unpack_cursor(cursor)
-                -- return cursor.i, unpack_cursor(cursor)
+                return cursor.i, unpack_cursor(cursor)
             end
         end
     elseif type(src) == 'function' then
