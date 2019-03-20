@@ -38,7 +38,7 @@ function utf8_read(bytes, offset, length)
 
             str = str .. string.char(
                 bit.bor(
-                    bit.rshift(bit.band(byte, 0x1f), 6),
+                    bit.arshift(bit.band(byte, 0x1f), 6),
                     bit.band(bytes[b1], 0x3f)
                 )
             )
@@ -53,9 +53,9 @@ function utf8_read(bytes, offset, length)
 
             str = str .. string.char(
                 bit.bor(
-                    bit.rshift(bit.band(byte, 0x0f), 12),
-                    bit.rshift(bit.band(bytes[b1], 0x3f), 6),
-                    bit.rshift(bit.band(bytes[b2], 0x3f), 0)
+                    bit.arshift(bit.band(byte, 0x0f), 12),
+                    bit.arshift(bit.band(bytes[b1], 0x3f), 6),
+                    bit.arshift(bit.band(bytes[b2], 0x3f), 0)
                 )
             )
             break
@@ -70,10 +70,10 @@ function utf8_read(bytes, offset, length)
             i = i + 1
 
             chr = bit.bor(
-                bit.rshift(bit.band(byte, 0x07), 18),
-                bit.rshift(bit.band(bytes[b1], 0x3f), 12),
-                bit.rshift(bit.band(bytes[b2], 0x3f), 6),
-                bit.rshift(bit.band(bytes[b3], 0x3f), 0)
+                bit.arshift(bit.band(byte, 0x07), 18),
+                bit.arshift(bit.band(bytes[b1], 0x3f), 12),
+                bit.arshift(bit.band(bytes[b2], 0x3f), 6),
+                bit.arshift(bit.band(bytes[b3], 0x3f), 0)
             )
             if (chr >= 0x010000) then -- surrogate pair
                 chr = chr - 0x010000
@@ -99,7 +99,7 @@ function boolean (bytes, it)
 end
 
 function int8 (bytes, it) 
-    return bit.rshift(bit.lshift(uint8(bytes, it), 24), 24)
+    return bit.arshift(bit.lshift(uint8(bytes, it), 24), 24)
 end
 
 function uint8 (bytes, it) 
@@ -109,7 +109,7 @@ function uint8 (bytes, it)
 end
 
 function int16 (bytes, it) 
-    return bit.rshift(bit.lshift(uint16(bytes, it), 16), 16)
+    return bit.arshift(bit.lshift(uint16(bytes, it), 16), 16)
 end
 
 function uint16 (bytes, it) 
@@ -135,7 +135,7 @@ function int32 (bytes, it)
     local n4 = bytes[it.offset]
     it.offset = it.offset + 1
 
-    return bit.bor(n1, bit.rshift(n2, 8), bit.rshift(n3, 16), bit.rshift(n4, 24))
+    return bit.bor(n1, bit.arshift(n2, 8), bit.arshift(n3, 16), bit.arshift(n4, 24))
 end
 
 function uint32 (bytes, it) 
@@ -754,9 +754,7 @@ function Schema:decode(bytes, it)
             })
         end
 
-        if field ~= nil then
-            self[field] = value
-        end
+        self[field] = value
     end
 
     if self["on_change"] ~= nil and table.getn(changes) then
