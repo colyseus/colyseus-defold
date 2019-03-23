@@ -683,7 +683,7 @@ function Schema:decode(bytes, it)
                     end
 
                     local item
-                    local is_new = (!has_index_change and not value_ref[new_key]) or (has_index_change and previous_key == nil and has_map_index)
+                    local is_new = (not has_index_change and not value_ref[new_key]) or (has_index_change and previous_key == nil and has_map_index)
 
                     if is_new and not is_schema_type then
                         item = ftype:new()
