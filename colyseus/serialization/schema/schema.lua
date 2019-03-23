@@ -575,13 +575,14 @@ function Schema:decode(bytes, it)
                     has_index_change = true
                 end
 
+                local is_new = (not has_index_change and not value[new_index]) or (has_index_change and index_change_from == nil);
+
                 -- LUA: do/end block is necessary due to `break`
                 -- workaround because lack of `continue` statement in LUA
                 local break_outer_loop = false
                 repeat
                     if typeref['new'] ~= nil then -- is instance of Schema
                         local item
-                        local is_new = (has_index_change and index_change_from == nil and new_index ~= nil);
 
                         if has_index_change and index_change_from == nil and new_index ~= nil then
                             item = typeref:new()
@@ -610,16 +611,18 @@ function Schema:decode(bytes, it)
                         end
 
                         item:decode(bytes, it)
-
-                        -- add on_add from ArraySchema
-                        if is_new and value_ref['on_add'] then
-                            value_ref['on_add'](item, new_index)
-                        end
-
                         value[new_index] = item
 
                     else 
                         value[new_index] = decode_primitive_type(typeref, bytes, it)
+                    end
+
+                    -- add on_add from ArraySchema
+                    if is_new and value_ref['on_add'] then
+                        value_ref['on_add'](value[new_index], new_index)
+
+                    elseif value_ref['on_change']
+                        value_ref['on_change'](value[new_index], new_index)
                     end
 
                     table.insert(change, value[new_index])
@@ -714,13 +717,13 @@ function Schema:decode(bytes, it)
                     else 
                         item:decode(bytes, it)
                         value[new_key] = item
+                    end
 
-                        if is_new and value_ref['on_add'] ~= nil then
-                            value_ref['on_add'](item, new_key)
+                    if is_new and value_ref['on_add'] ~= nil then
+                        value_ref['on_add'](value[new_key], new_key)
 
-                        elseif value_ref['on_change'] ~= nil then
-                            value_ref['on_change'](item, new_key)
-                        end
+                    elseif value_ref['on_change'] ~= nil then
+                        value_ref['on_change'](value[new_key], new_key)
                     end
 
                     if is_new then
