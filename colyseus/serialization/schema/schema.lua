@@ -670,6 +670,7 @@ function Schema:decode(bytes, it)
                     end
 
                     local has_map_index = decode.number_check(bytes, it)
+                    local is_schema_type = type(ftype) ~= "string";
 
                     local new_key
                     if has_map_index then 
@@ -680,9 +681,9 @@ function Schema:decode(bytes, it)
                     end
 
                     local item
-                    local is_new = (has_index_change and previous_key == nil and has_map_index)
+                    local is_new = (!has_index_change and not value_ref[new_key]) or (has_index_change and previous_key == nil and has_map_index)
 
-                    if has_index_change and previous_key == nil and has_map_index then
+                    if is_new and not is_schema_type then
                         item = ftype:new()
 
                     elseif previous_key ~= nil then
@@ -690,11 +691,6 @@ function Schema:decode(bytes, it)
 
                     else 
                         item = value_ref[new_key]
-                    end
-
-                    if item == nil and ftype ~= "string" then
-                        item = ftype:new()
-                        is_new = true
                     end
 
                     if decode.nil_check(bytes, it) then
@@ -711,7 +707,7 @@ function Schema:decode(bytes, it)
                         value[new_key] = nil
                         break -- continue
 
-                    elseif type == "string"  then
+                    elseif not is_schema_type then
                         value[new_key] = decode_primitive_type(type, bytes, it)
 
                     else 
