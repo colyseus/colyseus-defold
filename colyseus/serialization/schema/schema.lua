@@ -618,10 +618,12 @@ function Schema:decode(bytes, it)
                     end
 
                     -- add on_add from ArraySchema
-                    if is_new and value_ref['on_add'] then
-                        value_ref['on_add'](value[new_index], new_index)
+                    if is_new then
+                        if value_ref['on_add'] ~= nil then
+                            value_ref['on_add'](value[new_index], new_index)
+                        end
 
-                    elseif value_ref['on_change']
+                    elseif value_ref['on_change'] ~= nil then
                         value_ref['on_change'](value[new_index], new_index)
                     end
 
@@ -715,8 +717,10 @@ function Schema:decode(bytes, it)
                         value[new_key] = item
                     end
 
-                    if is_new and value_ref['on_add'] ~= nil then
-                        value_ref['on_add'](value[new_key], new_key)
+                    if is_new then
+                        if value_ref['on_add'] ~= nil then
+                            value_ref['on_add'](value[new_key], new_key)
+                        end
 
                     elseif value_ref['on_change'] ~= nil then
                         value_ref['on_change'](value[new_key], new_key)
