@@ -143,31 +143,55 @@ function uint16 (bytes, it)
 end
 
 function int32 (bytes, it) 
-    local n1 = bytes[it.offset]
-    local n2 = bytes[it.offset + 1]
-    local n3 = bytes[it.offset + 2]
-    local n4 = bytes[it.offset + 3]
+    local b4 = bytes[it.offset]
+    local b3 = bytes[it.offset + 1]
+    local b2 = bytes[it.offset + 2]
+    local b1 = bytes[it.offset + 3]
     it.offset = it.offset + 4
-    return bit.bor(n1, bit.lshift(n2, 8), bit.lshift(n3, 16), bit.lshift(n4, 24))
+    if b1 < 0x80 then
+        return ((b1 * 0x100 + b2) * 0x100 + b3) * 0x100 + b4
+    else
+        return ((((b1 - 0xFF) * 0x100 + (b2 - 0xFF)) * 0x100 + (b3 - 0xFF)) * 0x100 + (b4 - 0xFF)) - 1
+    end
 end
 
 function uint32 (bytes, it) 
-    --
-    -- TODO: the bit_rshift function is not reliable.
-    --
-    return bit_rshift(int32(bytes, it), 0)
+    local b4 = bytes[it.offset]
+    local b3 = bytes[it.offset + 1]
+    local b2 = bytes[it.offset + 2]
+    local b1 = bytes[it.offset + 3]
+    it.offset = it.offset + 4
+    return ((b1 * 0x100 + b2) * 0x100 + b3) * 0x100 + b4
 end
 
 function int64 (bytes, it) 
-    return uint64(bytes, it)
+    local b8 = bytes[it.offset]
+    local b7 = bytes[it.offset + 1]
+    local b6 = bytes[it.offset + 2]
+    local b5 = bytes[it.offset + 3]
+    local b4 = bytes[it.offset + 4]
+    local b3 = bytes[it.offset + 5]
+    local b2 = bytes[it.offset + 6]
+    local b1 = bytes[it.offset + 7]
+    it.offset = it.offset + 8
+    if b1 < 0x80 then
+        return ((((((b1 * 0x100 + b2) * 0x100 + b3) * 0x100 + b4) * 0x100 + b5) * 0x100 + b6) * 0x100 + b7) * 0x100 + b8
+    else
+        return ((((((((b1 - 0xFF) * 0x100 + (b2 - 0xFF)) * 0x100 + (b3 - 0xFF)) * 0x100 + (b4 - 0xFF)) * 0x100 + (b5 - 0xFF)) * 0x100 + (b6 - 0xFF)) * 0x100 + (b7 - 0xFF)) * 0x100 + (b8 - 0xFF)) - 1
+    end
 end
 
 function uint64 (bytes, it) 
-    local low = uint32(bytes, it);
-    local high = uint32(bytes, it) * math.pow(2, 32);
-    print("LOW: " .. tostring(low))
-    print("HIGH: " .. tostring(high))
-    return high + low;
+    local b8 = bytes[it.offset]
+    local b7 = bytes[it.offset + 1]
+    local b6 = bytes[it.offset + 2]
+    local b5 = bytes[it.offset + 3]
+    local b4 = bytes[it.offset + 4]
+    local b3 = bytes[it.offset + 5]
+    local b2 = bytes[it.offset + 6]
+    local b1 = bytes[it.offset + 7]
+    it.offset = it.offset + 8
+    return ((((((b1 * 0x100 + b2) * 0x100 + b3) * 0x100 + b4) * 0x100 + b5) * 0x100 + b6) * 0x100 + b7) * 0x100 + b8
 end
 
 function float32(bytes, it)
@@ -314,7 +338,7 @@ function number (bytes, it)
 
   elseif (prefix == 211) then
     -- int 64
-    return uint64(bytes, it)
+    return int64(bytes, it)
 
   elseif (prefix > 223) then
     -- negative fixint
