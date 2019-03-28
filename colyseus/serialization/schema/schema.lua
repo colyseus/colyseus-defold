@@ -94,6 +94,26 @@ function utf8_read(bytes, offset, length)
   return str
 end
 
+function bit_logic_rshift(n, bits)
+    if(n <= 0) then
+        n = bit.bnot(math.abs(n)) + 1
+    end
+    for i=1, bits do
+        n = n/2
+    end
+    return math.floor(n)
+end
+
+function bit_rshift(value, n)
+    local r = bit.rshift(value, n)
+
+    if r < 0 and n == 0 then
+        return bit.rshift(r, 1) * 2
+    else
+        return r
+    end
+end
+
 function boolean (bytes, it) 
     return uint8(bytes, it) == 1
 end
@@ -124,24 +144,30 @@ end
 
 function int32 (bytes, it) 
     local n1 = bytes[it.offset]
-    it.offset = it.offset + 1
-
-    local n2 = bytes[it.offset]
-    it.offset = it.offset + 1
-
-    local n3 = bytes[it.offset]
-    it.offset = it.offset + 1
-
-    local n4 = bytes[it.offset]
-    it.offset = it.offset + 1
-
-    return bit.bor(n1, bit.arshift(n2, 8), bit.arshift(n3, 16), bit.arshift(n4, 24))
+    local n2 = bytes[it.offset + 1]
+    local n3 = bytes[it.offset + 2]
+    local n4 = bytes[it.offset + 3]
+    it.offset = it.offset + 4
+    return bit.bor(n1, bit.lshift(n2, 8), bit.lshift(n3, 16), bit.lshift(n4, 24))
 end
 
 function uint32 (bytes, it) 
-    -- TODO:
-    -- return int32(bytes, it) >>> 0
-    return int32(bytes, it)
+    --
+    -- TODO: the bit_rshift function is not reliable.
+    --
+    return bit_rshift(int32(bytes, it), 0)
+end
+
+function int64 (bytes, it) 
+    return uint64(bytes, it)
+end
+
+function uint64 (bytes, it) 
+    local low = uint32(bytes, it);
+    local high = uint32(bytes, it) * math.pow(2, 32);
+    print("LOW: " .. tostring(low))
+    print("HIGH: " .. tostring(high))
+    return high + low;
 end
 
 function float32(bytes, it)
@@ -272,11 +298,7 @@ function number (bytes, it)
     return uint32(bytes, it)
 
   elseif (prefix == 207) then
-    -- uint 64
-    local hi = bytes[it.offset] * math.pow(2, 32)
-    local lo = bytes[it.offset + 4]
-    it.offset = it.offset + 8
-    return hi + lo
+    return uint64(bytes, it)
 
   elseif (prefix == 208) then
     -- int 8
@@ -292,10 +314,7 @@ function number (bytes, it)
 
   elseif (prefix == 211) then
     -- int 64
-    local hi = bytes[it.offset] * math.pow(2, 32)
-    local lo = bytes[it.offset + 4]
-    it.offset = it.offset + 8
-    return hi + lo
+    return uint64(bytes, it)
 
   elseif (prefix > 223) then
     -- negative fixint
@@ -328,6 +347,8 @@ local decode = {
     uint1 = uint1,
     int32 = int32,
     uint32 = uint32,
+    int64 = int64,
+    uint64 = uint64,
     float32 = float32,
     float64 = float64,
     number = number,
