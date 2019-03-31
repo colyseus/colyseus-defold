@@ -187,7 +187,13 @@ function client:on_message(binary_string, cursor)
       end
 
       room.id = room_id
-      room:connect( self:_build_endpoint(room.id, room.options) )
+
+      local process_path = ""
+      if #message > it.offset then
+        process_path = decode.string(message, it) .. "/"
+        print("process_path: " .. process_path)
+      end
+      room:connect( self:_build_endpoint(process_path .. room.id, room.options) )
 
       self.rooms[room.id] = room
       self.connecting_rooms[requestId] = nil;
