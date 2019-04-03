@@ -503,6 +503,52 @@ function table.keys(orig)
 end
 -- END UTIL FUNCTIONS --
 
+-- START MAP SCHEMA
+local MapSchema = {}
+function MapSchema:new(obj)
+    obj = obj or {}
+    setmetatable(obj, self)
+    self.__index = self
+    return obj
+end
+
+function MapSchema:trigger_all()
+    if self['on_add'] == nil then return end
+    for key, value in pairs(self) do
+        if key ~= 'on_add' and key ~= 'on_remove' and key ~= 'on_change' then
+            self['on_add'](value, key)
+        end
+    end
+end
+
+function MapSchema:clone()
+    return MapSchema:new(table.clone(self))
+end
+-- END MAP SCHEMA
+
+-- START ARRAY SCHEMA
+local ArraySchema = {}
+function ArraySchema:new(obj)
+    obj = obj or {}
+    setmetatable(obj, self)
+    self.__index = self
+    return obj
+end
+
+function ArraySchema:trigger_all()
+    if self['on_add'] == nil then return end
+    for key, value in ipairs(self) do
+        if key ~= 'on_add' and key ~= 'on_remove' and key ~= 'on_change' then
+            self['on_add'](value, key)
+        end
+    end
+end
+
+function ArraySchema:clone()
+    return ArraySchema:new(table.clone(self))
+end
+-- END ARRAY SCHEMA
+
 -- START SCHEMA CLASS --
 local Schema = {}
 
@@ -511,6 +557,24 @@ function Schema:new(obj)
     setmetatable(obj, self)
     self.__index = self
     return obj
+end
+
+function Schema:trigger_all()
+    -- skip if 'on_change' is not set
+    if self['on_change'] == nil then return end
+
+    local changes = {}
+    for field, value in pairs(self._schema) do
+        if self[field] ~= nil then
+            table.insert(changes, {
+                field = field,
+                value = value,
+                previous_value = nil
+            })
+        end
+    end
+
+    self['on_change'](changes)
 end
 
 function Schema:decode(bytes, it)
@@ -568,8 +632,8 @@ function Schema:decode(bytes, it)
             local typeref = ftype[1]
             change = {}
 
-            local value_ref = self[field] or {}
-            value = table.clone(value_ref) -- create new reference for array
+            local value_ref = self[field] or ArraySchema:new()
+            value = value_ref:clone() -- create new reference for array
 
             local new_length = decode.number(bytes, it)
             local num_changes = decode.number(bytes, it)
@@ -688,8 +752,8 @@ function Schema:decode(bytes, it)
             ftype = ftype['map']
 
             local maporder_key = "_" .. field .. "_maporder"
-            local value_ref = self[field] or {}
-            value = table.clone(value_ref)
+            local value_ref = self[field] or MapSchema:new()
+            value = value_ref:clone()
 
             local length = decode.number(bytes, it)
             has_change = (length > 0)
@@ -902,7 +966,11 @@ local reflection_decode = function (bytes, it)
                 root_instance[field_name] = field_type:new()
 
             elseif type(field_type) == "table" then
-                root_instance[field_name] = {}
+                if field_type.map ~= nil then 
+                    root_instance[field_name] = MapSchema:new() 
+                else 
+                    root_instance[field_name] = ArraySchema:new() 
+                end
             end
         end
     end
