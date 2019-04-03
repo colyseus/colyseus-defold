@@ -12,7 +12,6 @@ local spec = {
     END_OF_STRUCTURE = 193,
     NIL = 192,
     INDEX_CHANGE = 212,
-    SHIFT_OUT_BUFFER = 14
 }
 -- END SPEC --
 
@@ -564,11 +563,11 @@ function Schema:trigger_all()
     if self['on_change'] == nil then return end
 
     local changes = {}
-    for field, value in pairs(self._schema) do
+    for field, _ in pairs(self._schema) do
         if self[field] ~= nil then
             table.insert(changes, {
                 field = field,
-                value = value,
+                value = self[field],
                 previous_value = nil
             })
         end
@@ -635,6 +634,7 @@ function Schema:decode(bytes, it)
             local value_ref = self[field] or ArraySchema:new()
             value = value_ref:clone() -- create new reference for array
 
+
             local new_length = decode.number(bytes, it)
             local num_changes = decode.number(bytes, it)
 
@@ -646,7 +646,11 @@ function Schema:decode(bytes, it)
 
             -- ensure current array has the same length as encoded one
             if #value >= new_length then
-                local new_values = {}
+                local new_values = ArraySchema:new()
+                new_values['on_add'] = value_ref['on_add']
+                new_values['on_remove'] = value_ref['on_remove']
+                new_values['on_change'] = value_ref['on_change']
+
                 for i, item in ipairs(value) do
                     if i > new_length then
                         -- call "on_removed" on exceeding items
