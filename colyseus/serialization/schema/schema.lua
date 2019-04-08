@@ -16,14 +16,14 @@ local spec = {
 -- END SPEC --
 
 -- START DECODE --
-function utf8_read(bytes, offset, length) 
+function utf8_read(bytes, offset, length)
   local str = ""
   local chr = 0
 
   local len = offset + length
 
   for i = offset, len - 1 do
-    repeat 
+    repeat
         local byte = bytes[i]
 
         if (bit.band(byte, 0x80) == 0x00) then
@@ -113,25 +113,25 @@ function bit_rshift(value, n)
     end
 end
 
-function boolean (bytes, it) 
+function boolean (bytes, it)
     return uint8(bytes, it) == 1
 end
 
-function int8 (bytes, it) 
+function int8 (bytes, it)
     return bit.arshift(bit.lshift(uint8(bytes, it), 24), 24)
 end
 
-function uint8 (bytes, it) 
+function uint8 (bytes, it)
     local int = bytes[it.offset]
     it.offset = it.offset + 1
     return int
 end
 
-function int16 (bytes, it) 
+function int16 (bytes, it)
     return bit.arshift(bit.lshift(uint16(bytes, it), 16), 16)
 end
 
-function uint16 (bytes, it) 
+function uint16 (bytes, it)
     local n1 = bytes[it.offset]
     it.offset = it.offset + 1
 
@@ -141,7 +141,7 @@ function uint16 (bytes, it)
     return bit.bor(n1, bit.lshift(n2, 8))
 end
 
-function int32 (bytes, it) 
+function int32 (bytes, it)
     local b4 = bytes[it.offset]
     local b3 = bytes[it.offset + 1]
     local b2 = bytes[it.offset + 2]
@@ -154,7 +154,7 @@ function int32 (bytes, it)
     end
 end
 
-function uint32 (bytes, it) 
+function uint32 (bytes, it)
     local b4 = bytes[it.offset]
     local b3 = bytes[it.offset + 1]
     local b2 = bytes[it.offset + 2]
@@ -163,7 +163,7 @@ function uint32 (bytes, it)
     return ((b1 * 0x100 + b2) * 0x100 + b3) * 0x100 + b4
 end
 
-function int64 (bytes, it) 
+function int64 (bytes, it)
     local b8 = bytes[it.offset]
     local b7 = bytes[it.offset + 1]
     local b6 = bytes[it.offset + 2]
@@ -180,7 +180,7 @@ function int64 (bytes, it)
     end
 end
 
-function uint64 (bytes, it) 
+function uint64 (bytes, it)
     local b8 = bytes[it.offset]
     local b7 = bytes[it.offset + 1]
     local b6 = bytes[it.offset + 2]
@@ -267,7 +267,7 @@ function float64(bytes, it)
     return n
 end
 
-function _string (bytes, it) 
+function _string (bytes, it)
   local prefix = bytes[it.offset]
   it.offset = it.offset + 1
 
@@ -278,7 +278,7 @@ function _string (bytes, it)
   return value
 end
 
-function string_check (bytes, it) 
+function string_check (bytes, it)
   local prefix = bytes[it.offset]
   return (
     -- fixstr
@@ -292,7 +292,7 @@ function string_check (bytes, it)
   )
 end
 
-function number (bytes, it) 
+function number (bytes, it)
   local prefix = bytes[it.offset]
   it.offset = it.offset + 1
 
@@ -345,20 +345,20 @@ function number (bytes, it)
   end
 end
 
-function number_check (bytes, it) 
+function number_check (bytes, it)
   local prefix = bytes[it.offset]
   return (prefix < 128 or (prefix >= 202 and prefix <= 211))
 end
 
-function array_check (bytes, it) 
+function array_check (bytes, it)
   return bytes[it.offset] < 160
 end
 
-function nil_check (bytes, it) 
+function nil_check (bytes, it)
   return bytes[it.offset] == spec.NIL
 end
 
-function index_change_check (bytes, it) 
+function index_change_check (bytes, it)
   return bytes[it.offset] == spec.INDEX_CHANGE
 end
 
@@ -474,7 +474,7 @@ local pprint = pprint or function(node)
     print(output_str)
 end
 
-function decode_primitive_type (ftype, bytes, it) 
+function decode_primitive_type (ftype, bytes, it)
     local func = decode[ftype]
     return func and func(bytes, it) or nil
 end
@@ -521,7 +521,11 @@ function MapSchema:trigger_all()
 end
 
 function MapSchema:clone()
-    return MapSchema:new(table.clone(self))
+    local cloned = MapSchema:new(table.clone(self))
+    cloned['on_add'] = self['on_add']
+    cloned['on_remove'] = self['on_remove']
+    cloned['on_change'] = self['on_change']
+    return cloned
 end
 -- END MAP SCHEMA
 
@@ -544,7 +548,11 @@ function ArraySchema:trigger_all()
 end
 
 function ArraySchema:clone()
-    return ArraySchema:new(table.clone(self))
+    local cloned = ArraySchema:new(table.clone(self))
+    cloned['on_add'] = self['on_add']
+    cloned['on_remove'] = self['on_remove']
+    cloned['on_change'] = self['on_change']
+    return cloned
 end
 -- END ARRAY SCHEMA
 
@@ -592,9 +600,9 @@ function Schema:decode(bytes, it)
         it.offset = it.offset + 1
 
         -- reached end of strucutre. skip.
-        if index == spec.END_OF_STRUCTURE then 
+        if index == spec.END_OF_STRUCTURE then
             -- print("END_OF_STRUCTURE, breaking at offset:", it.offset)
-            break 
+            break
         end
 
         -- print("Schema:decode, continuing at offset:", it.offset)
@@ -607,7 +615,7 @@ function Schema:decode(bytes, it)
         local has_change = false
 
         -- FIXME: this may cause issues if the `index` provided actually matches a field.
-        -- WORKAROUND for LUA on emscripten environment 
+        -- WORKAROUND for LUA on emscripten environment
         -- (reached end of buffer)
         if not field then
             -- print("FIELD NOT FOUND, byte =>", index, ", previous byte =>", bytes[it.offset - 2])
@@ -675,10 +683,10 @@ function Schema:decode(bytes, it)
                 local new_index = decode.number(bytes, it)
 
                 -- lua indexes start at 1
-                if new_index ~= nil then 
-                    new_index = new_index + 1 
+                if new_index ~= nil then
+                    new_index = new_index + 1
                 end
-                -- 
+                --
 
                 -- index change check
                 local index_change_from
@@ -726,7 +734,7 @@ function Schema:decode(bytes, it)
                         item:decode(bytes, it)
                         value[new_index] = item
 
-                    else 
+                    else
                         value[new_index] = decode_primitive_type(typeref, bytes, it)
                     end
 
@@ -788,10 +796,10 @@ function Schema:decode(bytes, it)
                     local is_schema_type = type(ftype) ~= "string";
 
                     local new_key
-                    if has_map_index then 
+                    if has_map_index then
                         local map_index = decode.number(bytes, it) + 1
-                        new_key = self[maporder_key][map_index] 
-                    else 
+                        new_key = self[maporder_key][map_index]
+                    else
                         new_key = decode.string(bytes, it)
                     end
 
@@ -804,7 +812,7 @@ function Schema:decode(bytes, it)
                     elseif previous_key ~= nil then
                         item = value_ref[previous_key]
 
-                    else 
+                    else
                         item = value_ref[new_key]
                     end
 
@@ -825,7 +833,7 @@ function Schema:decode(bytes, it)
                     elseif not is_schema_type then
                         value[new_key] = decode_primitive_type(type, bytes, it)
 
-                    else 
+                    else
                         item:decode(bytes, it)
                         value[new_key] = item
                     end
@@ -970,10 +978,10 @@ local reflection_decode = function (bytes, it)
                 root_instance[field_name] = field_type:new()
 
             elseif type(field_type) == "table" then
-                if field_type.map ~= nil then 
-                    root_instance[field_name] = MapSchema:new() 
-                else 
-                    root_instance[field_name] = ArraySchema:new() 
+                if field_type.map ~= nil then
+                    root_instance[field_name] = MapSchema:new()
+                else
+                    root_instance[field_name] = ArraySchema:new()
                 end
             end
         end
