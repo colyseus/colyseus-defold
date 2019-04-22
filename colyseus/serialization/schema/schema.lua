@@ -271,7 +271,20 @@ function _string (bytes, it)
   local prefix = bytes[it.offset]
   it.offset = it.offset + 1
 
-  local length = bit.band(prefix, 0x1f)
+  local length
+
+  if prefix < 0xc0 then
+    length = bit.band(prefix, 0x1f) -- fixstr
+  else if prefix === 0xd9 then
+    length = uint8(bytes, it)
+  else if prefix === 0xda then
+    length = uint16(bytes, it)
+  else if prefix === 0xdb then
+    length = uint32(bytes, it)
+  else
+    length = 0
+  end
+
   local value = utf8_read(bytes, it.offset, length)
   it.offset = it.offset + length
 
