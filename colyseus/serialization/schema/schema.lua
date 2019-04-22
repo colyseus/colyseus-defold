@@ -276,11 +276,11 @@ function _string (bytes, it)
 
   if prefix < 0xc0 then
     length = bit.band(prefix, 0x1f) -- fixstr
-  else if prefix === 0xd9 then
+  elseif prefix == 0xd9 then
     length = uint8(bytes, it)
-  else if prefix === 0xda then
+  elseif prefix == 0xda then
     length = uint16(bytes, it)
-  else if prefix === 0xdb then
+  elseif prefix == 0xdb then
     length = uint32(bytes, it)
   else
     length = 0
@@ -570,6 +570,27 @@ function ArraySchema:clone()
 end
 -- END ARRAY SCHEMA
 
+-- START CONTEXT CLASS --
+local Context = {}
+function Context:new(obj)
+    obj = obj or {}
+    setmetatable(obj, self)
+    self.__index = self
+    obj.schemas = {}
+    obj.types = {}
+    return obj
+end
+function Context:get(typeid)
+    return self.types[typeid]
+end
+function Context:add(schema, typeid)
+    schema._typeid = typeid or #self.schemas
+    self.types[schema._typeid] = schema
+    table.insert(self.schemas, schema)
+end
+-- END CONTEXT CLASS --
+
+
 -- START SCHEMA CLASS --
 local Schema = {}
 
@@ -646,7 +667,7 @@ function Schema:decode(bytes, it)
                 value = nil
             else
                 -- decode child Schema instance
-                value = self[field] or ftype:new()
+                value = self[field] or self:create_instance_type(bytes, it, ftype)
                 value:decode(bytes, it)
                 has_change = true
             end
@@ -725,7 +746,7 @@ function Schema:decode(bytes, it)
                         local item
 
                         if has_index_change and index_change_from == nil and new_index ~= nil then
-                            item = typeref:new()
+                            item = self:create_instance_type(bytes, it, typeref)
 
                         elseif (index_change_from ~= nil) then
                             item = value_ref[index_change_from]
@@ -735,7 +756,7 @@ function Schema:decode(bytes, it)
                         end
 
                         if item == nil then
-                            item = typeref:new()
+                            item = self:create_instance_type(bytes, it, typeref)
                             is_new = true
                         end
 
@@ -780,7 +801,7 @@ function Schema:decode(bytes, it)
 
         elseif type(ftype) == "table" and ftype['map'] ~= nil then
             -- decode map
-            ftype = ftype['map']
+            local typeref = ftype['map']
 
             local maporder_key = "_" .. field .. "_maporder"
             local value_ref = self[field] or MapSchema:new()
@@ -812,7 +833,7 @@ function Schema:decode(bytes, it)
                     end
 
                     local has_map_index = decode.number_check(bytes, it)
-                    local is_schema_type = type(ftype) ~= "string";
+                    local is_schema_type = type(typeref) ~= "string";
 
                     local new_key
                     if has_map_index then
@@ -826,7 +847,7 @@ function Schema:decode(bytes, it)
                     local is_new = (not has_index_change and not value_ref[new_key]) or (has_index_change and previous_key == nil and has_map_index)
 
                     if is_new and is_schema_type then
-                        item = ftype:new()
+                        item = self:create_instance_type(bytes, it, typeref)
 
                     elseif previous_key ~= nil then
                         item = value_ref[previous_key]
@@ -906,13 +927,27 @@ function Schema:decode(bytes, it)
 
     return self
 end
+
+function Schema:create_instance_type(bytes, it, typeref)
+    if bytes[it.offset] == spec.TYPE_ID then
+        it.offset = it.offset + 1
+        local another_type = self._context.get(decode.uint8(bytes, it))
+        return another_type:new()
+    else
+        return typeref:new()
+    end
+end
 -- END SCHEMA CLASS --
 
-local define = function(fields)
+local global_context = Context:new()
+local define = function(fields, context, typeid)
     local DerivedSchema = Schema:new()
 
     DerivedSchema._schema = {}
     DerivedSchema._order = fields and fields['_order'] or {}
+    DerivedSchema._context = context or global_context
+
+    context:add(DerivedSchema, typeid)
 
     for i, field in pairs(DerivedSchema._order) do
         DerivedSchema._schema[field] = fields[field]
@@ -922,25 +957,29 @@ local define = function(fields)
 end
 
 -- START REFLECTION --
+local reflection_context = Context:new()
 local ReflectionField = define({
     ["name"] = "string",
     ["type"] = "string",
-    ["referenced_type"] = "number",
+    ["referenced_type"] = "uint8",
     ["_order"] = {"name", "type", "referenced_type"}
-})
+}, reflection_context)
 
 local ReflectionType = define({
-    ["id"] = "number",
+    ["id"] = "uint8",
     ["fields"] = { ReflectionField },
     ["_order"] = {"id", "fields"}
-})
+}, reflection_context)
 
 local Reflection = define({
     ["types"] = { ReflectionType },
-    ["_order"] = {"types"}
-})
+    ["root_type"] = "uint8",
+    ["_order"] = {"types", "root_type"}
+}, reflection_context)
 
 local reflection_decode = function (bytes, it)
+    local context = Context:new()
+
     local reflection = Reflection:new()
     reflection:decode(bytes, it)
 
@@ -952,18 +991,18 @@ local reflection_decode = function (bytes, it)
     local schema_types = {}
 
     for i, reflection_type in ipairs(reflection.types) do
-        schema_types[reflection_type.id + 1] = define({})
+        schema_types[reflection_type.id] = define({}, context, reflection_type.id)
     end
 
     for i = 1, #reflection.types do
         local reflection_type = reflection.types[i]
 
         for j = 1, #reflection_type.fields do
-            local schema_type = schema_types[reflection_type.id + 1]
+            local schema_type = schema_types[reflection_type.id]
             local field = reflection_type.fields[j]
 
             if field.referenced_type ~= nil then
-                local referenced_type = schema_types[field.referenced_type + 1]
+                local referenced_type = schema_types[field.referenced_type]
 
                 if field.type == "array" then
                     add_field_to_schema(schema_type, field.name, { referenced_type })
@@ -981,7 +1020,7 @@ local reflection_decode = function (bytes, it)
         end
     end
 
-    local root_type = schema_types[1]
+    local root_type = schema_types[reflection.root_type]
     local root_instance = root_type:new()
 
     for i = 1, #root_type._order do
