@@ -12,6 +12,7 @@ local spec = {
     END_OF_STRUCTURE = 193,
     NIL = 192,
     INDEX_CHANGE = 212,
+    TYPE_ID = 213,
 }
 -- END SPEC --
 
@@ -607,6 +608,11 @@ function Schema:decode(bytes, it)
     local schema = self._schema
     local fields_by_index = self._order
 
+    -- skip TYPE_ID of existing instances
+    if bytes[it.offset] == spec.TYPE_ID then
+        it.offset = it.offset + 2
+    end
+
     local total_bytes = #bytes
     while it.offset <= total_bytes do
         local index = bytes[it.offset]
@@ -617,8 +623,6 @@ function Schema:decode(bytes, it)
             -- print("END_OF_STRUCTURE, breaking at offset:", it.offset)
             break
         end
-
-        -- print("Schema:decode, continuing at offset:", it.offset)
 
         local field = fields_by_index[index + 1]
         local ftype = schema[field]
@@ -662,11 +666,13 @@ function Schema:decode(bytes, it)
             has_change = (num_changes > 0)
 
             -- FIXME: this may not be reliable. possibly need to encode this variable during
-            -- serializagion
+            -- serialization
             local has_index_change = false
 
             -- ensure current array has the same length as encoded one
             if #value >= new_length then
+                num_changes = num_changes - (#value - new_length)
+
                 local new_values = ArraySchema:new()
                 new_values['on_add'] = value_ref['on_add']
                 new_values['on_remove'] = value_ref['on_remove']
