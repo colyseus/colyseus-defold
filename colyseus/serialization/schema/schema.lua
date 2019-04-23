@@ -931,7 +931,7 @@ end
 function Schema:create_instance_type(bytes, it, typeref)
     if bytes[it.offset] == spec.TYPE_ID then
         it.offset = it.offset + 1
-        local another_type = self._context.get(decode.uint8(bytes, it))
+        local another_type = self._context:get(decode.uint8(bytes, it))
         return another_type:new()
     else
         return typeref:new()
