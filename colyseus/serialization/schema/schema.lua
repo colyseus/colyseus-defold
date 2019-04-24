@@ -682,7 +682,7 @@ function Schema:decode(bytes, it)
 
 
             local new_length = decode.number(bytes, it)
-            local num_changes = decode.number(bytes, it)
+            local num_changes = math.min(decode.number(bytes, it), new_length)
 
             has_change = (num_changes > 0)
 
@@ -692,8 +692,6 @@ function Schema:decode(bytes, it)
 
             -- ensure current array has the same length as encoded one
             if #value >= new_length then
-                num_changes = num_changes - (#value - new_length)
-
                 local new_values = ArraySchema:new()
                 new_values['on_add'] = value_ref['on_add']
                 new_values['on_remove'] = value_ref['on_remove']
