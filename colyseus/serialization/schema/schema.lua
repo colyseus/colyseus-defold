@@ -834,8 +834,9 @@ function Schema:decode(bytes, it)
                     local is_schema_type = type(typeref) ~= "string";
 
                     local new_key
+                    local map_index
                     if has_map_index then
-                        local map_index = decode.number(bytes, it) + 1
+                        map_index = decode.number(bytes, it) + 1
                         new_key = self[maporder_key][map_index]
                     else
                         new_key = decode.string(bytes, it)
@@ -866,6 +867,7 @@ function Schema:decode(bytes, it)
                         end
 
                         value[new_key] = nil
+                        table.remove(self[maporder_key], map_index)
                         break -- continue
 
                     elseif not is_schema_type then
