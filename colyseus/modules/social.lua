@@ -71,7 +71,7 @@ local function request(method, segments, params, callback, headers)
 
   http.request(build_url(segments), method, function(self, id, response)
 		local data = response.response ~= '' and json.decode(response.response)
-    local has_error = not data or next(data) == nil or data.error
+    local has_error = (response.status >= 400)
     local err = nil
 
     if has_error then
@@ -126,7 +126,18 @@ function m.get_friends(success_cb)
   check_token()
 
   request("GET", "/friends", {}, function(err, response)
-    if err then print("@colyseus/social: '/friends' error => " .. tostring(err)) end
+    if err then print("@colyseus/social: " .. tostring(err)) end
+    success_cb(err, response)
+  end, {
+    authorization = "Bearer " .. m.token
+  })
+end
+
+function m.get_online_friends(success_cb)
+  check_token()
+
+  request("GET", "/online_friends", {}, function(err, response)
+    if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
   end, {
     authorization = "Bearer " .. m.token
@@ -137,7 +148,7 @@ function m.send_friend_request(user_id, success_cb)
   check_token()
 
   request("GET", "/friend_request", { userId = user_id }, function(err, response)
-    if err then print("@colyseus/social: '/friend_request' error => " .. tostring(err)) end
+    if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
   end, {
     authorization = "Bearer " .. m.token
@@ -148,7 +159,7 @@ function m.logout(success_cb)
   check_token()
 
   request("GET", "/logout", {}, function(err, response)
-    if err then print("@colyseus/social: '/logout' error => " .. tostring(err)) end
+    if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
   end, {
     authorization = "Bearer " .. m.token
