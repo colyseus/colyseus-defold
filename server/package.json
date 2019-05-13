@@ -11,7 +11,9 @@
     "node": ">= 5.x"
   },
   "dependencies": {
+    "@colyseus/social": "file:../../colyseus-social",
     "colyseus": "^0.10.3",
+    "cors": "^2.8.5",
     "express": "^4.13.3"
   },
   "devDependencies": {

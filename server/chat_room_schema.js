@@ -72,6 +72,10 @@ class ChatRoomSchema extends colyseus.Room {
     this.broadcast({broadcasting: "something"});
     console.log(data, "received from", client.sessionId);
     this.state.messages.push(new Message(client.sessionId + " sent " + data));
+
+    for (let message of this.state.messages) {
+      message.message += "a";
+    }
   }
 
   update () {

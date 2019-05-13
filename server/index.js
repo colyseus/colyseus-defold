@@ -1,7 +1,9 @@
 const http = require("http");
 const express = require("express");
+const cors = require("cors");
 
 const colyseus = require("colyseus");
+const colyseusSocialExpress = require("@colyseus/social/router/express").default;
 const ChatRoom = require('./chat_room');
 const ChatRoomSchema = require('./chat_room_schema');
 
@@ -13,6 +15,12 @@ const app = new express();
 const gameServer = new colyseus.Server({
   server: http.createServer(app)
 });
+
+// allow CORS
+app.use(cors());
+
+// bind @colyseus/social
+app.use("/", colyseusSocialExpress);
 
 // Register ChatRoom as "chat"
 gameServer.register("chat", ChatRoom);

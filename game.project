@@ -23,3 +23,6 @@ include_dirs = colyseus
 [physics]
 scale = 0.02
 
+[facebook]
+appid = 353169041992501
+

@@ -1,9 +1,10 @@
 local ColyseusClient = require "colyseus.client"
+local ColyseusSocial = require "colyseus.modules.social"
 
 local client
 local room
 
---[[ 
+--[[
 --
 -- OPTIONAL: defold-websocket allows to set a `connect_timeout` option.
 --
@@ -14,6 +15,7 @@ ColyseusConnection.config = { connect_timeout = 10 }
 --]]
 
 function init(self)
+  --[[
     -- Add initialization code here
     -- Remove this function if not needed
     client = ColyseusClient.new("ws://localhost:2567", false)
@@ -79,6 +81,17 @@ function init(self)
     end)
 
     client:connect()
+]]--
+    ColyseusSocial.facebook_login(function(err, data)
+      pprint(data)
+
+      ColyseusSocial.get_friends(function(err, data)
+        print("GET FRIENDS")
+        pprint(data)
+      end)
+
+    end)
+
 end
 
 function final(self)
@@ -87,7 +100,7 @@ function final(self)
 end
 
 function update(self, dt)
-  client:loop()
+  -- client:loop()
 
    -- Add update code here
    -- Remove this function if not needed
