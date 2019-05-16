@@ -205,4 +205,22 @@ function m.get_online_friends(success_cb)
   end, { authorization = "Bearer " .. m.token })
 end
 
+function m.block_user(user_id, success_cb)
+  check_token()
+
+  request("POST", "/block", { userId = user_id }, function(err, response)
+    if err then print("@colyseus/social: " .. tostring(err)) end
+    success_cb(err, response)
+  end, { authorization = "Bearer " .. m.token })
+end
+
+function m.unblock_user(user_id, success_cb)
+  check_token()
+
+  request("PUT", "/block", { userId = user_id }, function(err, response)
+    if err then print("@colyseus/social: " .. tostring(err)) end
+    success_cb(err, response)
+  end, { authorization = "Bearer " .. m.token })
+end
+
 return m
