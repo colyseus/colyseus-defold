@@ -141,6 +141,16 @@ function m.facebook_login(success_cb, permissions)
   end)
 end
 
+function m.ping(success_cb)
+  check_token()
+
+  request("GET", "/ping", {}, function(err, response)
+    if err then print("@colyseus/social: " .. tostring(err)) end
+    success_cb(err, response)
+  end, { authorization = "Bearer " .. m.token })
+end
+
+
 function m.get_friend_requests(success_cb)
   check_token()
 
@@ -190,15 +200,6 @@ function m.get_online_friends(success_cb)
   check_token()
 
   request("GET", "/online_friends", {}, function(err, response)
-    if err then print("@colyseus/social: " .. tostring(err)) end
-    success_cb(err, response)
-  end, { authorization = "Bearer " .. m.token })
-end
-
-function m.logout(success_cb)
-  check_token()
-
-  request("GET", "/logout", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
   end, { authorization = "Bearer " .. m.token })
