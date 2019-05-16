@@ -39,8 +39,20 @@ local function check_token()
   end
 end
 
+local function get_platform_id()
+  if info.system_name == "iPhone OS" then
+    return "ios"
+
+  else if info.system_name == "Android" then
+    return "android"
+
+  else
+    return nil
+  end
+end
+
 local function get_device_id()
-  if info.system_name == "iPhone OS" or info.system_name == "Android" then
+  if get_platform_id() ~= nil then
 		return info.device_ident
   else
 		local unique_id = cache.get_item("device_id")
@@ -57,9 +69,11 @@ local function request(method, segments, params, callback, headers)
 
   local has_query_string = false
   local query_string = {}
-	for k, v in pairs(params) do
-    table.insert(query_string, k .. "=" .. urlencode(tostring(v)))
-    has_query_string = true
+  for k, v in pairs(params) do
+    if v ~= nil then
+      table.insert(query_string, k .. "=" .. urlencode(tostring(v)))
+      has_query_string = true
+    end
   end
 
   if has_query_string then
@@ -95,8 +109,13 @@ function m.facebook_login(success_cb, permissions)
     if data.status == facebook.STATE_OPEN then
 
       -- TODO: get device id
+      local query_params = {
+        accessToken = facebook.access_token(),
+        deviceId = get_device_id(),
+        platform = get_platform_id()
+      }
 
-      request("GET", "/facebook", { accessToken = facebook.access_token() }, function(err, response)
+      request("GET", "/facebook", query_params, function(err, response)
         if err then error("@colyseus/social: " .. tostring(err)) end
 
         -- TODO: cache and check token expiration on every call
@@ -122,15 +141,49 @@ function m.facebook_login(success_cb, permissions)
   end)
 end
 
+function m.get_friend_requests(success_cb)
+  check_token()
+
+  request("GET", "/friend_requests", {}, function(err, response)
+    if err then print("@colyseus/social: " .. tostring(err)) end
+    success_cb(err, response)
+  end, { authorization = "Bearer " .. m.token })
+end
+
+function m.accept_friend_request(user_id, success_cb)
+  check_token()
+
+  request("PUT", "/friend_requests", { userId = user_id }, function(err, response)
+    if err then print("@colyseus/social: " .. tostring(err)) end
+    success_cb(err, response)
+  end, { authorization = "Bearer " .. m.token })
+end
+
+function m.delete_friend_request(user_id, success_cb)
+  check_token()
+
+  request("DELETE", "/friend_requests", { userId = user_id }, function(err, response)
+    if err then print("@colyseus/social: " .. tostring(err)) end
+    success_cb(err, response)
+  end, { authorization = "Bearer " .. m.token })
+end
+
+function m.send_friend_request(user_id, success_cb)
+  check_token()
+
+  request("POST", "/friend_requests", { userId = user_id }, function(err, response)
+    if err then print("@colyseus/social: " .. tostring(err)) end
+    success_cb(err, response)
+  end, { authorization = "Bearer " .. m.token })
+end
+
 function m.get_friends(success_cb)
   check_token()
 
   request("GET", "/friends", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
-  end, {
-    authorization = "Bearer " .. m.token
-  })
+  end, { authorization = "Bearer " .. m.token })
 end
 
 function m.get_online_friends(success_cb)
@@ -139,20 +192,7 @@ function m.get_online_friends(success_cb)
   request("GET", "/online_friends", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
-  end, {
-    authorization = "Bearer " .. m.token
-  })
-end
-
-function m.send_friend_request(user_id, success_cb)
-  check_token()
-
-  request("GET", "/friend_request", { userId = user_id }, function(err, response)
-    if err then print("@colyseus/social: " .. tostring(err)) end
-    success_cb(err, response)
-  end, {
-    authorization = "Bearer " .. m.token
-  })
+  end, { authorization = "Bearer " .. m.token })
 end
 
 function m.logout(success_cb)
@@ -161,9 +201,7 @@ function m.logout(success_cb)
   request("GET", "/logout", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
-  end, {
-    authorization = "Bearer " .. m.token
-  })
+  end, { authorization = "Bearer " .. m.token })
 end
 
 return m
