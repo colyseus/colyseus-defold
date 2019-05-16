@@ -99,9 +99,36 @@ local function request(method, segments, params, callback, headers)
 	end, headers, "", options)
 end
 
+local function login_request (query_params, success_cb)
+  request("POST", "/login", query_params, function(err, response)
+    if err then
+      print("@colyseus/social: " .. tostring(err))
+    else
+      -- TODO: cache and check token expiration on every call
+      -- response.expiresIn
+
+      -- cache token locally
+      cache.set_item("token", response.token)
+      m.token = response.token
+
+      -- initialize auto-ping
+      m.register_ping_service()
+    end
+
+    success_cb(err, response)
+  end)
+end
+
 --
 -- PUBLIC METHODS
 --
+
+function m.anonymous_login(success_cb)
+  login_request({
+    deviceId = get_device_id(),
+    platform = get_platform_id()
+  }, success_cb)
+end
 
 function m.facebook_login(success_cb, permissions)
   if not facebook then
@@ -110,31 +137,11 @@ function m.facebook_login(success_cb, permissions)
 
   facebook.login_with_read_permissions(permissions or { "public_profile", "email", "user_friends" }, function(self, data)
     if data.status == facebook.STATE_OPEN then
-
-      -- TODO: get device id
-      local query_params = {
+      login_request({
         accessToken = facebook.access_token(),
         deviceId = get_device_id(),
         platform = get_platform_id()
-      }
-
-      request("GET", "/facebook", query_params, function(err, response)
-        if err then
-          print("@colyseus/social: " .. tostring(err))
-        else
-          -- TODO: cache and check token expiration on every call
-          -- response.expiresIn
-
-          -- cache token locally
-          cache.set_item("token", response.token)
-          m.token = response.token
-
-          -- initialize auto-ping
-          m.register_ping_service()
-        end
-
-        success_cb(err, response)
-      end)
+      }, success_cb)
 
     elseif data.status == facebook.STATE_CLOSED_LOGIN_FAILED then
       -- Do something to indicate that login failed
