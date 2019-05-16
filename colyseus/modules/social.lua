@@ -12,7 +12,10 @@ local m = {
   use_https = not sys.get_engine_info().is_debug,
   endpoint = "localhost:2567",
   http_timeout = 10,
-  token = cache.get_item("token")
+  token = cache.get_item("token"),
+
+  ping_interval = 20,
+  ping_service_handle = nil
 }
 
 local is_emscripten = sys.get_sys_info().system_name == "HTML5"
@@ -116,14 +119,19 @@ function m.facebook_login(success_cb, permissions)
       }
 
       request("GET", "/facebook", query_params, function(err, response)
-        if err then error("@colyseus/social: " .. tostring(err)) end
+        if err then
+          print("@colyseus/social: " .. tostring(err))
+        else
+          -- TODO: cache and check token expiration on every call
+          -- response.expiresIn
 
-        -- TODO: cache and check token expiration on every call
-        -- response.expiresIn
+          -- cache token locally
+          cache.set_item("token", response.token)
+          m.token = response.token
 
-        -- cache token locally
-        cache.set_item("token", response.token)
-        m.token = response.token
+          -- initialize auto-ping
+          m.register_ping_service()
+        end
 
         success_cb(err, response)
       end)
@@ -141,6 +149,18 @@ function m.facebook_login(success_cb, permissions)
   end)
 end
 
+function m.register_ping_service()
+  -- prevent from having more than one ping services
+  if m.ping_service_handle ~= nil then
+    m.unregister_ping_service()
+  end
+  m.ping_service_handle = timer.delay(m.ping_interval, true, function() m.ping() end)
+end
+
+function m.unregister_ping_service()
+  timer.cancel(m.ping_service_handle)
+end
+
 function m.ping(success_cb)
   check_token()
 
@@ -149,7 +169,6 @@ function m.ping(success_cb)
     success_cb(err, response)
   end, { authorization = "Bearer " .. m.token })
 end
-
 
 function m.get_friend_requests(success_cb)
   check_token()
