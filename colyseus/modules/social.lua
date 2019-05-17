@@ -38,7 +38,7 @@ end
 
 local function check_token()
   if m.token == nil or m.token == "" then
-    error "missing token. call 'facebook_login' first."
+    error "missing token. need to login first."
   end
 end
 
