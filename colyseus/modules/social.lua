@@ -100,6 +100,10 @@ local function request(method, segments, params, callback, headers)
 end
 
 local function login_request (query_params, success_cb)
+  if m.token ~= nil then
+    query_params['token'] = m.token
+  end
+
   request("POST", "/login", query_params, function(err, response)
     if err then
       print("@colyseus/social: " .. tostring(err))
@@ -247,6 +251,10 @@ function m.unblock_user(user_id, success_cb)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
   end, { authorization = "Bearer " .. m.token })
+end
+
+function m.logout()
+  m.token = nil
 end
 
 return m
