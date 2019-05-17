@@ -25,7 +25,7 @@ function fossil_delta:set_state(encoded_state, it)
 
   self.state:set(state)
 
-  self.previous_state = utils.string_to_byte_array(encoded_state:sub(1, state_length))
+  self.previous_state = utils.string_to_byte_array(encoded_state)
 end
 
 function fossil_delta:patch(binary_patch, it)
