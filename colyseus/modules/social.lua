@@ -199,7 +199,7 @@ function m.accept_friend_request(user_id, success_cb)
   end, { authorization = "Bearer " .. m.token })
 end
 
-function m.delete_friend_request(user_id, success_cb)
+function m.decline_friend_request(user_id, success_cb)
   check_token()
 
   request("DELETE", "/friend_requests", { userId = user_id }, function(err, response)
