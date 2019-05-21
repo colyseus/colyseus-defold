@@ -1,4 +1,5 @@
 local Connection = require('colyseus.connection')
+local Auth = require('colyseus.auth')
 local Room = require('colyseus.room')
 local protocol = require('colyseus.protocol')
 local EventEmitter = require('colyseus.eventemitter')
@@ -33,6 +34,7 @@ function client:init(endpoint, connect_on_init)
   end
 
   self.connection = Connection.new()
+  self.auth = Auth.new(endpoint)
 
   self.connection:on("open", function()
     if storage.get_item("colyseusid") ~= nil then

@@ -1,80 +1,89 @@
---
--- @colyseus/social is a Colyseus Pro ⚔️️🛡 feature.
---
--- Support Colyseus on Patreon to unlock access to it:
--- https://www.patreon.com/endel
---
+local utils = require "colyseus.utils"
+local storage = require "colyseus.storage"
 
-local urlencode = require "colyseus.modules.urlencode"
-local cache = require "colyseus.storage"
+local auth = {}
+auth.__index = auth
 
-local m = {
-  use_https = not sys.get_engine_info().is_debug,
-  endpoint = "localhost:2567",
-  http_timeout = 10,
-  token = cache.get_item("token"),
+function auth.new (endpoint)
+  local instance = EventEmitter:new({
+    use_https = not sys.get_engine_info().is_debug,
+    endpoint = endpoint:gsub("ws", "http"),
+    http_timeout = 10,
+    token = storage.get_item("token"),
 
-  ping_interval = 20,
-  ping_service_handle = nil
-}
+    ping_interval = 20,
+    ping_service_handle = nil
+  })
 
-local is_emscripten = sys.get_sys_info().system_name == "HTML5"
-if is_emscripten then
-  m.use_https = html5.run("window['location']['protocol']") == "https:"
+  local is_emscripten = sys.get_sys_info().system_name == "HTML5"
+  if is_emscripten then
+    instance.use_https = html5.run("window['location']['protocol']") == "https:"
+  end
+
+  setmetatable(instance, auth)
+  instance:init()
+  return instance
 end
 
 --
 -- PRIVATE METHODS
 --
 
-local function build_url(segments)
-  if not m.endpoint then
+function auth:build_url(segments)
+  if not self.endpoint then
     error "'endpoint' must be set on 'colyseus.modules.social'"
   end
 
-  local protocol = m.use_https and "https://" or "http://"
-  return protocol .. m.endpoint .. segments
+  local protocol = self.use_https and "https://" or "http://"
+  return protocol .. self.endpoint .. segments
 end
 
-local function check_token()
-  if m.token == nil or m.token == "" then
-    error "missing token. need to login first."
-  end
+function auth:has_token()
+  return self.token ~= nil and self.token ~= ""
 end
 
-local function get_platform_id()
+function auth:get_platform_id()
   if info.system_name == "iPhone OS" then
     return "ios"
 
   else if info.system_name == "Android" then
     return "android"
 
-  else
-    return nil
+  else if info.system_name == "HTML5" then
+    return "html5"
+
+  else if info.system_name == "Darwin" then
+    return "osx"
+
+  else if info.system_name == "Windows" then
+    return "windows"
+
+  else if info.system_name == "Linux" then
+    return "linux"
   end
 end
 
-local function get_device_id()
+function auth:get_device_id()
   if get_platform_id() ~= nil then
 		return info.device_ident
   else
-		local unique_id = cache.get_item("device_id")
+		local unique_id = storage.get_item("device_id")
 		if type(unique_id) ~= "string" then
       unique_id = tostring(math.random(0, 9999)) .. tostring(os.time(os.date("!*t")))
-      cache.set_item("device_id", unique_id)
+      storage.set_item("device_id", unique_id)
 		end
 		return unique_id
 	end
 end
 
-local function request(method, segments, params, callback, headers)
+function auth:request(method, segments, params, callback, headers)
   if not headers then headers = {} end
 
   local has_query_string = false
   local query_string = {}
   for k, v in pairs(params) do
     if v ~= nil then
-      table.insert(query_string, k .. "=" .. urlencode(tostring(v)))
+      table.insert(query_string, k .. "=" .. utils.urlencode(tostring(v)))
       has_query_string = true
     end
   end
@@ -84,7 +93,7 @@ local function request(method, segments, params, callback, headers)
   end
 
   local options = {}
-  options['timeout'] = m.http_timeout
+  options['timeout'] = self.http_timeout
 
   http.request(build_url(segments), method, function(self, id, response)
 		local data = response.response ~= '' and json.decode(response.response)
@@ -99,9 +108,9 @@ local function request(method, segments, params, callback, headers)
 	end, headers, "", options)
 end
 
-local function login_request (query_params, success_cb)
-  if m.token ~= nil then
-    query_params['token'] = m.token
+function auth:login_request (query_params, success_cb)
+  if self:has_token() then
+    query_params['token'] = self.token
   end
 
   request("POST", "/login", query_params, function(err, response)
@@ -112,11 +121,11 @@ local function login_request (query_params, success_cb)
       -- response.expiresIn
 
       -- cache token locally
-      cache.set_item("token", response.token)
-      m.token = response.token
+      storage.set_item("token", response.token)
+      self.token = response.token
 
       -- initialize auto-ping
-      m.register_ping_service()
+      self:register_ping_service()
     end
 
     success_cb(err, response)
@@ -127,14 +136,14 @@ end
 -- PUBLIC METHODS
 --
 
-function m.anonymous_login(success_cb)
+function auth:login(success_cb)
   login_request({
     deviceId = get_device_id(),
     platform = get_platform_id()
   }, success_cb)
 end
 
-function m.facebook_login(success_cb, permissions)
+function auth:facebook_login(success_cb, permissions)
   if not facebook then
     error ("Facebook login is not supported on '" .. sys.get_sys_info().system_name .. "' platform")
   end
@@ -160,101 +169,101 @@ function m.facebook_login(success_cb, permissions)
   end)
 end
 
-function m.register_ping_service()
+function auth:register_ping_service()
   -- prevent from having more than one ping services
-  if m.ping_service_handle ~= nil then
-    m.unregister_ping_service()
+  if self.ping_service_handle ~= nil then
+    self:unregister_ping_service()
   end
-  m.ping_service_handle = timer.delay(m.ping_interval, true, function() m.ping() end)
+  self.ping_service_handle = timer.delay(self.ping_interval, true, function() self:ping() end)
 end
 
-function m.unregister_ping_service()
-  timer.cancel(m.ping_service_handle)
+function auth:unregister_ping_service()
+  timer.cancel(self.ping_service_handle)
 end
 
-function m.ping(success_cb)
+function auth:ping(success_cb)
   check_token()
 
   request("GET", "/ping", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
-  end, { authorization = "Bearer " .. m.token })
+  end, { authorization = "Bearer " .. self.token })
 end
 
-function m.get_friend_requests(success_cb)
+function auth:get_friend_requests(success_cb)
   check_token()
 
   request("GET", "/friend_requests", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
-  end, { authorization = "Bearer " .. m.token })
+  end, { authorization = "Bearer " .. self.token })
 end
 
-function m.accept_friend_request(user_id, success_cb)
+function auth:accept_friend_request(user_id, success_cb)
   check_token()
 
   request("PUT", "/friend_requests", { userId = user_id }, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
-  end, { authorization = "Bearer " .. m.token })
+  end, { authorization = "Bearer " .. self.token })
 end
 
-function m.decline_friend_request(user_id, success_cb)
+function auth:decline_friend_request(user_id, success_cb)
   check_token()
 
   request("DELETE", "/friend_requests", { userId = user_id }, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
-  end, { authorization = "Bearer " .. m.token })
+  end, { authorization = "Bearer " .. self.token })
 end
 
-function m.send_friend_request(user_id, success_cb)
+function auth:send_friend_request(user_id, success_cb)
   check_token()
 
   request("POST", "/friend_requests", { userId = user_id }, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
-  end, { authorization = "Bearer " .. m.token })
+  end, { authorization = "Bearer " .. self.token })
 end
 
-function m.get_friends(success_cb)
+function auth:get_friends(success_cb)
   check_token()
 
   request("GET", "/friends", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
-  end, { authorization = "Bearer " .. m.token })
+  end, { authorization = "Bearer " .. self.token })
 end
 
-function m.get_online_friends(success_cb)
+function auth:get_online_friends(success_cb)
   check_token()
 
   request("GET", "/online_friends", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
-  end, { authorization = "Bearer " .. m.token })
+  end, { authorization = "Bearer " .. self.token })
 end
 
-function m.block_user(user_id, success_cb)
+function auth:block_user(user_id, success_cb)
   check_token()
 
   request("POST", "/block", { userId = user_id }, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
-  end, { authorization = "Bearer " .. m.token })
+  end, { authorization = "Bearer " .. self.token })
 end
 
-function m.unblock_user(user_id, success_cb)
+function auth:unblock_user(user_id, success_cb)
   check_token()
 
   request("PUT", "/block", { userId = user_id }, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
     success_cb(err, response)
-  end, { authorization = "Bearer " .. m.token })
+  end, { authorization = "Bearer " .. self.token })
 end
 
-function m.logout()
+function auth:logout()
   m.token = nil
 end
 
-return m
+return auth
