@@ -1,5 +1,4 @@
-local ColyseusClient = require "colyseus.client"
-local ColyseusSocial = require "colyseus.modules.social"
+local Colyseus = require "colyseus.client"
 
 local client
 local room
@@ -15,10 +14,9 @@ ColyseusConnection.config = { connect_timeout = 10 }
 --]]
 
 function init(self)
-  --[[
     -- Add initialization code here
     -- Remove this function if not needed
-    client = ColyseusClient.new("ws://localhost:2567", false)
+    client = Colyseus.new("ws://localhost:2567", false)
 
     client:on("open", function()
         print("colyseus-defold: connection opened!")
@@ -33,65 +31,56 @@ function init(self)
         print(err)
     end)
 
-    -- join chat room
-    room = client:join("chat_schema", { create = true })
-    -- room = client:join("chat", { create = true })
+    client.auth:login(function(err, auth)
+      print("AUTH DATA:")
+      pprint(auth)
 
-    room:on("join", function()
-      print("joined 'chat'")
+      -- join chat room
+      room = client:join("chat_schema", { create = true })
+      -- room = client:join("chat", { create = true })
 
-      -- print("PLAYERS:")
-      -- pprint(room.state.players)
-      -- pprint(room.state.messages)
+      room:on("join", function()
+        print("joined 'chat'")
 
-      room.state.messages['on_add'] = function(msg, i)
-        print("message arrived", msg.message)
-      end
+        -- print("PLAYERS:")
+        -- pprint(room.state.players)
+        -- pprint(room.state.messages)
 
-      room.state.players['on_add'] = function(player, i)
-        print("new player")
-        pprint(player)
-      end
+        room.state.messages['on_add'] = function(msg, i)
+          print("message arrived", msg.message)
+        end
 
-      room.state['on_change'] = function(changes)
-        print("state changes")
-        pprint(changes)
-      end
+        room.state.players['on_add'] = function(player, i)
+          print("new player")
+          pprint(player)
+        end
 
-      -- room:listen("players/:id/:axis", function(change)
-      --   pprint(change)
-      -- end)
+        room.state['on_change'] = function(changes)
+          -- print("state changes")
+          -- pprint(changes)
+        end
 
-    end)
+      end)
 
-    room:on("message", function(message)
-        print("colyseus-defold: message received!")
+      room:on("message", function(message)
+          print("colyseus-defold: message received!")
 
-        -- pprint(message)
-    end)
+          -- pprint(message)
+      end)
 
-    room:on("statechange", function(state)
-      -- room:send("Hello world!")
-      -- print("STATE CHANGE")
-      -- pprint(state)
-    end)
+      room:on("statechange", function(state)
+        -- room:send("Hello world!")
+        -- print("STATE CHANGE")
+        -- pprint(state)
+      end)
 
-    room:on("leave", function()
-      print("left 'chat'")
-    end)
-
-    client:connect()
-]]--
-    ColyseusSocial.facebook_login(function(err, data)
-      pprint(data)
-
-      ColyseusSocial.get_friends(function(err, data)
-        print("GET FRIENDS")
-        pprint(data)
+      room:on("leave", function()
+        print("left 'chat'")
       end)
 
     end)
 
+    client:connect()
 end
 
 function final(self)
@@ -100,7 +89,7 @@ function final(self)
 end
 
 function update(self, dt)
-  -- client:loop()
+  client:loop()
 
    -- Add update code here
    -- Remove this function if not needed

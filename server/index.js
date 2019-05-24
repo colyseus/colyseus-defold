@@ -3,7 +3,7 @@ const express = require("express");
 const cors = require("cors");
 
 const colyseus = require("colyseus");
-const colyseusSocialExpress = require("@colyseus/social/router/express").default;
+const socialRoutes = require("@colyseus/social/express").default;
 const ChatRoom = require('./chat_room');
 const ChatRoomSchema = require('./chat_room_schema');
 
@@ -20,7 +20,7 @@ const gameServer = new colyseus.Server({
 app.use(cors());
 
 // bind @colyseus/social
-app.use("/", colyseusSocialExpress);
+app.use("/", socialRoutes);
 
 // Register ChatRoom as "chat"
 gameServer.register("chat", ChatRoom);

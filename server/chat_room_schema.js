@@ -1,5 +1,6 @@
 var schema = require('@colyseus/schema');
 var colyseus = require('colyseus');
+var social = require('@colyseus/social');
 
 class Message extends schema.Schema {
     constructor(message) {
@@ -50,6 +51,11 @@ class ChatRoomSchema extends colyseus.Room {
     }, 1000);
 
     console.log("ChatRoom created!", options);
+  }
+
+  async onAuth(options) {
+    // console.log("onAuth: ", options);
+    return await social.User.findOne(social.verifyToken(options.token));
   }
 
   requestJoin (options) {

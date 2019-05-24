@@ -1,6 +1,7 @@
 local Connection = require('colyseus.connection')
 local Auth = require('colyseus.auth')
 local Room = require('colyseus.room')
+local Push = require('colyseus.push')
 local protocol = require('colyseus.protocol')
 local EventEmitter = require('colyseus.eventemitter')
 local storage = require('colyseus.storage')
@@ -35,6 +36,7 @@ function client:init(endpoint, connect_on_init)
 
   self.connection = Connection.new()
   self.auth = Auth.new(endpoint)
+  self.push = Push.new(endpoint)
 
   self.connection:on("open", function()
     if storage.get_item("colyseusid") ~= nil then
@@ -115,6 +117,10 @@ end
 function client:create_room_request(room_name, options, reuse_room_instance, retry_count)
   self.requestId = self.requestId + 1
   options.requestId = self.requestId;
+
+  if self.auth:has_token() then
+    options.token = self.auth.token
+  end
 
   local room = reuse_room_instance or Room.create(room_name, options)
 
