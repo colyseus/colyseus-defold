@@ -55,7 +55,7 @@ class ChatRoomSchema extends colyseus.Room {
 
   async onAuth(options) {
     // console.log("onAuth: ", options);
-    return await social.User.findOne(social.verifyToken(options.token));
+    return await social.User.findById(social.verifyToken(options.token)._id);
   }
 
   requestJoin (options) {
@@ -63,8 +63,10 @@ class ChatRoomSchema extends colyseus.Room {
     return true;
   }
 
-  onJoin (client) {
+  onJoin (client, options, user) {
     console.log("client joined!", client.sessionId);
+
+    console.log("User:", user);
     this.state.players[client.sessionId] = new Player({ x: 0, y: 0 });
     this.send(client, { hello: "world!" })
   }

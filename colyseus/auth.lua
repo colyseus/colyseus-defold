@@ -18,8 +18,7 @@ function Auth.new (endpoint)
     ping_service_handle = nil
   })
 
-  local is_emscripten = info.system_name == "HTML5"
-  if is_emscripten then
+  if info.system_name == "HTML5" then
     instance.use_https = html5.run("window['location']['protocol']") == "https:"
   end
 
@@ -73,7 +72,7 @@ function Auth:get_device_id()
 	end
 end
 
-function Auth:request(method, segments, params, callback, headers)
+function Auth:request(method, segments, params, callback, headers, body)
   if not headers then headers = {} end
 
   local has_query_string = false
@@ -102,7 +101,7 @@ function Auth:request(method, segments, params, callback, headers)
     end
 
     callback(err, data)
-	end, headers, "", options)
+	end, headers, body or "", options)
 end
 
 function Auth:login_request (query_params, success_cb)
@@ -173,6 +172,24 @@ function Auth:facebook_login(success_cb, permissions)
     end
   end)
 end
+
+function Auth:save(success_cb)
+  local body_fields = {}
+
+  local allowed_fields = {'username', 'displayName', 'avatarUrl', 'lang', 'location', 'timezone'}
+  for i, field in ipairs(allowed_fields) do
+    if self[field] then table.insert(body_fields, [["]] .. field .. [[":"]] .. self[field] .. [["]]) end
+  end
+
+  self:request("PUT", "/auth", {}, function(err, response)
+    if err then print("@colyseus/social: " .. tostring(err)) end
+    success_cb(err, response)
+  end, {
+    ["content-type"] = 'application/json',
+    authorization = "Bearer " .. self.token
+  }, "{" .. table.concat(body_fields, ",") .. "}")
+end
+
 
 function Auth:register_ping_service()
   -- prevent from having more than one ping services
@@ -251,6 +268,7 @@ end
 
 function Auth:logout()
   self.token = nil
+  self:unregister_ping_service()
 end
 
 return Auth

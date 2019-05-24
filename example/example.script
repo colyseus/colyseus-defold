@@ -35,6 +35,12 @@ function init(self)
       print("AUTH DATA:")
       pprint(auth)
 
+      client.auth.username = "Endel"
+      client.auth:save(function(err, data)
+        pprint(data)
+        pprint(client.auth)
+      end)
+
       -- join chat room
       room = client:join("chat_schema", { create = true })
       -- room = client:join("chat", { create = true })
