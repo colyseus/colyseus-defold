@@ -18,12 +18,13 @@ function Push:register()
   local system_name = sys.get_sys_info().system_name
   if system_name == "HTML5" then
     -- run webpush register script
-    html5.run(_webpush_register_script())
+    html5.run(self:_webpush_register_script())
 
   elseif system_name == "iPhone OS" or system_name == "Android" then
     -- register for iOS / Android
 
     push.register({}, function(self, token, error)
+      -- send "token" to backend service
     end)
   end
 end
@@ -40,7 +41,13 @@ const check = () => {
 };
 
 const registerServiceWorker = async () => {
-  return await navigator.serviceWorker.register("]] .. self.endpoint .. "/push" .. [[");
+  try {
+    return await navigator.serviceWorker.register("]] .. self.endpoint .. "/push" .. [[");
+
+  } catch(e) {
+    console.error(e);
+    console.error(e.message);
+  }
 };
 
 const requestNotificationPermission = async () => {

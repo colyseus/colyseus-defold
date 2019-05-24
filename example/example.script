@@ -14,6 +14,8 @@ ColyseusConnection.config = { connect_timeout = 10 }
 --]]
 
 function init(self)
+  msg.post(".", "acquire_input_focus")
+
     -- Add initialization code here
     -- Remove this function if not needed
     client = Colyseus.new("ws://localhost:2567", false)
@@ -35,7 +37,7 @@ function init(self)
       print("AUTH DATA:")
       pprint(auth)
 
-      client.auth.username = "Endel"
+      client.auth.username = "jakebadlands"
       client.auth:save(function(err, data)
         pprint(data)
         pprint(client.auth)
@@ -92,6 +94,7 @@ end
 function final(self)
     -- Add finalization code here
     -- Remove this function if not needed
+    msg.post(".", "release_input_focus")
 end
 
 function update(self, dt)
@@ -108,7 +111,10 @@ end
 
 function on_input(self, action_id, action)
    -- Add input-handling code here
-   -- Remove this function if not needed
+  -- Remove this function if not needed
+  if action_id == hash("click") and action.pressed then
+    client.push:register()
+  end
 end
 
 function on_reload(self)
