@@ -105,8 +105,6 @@ function Auth:request(method, segments, params, callback, headers, body)
 end
 
 function Auth:login_request (query_params, success_cb)
-  print("LOGIN REQUEST!")
-
   if self:has_token() then
     query_params['token'] = self.token
   end
@@ -139,13 +137,12 @@ end
 -- PUBLIC METHODS
 --
 
-function Auth:login(email_or_success_cb, optional_password, success_cb)
+function Auth:login(query_params_or_success_cb, success_cb)
   local query_params = {}
-  if not success_cb and not optional_password then
-    success_cb = email_or_success_cb
+  if not success_cb then
+    success_cb = query_params_or_success_cb
   else
-    query_params['email'] = email_or_success_cb
-    query_params['password'] = optional_password
+    query_params = query_params_or_success_cb
   end
   self:login_request(query_params, success_cb)
 end
