@@ -1004,6 +1004,16 @@ local reflection_decode = function (bytes, it)
             if field.referenced_type ~= nil then
                 local referenced_type = schema_types[field.referenced_type]
 
+                if referenced_type == nil then
+                    local child_type_index = string.find(field.type, ":")
+                    referenced_type = string.sub(
+                        field.type,
+                        child_type_index + 1,
+                        string.len(field.type)
+                    )
+                    field.type = string.sub(field.type, 1, child_type_index - 1)
+                end
+
                 if field.type == "array" then
                     add_field_to_schema(schema_type, field.name, { referenced_type })
 
