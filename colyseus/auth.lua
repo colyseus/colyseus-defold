@@ -203,7 +203,9 @@ end
 function Auth:ping(success_cb)
   self:request("GET", "/auth", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
-    success_cb(err, response)
+    if success_cb then
+      success_cb(err, response)
+    end
   end, { authorization = "Bearer " .. self.token })
 end
 
