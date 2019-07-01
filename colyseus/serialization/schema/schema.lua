@@ -911,9 +911,17 @@ function Schema:decode(bytes, it)
         end
 
         if self["on_change"] and has_change then
+            local current_value
+
+            if change ~= nil then
+                current_value = change
+            else
+                current_value = value
+            end
+
             table.insert(changes, {
                 field = field,
-                value = change or value,
+                value = current_value,
                 previous_value = self[field]
             })
         end
