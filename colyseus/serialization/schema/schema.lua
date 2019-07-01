@@ -490,7 +490,7 @@ end
 
 function decode_primitive_type (ftype, bytes, it)
     local func = decode[ftype]
-    return func and func(bytes, it) or nil
+    if func then return func(bytes, it) else return nil end
 end
 
 function table.clone(orig)
