@@ -526,7 +526,7 @@ function MapSchema:new(obj)
 end
 
 function MapSchema:trigger_all()
-    if self['on_add'] == nil then return end
+    if type(self) ~= "table" or self['on_add'] == nil then return end
     for key, value in pairs(self) do
         if key ~= 'on_add' and key ~= 'on_remove' and key ~= 'on_change' then
             self['on_add'](value, key)
@@ -553,7 +553,7 @@ function ArraySchema:new(obj)
 end
 
 function ArraySchema:trigger_all()
-    if self['on_add'] == nil then return end
+    if type(self) ~= "table" or self['on_add'] == nil then return end
     for key, value in ipairs(self) do
         if key ~= 'on_add' and key ~= 'on_remove' and key ~= 'on_change' then
             self['on_add'](value, key)
@@ -700,7 +700,7 @@ function Schema:decode(bytes, it)
                 for i, item in ipairs(value) do
                     if i > new_length then
                         -- call "on_removed" on exceeding items
-                        if item["on_remove"] ~= nil then
+                        if type(item) == "table" and item["on_remove"] ~= nil then
                             item["on_remove"]()
                         end
 
@@ -858,7 +858,7 @@ function Schema:decode(bytes, it)
                     if decode.nil_check(bytes, it) then
                         it.offset = it.offset + 1
 
-                        if item ~= nil and item['on_remove'] ~= nil then
+                        if item ~= nil and type(item) == "table" and item['on_remove'] ~= nil then
                             item['on_remove']()
                         end
 
@@ -871,7 +871,7 @@ function Schema:decode(bytes, it)
                         break -- continue
 
                     elseif not is_schema_type then
-                        value[new_key] = decode_primitive_type(type, bytes, it)
+                        value[new_key] = decode_primitive_type(typeref, bytes, it)
 
                     else
                         item:decode(bytes, it)
