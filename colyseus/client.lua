@@ -81,9 +81,6 @@ function client:create_matchmake_request(method, room_name, options, callback)
     options = {}
   end
 
-  print("create_matchmake_request! options =>")
-  pprint(options)
-
   if self.auth:has_token() then
     options.token = self.auth.token
   end
@@ -102,9 +99,6 @@ function client:create_matchmake_request(method, room_name, options, callback)
     room.sessionId = response.sessionId
 
     local on_error = function(err)
-      print("JOIN ERROR ON ROOM!")
-      pprint(err)
-
       callback(err)
       room:off()
     end
