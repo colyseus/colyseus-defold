@@ -18,20 +18,7 @@ function init(self)
 
     -- Add initialization code here
     -- Remove this function if not needed
-    client = Colyseus.new("ws://localhost:2567", false)
-
-    client:on("open", function()
-        print("colyseus-defold: connection opened!")
-    end)
-
-    client:on("close", function()
-        print("colyseus-defold: connection closed!")
-    end)
-
-    client:on("error", function(err)
-        print("colyseus-defold: error")
-        print(err)
-    end)
+    client = Colyseus.new("ws://localhost:2567")
 
     client.auth:login(function(err, auth)
       print("AUTH DATA:")
@@ -39,20 +26,20 @@ function init(self)
 
       client.auth.username = "jakebadlands"
       client.auth:save(function(err, data)
-        pprint(data)
-        pprint(client.auth)
+        print("auth saved successfuly!")
       end)
 
-      -- join chat room
-      room = client:join("chat_schema", { create = true })
-      -- room = client:join("chat", { create = true })
-
-      room:on("join", function()
-        print("joined 'chat'")
+      -- join "demo" room
+      client:join_or_create("demo", function(err, room)
+        if (err) then
+          print("JOIN ERROR: " .. err)
+          return
+        end
 
         -- print("PLAYERS:")
         -- pprint(room.state.players)
         -- pprint(room.state.messages)
+        print("successfully joined '" .. room.name .. "'")
 
         room.state.messages['on_add'] = function(msg, i)
           print("message arrived", msg.message)
@@ -63,32 +50,36 @@ function init(self)
           pprint(player)
         end
 
+        room.state.players['on_change'] = function(changes)
+          print("player changed")
+          pprint(changes)
+        end
+
         room.state['on_change'] = function(changes)
           -- print("state changes")
           -- pprint(changes)
         end
 
-      end)
+        room:on("message", function(message)
+            print("colyseus-defold: message received!")
 
-      room:on("message", function(message)
-          print("colyseus-defold: message received!")
+            -- pprint(message)
+        end)
 
-          -- pprint(message)
-      end)
+        room:on("statechange", function(state)
+          -- room:send("Hello world!")
+          -- print("STATE CHANGE")
+          -- pprint(state)
+        end)
 
-      room:on("statechange", function(state)
-        -- room:send("Hello world!")
-        -- print("STATE CHANGE")
-        -- pprint(state)
-      end)
+        room:on("leave", function()
+          print("left '" .. room.name .. "'")
+        end)
 
-      room:on("leave", function()
-        print("left 'chat'")
       end)
 
     end)
 
-    client:connect()
 end
 
 function final(self)
@@ -110,7 +101,7 @@ function on_message(self, message_id, message, sender)
 end
 
 function on_input(self, action_id, action)
-   -- Add input-handling code here
+  -- Add input-handling code here
   -- Remove this function if not needed
   if action_id == hash("click") and action.pressed then
     client.push:register()

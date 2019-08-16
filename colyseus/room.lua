@@ -13,13 +13,13 @@ Room = {}
 Room.__index = function (self, key)
   if key == "state" then
     -- state getter
-    return self.serializer:get_state() 
+    return self.serializer:get_state()
   else
     return Room[key]
   end
 end
 
-function Room.create(name, options)
+function Room.new(name)
   local room = EventEmitter:new({
     serializer_id = nil,
     previous_code = nil
@@ -29,10 +29,9 @@ function Room.create(name, options)
   return room
 end
 
-function Room:init(name, options)
+function Room:init(name)
   self.id = nil
   self.name = name
-  self.options = options or {}
   self.connection = Connection.new()
   self.serializer = serialization.get_serializer('fossil-delta').new()
 
@@ -41,7 +40,7 @@ function Room:init(name, options)
     if self.serializer and self.serializer.teardown ~= nil then
       self.serializer:teardown();
     end
-    
+
     self:off()
   end)
 end
@@ -61,10 +60,6 @@ function Room:connect (endpoint)
   end)
 
   self.connection:open(endpoint)
-end
-
-function Room:has_joined ()
-  return self.sessionId ~= nil
 end
 
 -- fossil-delta serializer only
@@ -109,10 +104,8 @@ function Room:on_message (binary_string, cursor)
     local code = message[it.offset]
     it.offset = it.offset + 1
 
-    -- print("CURRENT CODE:", code)
-
     if code == protocol.JOIN_ROOM then
-      self.sessionId = decode.string(message, it)
+      print("RECEIVED JOIN_ROOM")
       self.serializer_id = decode.string(message, it)
 
       local serializer = serialization.get_serializer(self.serializer_id)
@@ -137,11 +130,11 @@ function Room:on_message (binary_string, cursor)
     elseif code == protocol.LEAVE_ROOM then
       self:leave()
 
-    else 
+    else
       self.previous_code = code
     end
 
-  else 
+  else
     -- print("PREVIOUS CODE", self.previous_code)
 
     if self.previous_code == protocol.ROOM_STATE then
@@ -192,7 +185,7 @@ function Room:leave(consented)
 end
 
 function Room:send (data)
-  self.connection:send({ protocol.ROOM_DATA, self.id, data })
+  self.connection:send({ protocol.ROOM_DATA, data })
 end
 
 return Room

@@ -8,7 +8,9 @@ class Message extends schema.Schema {
         this.message = message;
     }
 }
-schema.type("string")(Message.prototype, "message");
+schema.defineTypes(Message, {
+  message: "string"
+});
 
 class Player extends schema.Schema {
     constructor(args) {
@@ -17,8 +19,10 @@ class Player extends schema.Schema {
         this.y = args.y;
     }
 }
-schema.type("number")(Player.prototype, "x");
-schema.type("number")(Player.prototype, "y");
+schema.defineTypes(Player, {
+  x: "number",
+  y: "number",
+});
 
 class State extends schema.Schema {
     constructor() {
@@ -27,13 +31,15 @@ class State extends schema.Schema {
         this.players = new schema.MapSchema();
     }
 }
-schema.type([ Message ])(State.prototype, "messages");
-schema.type({ map: Player })(State.prototype, "players");
-schema.type("string")(State.prototype, "turn");
+schema.defineTypes(State, {
+  messages: [Message],
+  players: { map: Player },
+  turn: "string"
+});
 
-class ChatRoomSchema extends colyseus.Room {
+class DemoRoom extends colyseus.Room {
 
-  onInit (options) {
+  onCreate (options) {
     this.setState(new State());
 
     // for "get_available_rooms" (ROOM_LIST protocol)
@@ -53,14 +59,9 @@ class ChatRoomSchema extends colyseus.Room {
     console.log("ChatRoom created!", options);
   }
 
-  async onAuth(options) {
+  async onAuth(client, options) {
     // console.log("onAuth: ", options);
     return await social.User.findById(social.verifyToken(options.token)._id);
-  }
-
-  requestJoin (options) {
-    console.log("request join!", options);
-    return true;
   }
 
   onJoin (client, options, user) {
@@ -98,4 +99,4 @@ class ChatRoomSchema extends colyseus.Room {
 
 }
 
-module.exports = ChatRoomSchema;
+module.exports = DemoRoom;
