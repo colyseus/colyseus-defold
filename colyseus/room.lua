@@ -105,7 +105,6 @@ function Room:on_message (binary_string, cursor)
     it.offset = it.offset + 1
 
     if code == protocol.JOIN_ROOM then
-      print("RECEIVED JOIN_ROOM")
       self.serializer_id = decode.string(message, it)
 
       local serializer = serialization.get_serializer(self.serializer_id)
