@@ -203,9 +203,7 @@ end
 function Auth:ping(success_cb)
   self:request("GET", "/auth", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
-    if success_cb then
-      success_cb(err, response)
-    end
+    if success_cb then success_cb(err, response) end
   end, { authorization = "Bearer " .. self.token })
 end
 
@@ -219,49 +217,49 @@ end
 function Auth:accept_friend_request(user_id, success_cb)
   self:request("PUT", "/friends/requests", { userId = user_id }, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
-    success_cb(err, response)
+    if success_cb then success_cb(err, response) end
   end, { authorization = "Bearer " .. self.token })
 end
 
 function Auth:decline_friend_request(user_id, success_cb)
   self:request("DELETE", "/friends/requests", { userId = user_id }, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
-    success_cb(err, response)
+    if success_cb then success_cb(err, response) end
   end, { authorization = "Bearer " .. self.token })
 end
 
 function Auth:send_friend_request(user_id, success_cb)
   self:request("POST", "/friends/requests", { userId = user_id }, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
-    success_cb(err, response)
+    if success_cb then success_cb(err, response) end
   end, { authorization = "Bearer " .. self.token })
 end
 
 function Auth:get_friends(success_cb)
   self:request("GET", "/friends/all", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
-    success_cb(err, response)
+    if success_cb then success_cb(err, response) end
   end, { authorization = "Bearer " .. self.token })
 end
 
 function Auth:get_online_friends(success_cb)
   self:request("GET", "/friends/online", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
-    success_cb(err, response)
+    if success_cb then success_cb(err, response) end
   end, { authorization = "Bearer " .. self.token })
 end
 
 function Auth:block_user(user_id, success_cb)
   self:request("POST", "/friends/block", { userId = user_id }, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
-    success_cb(err, response)
+    if success_cb then success_cb(err, response) end
   end, { authorization = "Bearer " .. self.token })
 end
 
 function Auth:unblock_user(user_id, success_cb)
   self:request("PUT", "/friends/block", { userId = user_id }, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
-    success_cb(err, response)
+    if success_cb then success_cb(err, response) end
   end, { authorization = "Bearer " .. self.token })
 end
 
