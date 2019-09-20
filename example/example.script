@@ -14,11 +14,24 @@ ColyseusConnection.config = { connect_timeout = 10 }
 --]]
 
 function init(self)
-  msg.post(".", "acquire_input_focus")
+    msg.post(".", "acquire_input_focus")
+
 
     -- Add initialization code here
     -- Remove this function if not needed
     client = Colyseus.new("ws://localhost:2567")
+
+    -- get all available rooms at every 3 seconds (example)
+    timer.delay(3, true, function()
+      client:get_available_rooms("", function(err, rooms)
+        if err then
+          print("get_available_rooms error =>")
+          pprint(err)
+        end
+        print("available rooms =>")
+        pprint(rooms)
+      end)
+    end)
 
     client.auth:login(function(err, auth)
       print("AUTH DATA:")

@@ -36,17 +36,9 @@ function client:init(endpoint)
 end
 
 function client:get_available_rooms(room_name, callback)
-  local requestId = self.requestId + 1
-  self.connection:send({ protocol.ROOM_LIST, requestId, room_name })
-
-  -- TODO: add timeout to cancel request.
-
-  self.rooms_available_request[requestId] = function(rooms)
-    self.rooms_available_request[requestId] = nil
-    callback(rooms)
-  end
-
-  self.requestId = requestId
+  local url = "http" .. self.hostname:sub(3) .. "matchmake/" .. room_name
+  local headers = { ['Accept'] = 'application/json' }
+  self:_request(url, 'GET', headers, nil, callback)
 end
 
 function client:loop(timeout)
