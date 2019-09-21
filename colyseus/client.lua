@@ -59,7 +59,7 @@ function client:join(room_name, options, callback)
   return self:create_matchmake_request('join', room_name, options or {}, callback)
 end
 
-function client:join(room_id, options, callback)
+function client:join_by_id(room_id, options, callback)
   return self:create_matchmake_request('joinById', room_id, options or {}, callback)
 end
 
