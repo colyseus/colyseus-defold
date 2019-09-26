@@ -77,6 +77,11 @@ function Auth:request(method, segments, params, callback, headers, body)
 
   local has_query_string = false
   local query_params = {}
+
+  if self:has_token() then
+    query_params['token'] = self.token
+  end
+
   for k, v in pairs(params) do
     if v ~= nil then
       table.insert(query_params, k .. "=" .. utils.urlencode(tostring(v)))
@@ -105,10 +110,6 @@ function Auth:request(method, segments, params, callback, headers, body)
 end
 
 function Auth:login_request (query_params, success_cb)
-  if self:has_token() then
-    query_params['token'] = self.token
-  end
-
   query_params['deviceId'] = self:get_device_id()
   query_params['platform'] = self:get_platform_id()
 
