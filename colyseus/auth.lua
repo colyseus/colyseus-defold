@@ -61,15 +61,15 @@ end
 
 function Auth:get_device_id()
   if self:get_platform_id() ~= nil then
-		return info.device_ident
+    return info.device_ident
   else
-		local unique_id = storage.get_item("device_id")
-		if type(unique_id) ~= "string" then
+    local unique_id = storage.get_item("device_id")
+    if type(unique_id) ~= "string" then
       unique_id = tostring(math.random(0, 9999)) .. tostring(os.time(os.date("!*t")))
       storage.set_item("device_id", unique_id)
-		end
-		return unique_id
-	end
+    end
+    return unique_id
+  end
 end
 
 function Auth:request(method, segments, params, callback, headers, body)
@@ -92,7 +92,7 @@ function Auth:request(method, segments, params, callback, headers, body)
   options['timeout'] = self.http_timeout
 
   http.request(self:build_url(segments), method, function(self, id, response)
-		local data = response.response ~= '' and json.decode(response.response)
+    local data = response.response ~= '' and json.decode(response.response)
     local has_error = (response.status >= 400)
     local err = nil
 
@@ -101,7 +101,7 @@ function Auth:request(method, segments, params, callback, headers, body)
     end
 
     callback(err, data)
-	end, headers, body or "", options)
+  end, headers, body or "", options)
 end
 
 function Auth:login_request (query_params, success_cb)
