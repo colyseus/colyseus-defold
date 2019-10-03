@@ -129,12 +129,16 @@ function client:_request(url, method, headers, body, callback)
     local has_error = (response.status >= 400)
     local err = nil
 
+    if not data and response.status == 0 then
+      return callback("offline")
+    end
+
     if has_error or data.error then
       err = (not data or next(data) == nil) and response.response or data.error
     end
 
     callback(err, data)
-	end, headers, body or "", { timeout = 10 })
+	end, headers, body or "", { timeout = Connection.config.connect_timeout })
 end
 
 return client

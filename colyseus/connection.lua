@@ -5,6 +5,7 @@ local msgpack = require('colyseus.messagepack.MessagePack')
 local websocket_async = require "websocket.client_async"
 
 local connection = {}
+connection.config = { connect_timeout = 10 }
 connection.__index = connection
 
 function connection.new (endpoint)

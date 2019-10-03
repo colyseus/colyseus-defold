@@ -1,6 +1,7 @@
 local utils = require "colyseus.utils"
 local storage = require "colyseus.storage"
 local EventEmitter = require('colyseus.eventemitter')
+local Connection = require('colyseus.connection')
 
 local Auth = {}
 Auth.__index = Auth
@@ -11,7 +12,7 @@ function Auth.new (endpoint)
   local instance = EventEmitter:new({
     use_https = not sys.get_engine_info().is_debug,
     endpoint = endpoint:gsub("ws", "http"),
-    http_timeout = 10,
+    http_timeout = Connection.config.connect_timeout,
     token = storage.get_item("token"),
 
     ping_interval = 20,
@@ -103,6 +104,10 @@ function Auth:request(method, segments, params, callback, body, headers)
     local data = response.response ~= '' and json.decode(response.response)
     local has_error = (response.status >= 400)
     local err = nil
+
+    if not data and response.status == 0 then
+      return callback("offline")
+    end
 
     if has_error then
       err = (not data or next(data) == nil) and response.response or data.error
