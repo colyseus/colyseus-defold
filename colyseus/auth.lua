@@ -252,6 +252,13 @@ function Auth:get_friends(success_cb)
   end)
 end
 
+function Auth:remove_friend(user_id, success_cb)
+  self:request("DELETE", "/friends", { userId = user_id }, function(err, response)
+    if err then print("@colyseus/social: " .. tostring(err)) end
+    if success_cb then success_cb(err, response) end
+  end)
+end
+
 function Auth:get_online_friends(success_cb)
   self:request("GET", "/friends/online", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
