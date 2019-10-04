@@ -7,6 +7,9 @@
 local bit = require 'colyseus.serialization.bit'
 local ldexp = math.ldexp or mathx.ldexp
 
+local array_schema = require 'colyseus.serialization.schema.array_schema'
+local map_schema = require 'colyseus.serialization.schema.map_schema'
+
 -- START SPEC --
 local spec = {
     END_OF_STRUCTURE = 193,
@@ -516,60 +519,6 @@ function table.keys(orig)
 end
 -- END UTIL FUNCTIONS --
 
--- START MAP SCHEMA
-local MapSchema = {}
-function MapSchema:new(obj)
-    obj = obj or {}
-    setmetatable(obj, self)
-    self.__index = self
-    return obj
-end
-
-function MapSchema:trigger_all()
-    if type(self) ~= "table" or self['on_add'] == nil then return end
-    for key, value in pairs(self) do
-        if key ~= 'on_add' and key ~= 'on_remove' and key ~= 'on_change' then
-            self['on_add'](value, key)
-        end
-    end
-end
-
-function MapSchema:clone()
-    local cloned = MapSchema:new(table.clone(self))
-    cloned['on_add'] = self['on_add']
-    cloned['on_remove'] = self['on_remove']
-    cloned['on_change'] = self['on_change']
-    return cloned
-end
--- END MAP SCHEMA
-
--- START ARRAY SCHEMA
-local ArraySchema = {}
-function ArraySchema:new(obj)
-    obj = obj or {}
-    setmetatable(obj, self)
-    self.__index = self
-    return obj
-end
-
-function ArraySchema:trigger_all()
-    if type(self) ~= "table" or self['on_add'] == nil then return end
-    for key, value in ipairs(self) do
-        if key ~= 'on_add' and key ~= 'on_remove' and key ~= 'on_change' then
-            self['on_add'](value, key)
-        end
-    end
-end
-
-function ArraySchema:clone()
-    local cloned = ArraySchema:new(table.clone(self))
-    cloned['on_add'] = self['on_add']
-    cloned['on_remove'] = self['on_remove']
-    cloned['on_change'] = self['on_change']
-    return cloned
-end
--- END ARRAY SCHEMA
-
 -- START CONTEXT CLASS --
 local Context = {}
 function Context:new(obj)
@@ -677,7 +626,7 @@ function Schema:decode(bytes, it)
             local typeref = ftype[1]
             change = {}
 
-            local value_ref = self[field] or ArraySchema:new()
+            local value_ref = self[field] or array_schema:new()
             value = value_ref:clone() -- create new reference for array
 
 
@@ -692,7 +641,7 @@ function Schema:decode(bytes, it)
 
             -- ensure current array has the same length as encoded one
             if #value >= new_length then
-                local new_values = ArraySchema:new()
+                local new_values = array_schema:new()
                 new_values['on_add'] = value_ref['on_add']
                 new_values['on_remove'] = value_ref['on_remove']
                 new_values['on_change'] = value_ref['on_change']
@@ -704,7 +653,7 @@ function Schema:decode(bytes, it)
                             item["on_remove"]()
                         end
 
-                        -- call on_remove from ArraySchema
+                        -- call on_remove from array_schema
                         if value_ref["on_remove"] ~= nil then
                             value_ref["on_remove"](item, i)
                         end
@@ -761,7 +710,7 @@ function Schema:decode(bytes, it)
                         if decode.nil_check(bytes, it) then
                             it.offset = it.offset + 1
 
-                            -- call on_remove from ArraySchema
+                            -- call on_remove from array_schema
                             if value_ref['on_remove'] ~= nil then
                                 value_ref['on_remove'](item, new_index)
                             end
@@ -776,7 +725,7 @@ function Schema:decode(bytes, it)
                         value[new_index] = decode_primitive_type(typeref, bytes, it)
                     end
 
-                    -- add on_add from ArraySchema
+                    -- add on_add from array_schema
                     if is_new then
                         if value_ref['on_add'] ~= nil then
                             value_ref['on_add'](value[new_index], new_index)
@@ -801,8 +750,7 @@ function Schema:decode(bytes, it)
             -- decode map
             local typeref = ftype['map']
 
-            local maporder_key = "_" .. field .. "_maporder"
-            local value_ref = self[field] or MapSchema:new()
+            local value_ref = self[field] or map_schema:new()
             value = value_ref:clone()
 
             local length = decode.number(bytes, it)
@@ -826,7 +774,7 @@ function Schema:decode(bytes, it)
                     local previous_key
                     if decode.index_change_check(bytes, it) then
                         decode.uint8(bytes, it)
-                        previous_key = self[maporder_key][decode.number(bytes, it)+1]
+                        previous_key = value.__keys[decode.number(bytes, it)+1]
                         has_index_change = true
                     end
 
@@ -837,7 +785,7 @@ function Schema:decode(bytes, it)
                     local map_index
                     if has_map_index then
                         map_index = decode.number(bytes, it) + 1
-                        new_key = self[maporder_key][map_index]
+                        new_key = value.__keys[map_index]
                     else
                         new_key = decode.string(bytes, it)
                     end
@@ -866,16 +814,14 @@ function Schema:decode(bytes, it)
                             value_ref['on_remove'](item, new_key)
                         end
 
-                        value[new_key] = nil
-                        table.remove(self[maporder_key], map_index)
+                        value:set(new_key, nil)
                         break -- continue
 
                     elseif not is_schema_type then
-                        value[new_key] = decode_primitive_type(typeref, bytes, it)
+                        value:set(new_key, decode_primitive_type(typeref, bytes, it))
 
                     else
-                        item:decode(bytes, it)
-                        value[new_key] = item
+                        value:set(new_key, item:decode(bytes, it))
                     end
 
                     if is_new then
@@ -885,15 +831,6 @@ function Schema:decode(bytes, it)
 
                     elseif value_ref['on_change'] ~= nil then
                         value_ref['on_change'](value[new_key], new_key)
-                    end
-
-                    if is_new then
-                        -- LUA-specific keep track of keys ordering (lua tables doesn't keep then)
-                        if self[maporder_key] == nil then
-                            self[maporder_key] = {}
-                        end
-                        table.insert(self[maporder_key], new_key)
-                        --
                     end
 
                     break -- continue
@@ -1047,9 +984,9 @@ local reflection_decode = function (bytes, it)
 
             elseif type(field_type) == "table" then
                 if field_type.map ~= nil then
-                    root_instance[field_name] = MapSchema:new()
+                    root_instance[field_name] = map_schema:new()
                 else
-                    root_instance[field_name] = ArraySchema:new()
+                    root_instance[field_name] = array_schema:new()
                 end
             end
         end
