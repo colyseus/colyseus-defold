@@ -10,9 +10,6 @@ before_install:
   - source .travis/setenv_lua.sh
   - luarocks install busted
 
-install:
-  - luarocks make
-
 script:
   - busted test/*.lua
 
