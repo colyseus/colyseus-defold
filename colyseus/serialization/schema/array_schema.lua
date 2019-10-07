@@ -16,6 +16,14 @@ function array_schema:trigger_all()
     end
 end
 
+function array_schema:each(cb)
+    for key, value in ipairs(self) do
+        if key ~= 'on_add' and key ~= 'on_remove' and key ~= 'on_change' then
+            cb(value, key)
+        end
+    end
+end
+
 function array_schema:clone()
     local cloned = array_schema:new(table.clone(self))
     cloned['on_add'] = self['on_add']
