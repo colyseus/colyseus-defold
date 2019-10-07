@@ -880,9 +880,13 @@ local global_context = Context:new()
 local define = function(fields, context, typeid)
     local DerivedSchema = Schema:new()
 
+    if not context then
+      context = global_context
+    end
+
     DerivedSchema._schema = {}
     DerivedSchema._order = fields and fields['_order'] or {}
-    DerivedSchema._context = context or global_context
+    DerivedSchema._context = context
 
     context:add(DerivedSchema, typeid)
 

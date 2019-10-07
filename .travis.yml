@@ -1,0 +1,18 @@
+language: c
+
+env:
+  global:
+    - LUAROCKS=2.3.0
+  matrix:
+    - LUA=luajit
+
+before_install:
+  - source .travis/setenv_lua.sh
+  - luarocks install busted
+
+install:
+  - luarocks make
+
+script:
+  - busted test/*.lua
+
