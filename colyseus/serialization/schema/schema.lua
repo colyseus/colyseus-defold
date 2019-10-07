@@ -21,80 +21,14 @@ local spec = {
 
 -- START DECODE --
 function utf8_read(bytes, offset, length)
-  local str = ""
-  local chr = 0
-
+  local bytearr = {}
   local len = offset + length
-
   for i = offset, len - 1 do
-    repeat
-        local byte = bytes[i]
-
-        if (bit.band(byte, 0x80) == 0x00) then
-            str = str .. string.char(byte)
-            break
-        end
-
-        if (bit.band(byte, 0xe0) == 0xc0) then
-            local b1 = bytes[i]
-            i = i + 1
-
-            str = str .. string.char(
-                bit.bor(
-                    bit.arshift(bit.band(byte, 0x1f), 6),
-                    bit.band(bytes[b1], 0x3f)
-                )
-            )
-            break
-        end
-
-        if (bit.band(byte, 0xf0) == 0xe0) then
-            local b1 = bytes[i]
-            i = i + 1
-            local b2 = bytes[i]
-            i = i + 1
-
-            str = str .. string.char(
-                bit.bor(
-                    bit.arshift(bit.band(byte, 0x0f), 12),
-                    bit.arshift(bit.band(bytes[b1], 0x3f), 6),
-                    bit.arshift(bit.band(bytes[b2], 0x3f), 0)
-                )
-            )
-            break
-        end
-
-        if (bit.band(byte, 0xf8) == 0xf0) then
-            local b1 = bytes[i]
-            i = i + 1
-            local b2 = bytes[i]
-            i = i + 1
-            local b3 = bytes[i]
-            i = i + 1
-
-            chr = bit.bor(
-                bit.arshift(bit.band(byte, 0x07), 18),
-                bit.arshift(bit.band(bytes[b1], 0x3f), 12),
-                bit.arshift(bit.band(bytes[b2], 0x3f), 6),
-                bit.arshift(bit.band(bytes[b3], 0x3f), 0)
-            )
-            if (chr >= 0x010000) then -- surrogate pair
-                chr = chr - 0x010000
-                error("not supported string!" .. tostring(chr))
-                -- str = str .. str.char((chr >>> 10) + 0xD800, bit.band(chr, 0x3FF) + 0xDC00)
-            else
-                str = str .. string.char(chr)
-            end
-            break
-        end
-
-        pprint(str)
-        error('invalid byte ' .. byte)
-        break
-    until true
+      local byte = bytes[i]
+      local utf8byte = byte < 0 and (0xff + byte + 1) or byte
+      table.insert(bytearr, string.char(utf8byte))
   end
-
-  return str
+  return table.concat(bytearr)
 end
 
 function bit_logic_rshift(n, bits)
