@@ -86,29 +86,33 @@ function client:create_matchmake_request(method, room_name, options, callback)
   self:_request(url, 'POST', headers, JSON.encode(options), function(err, response)
     if (err) then return callback(err) end
 
-    local room = Room.new(room_name)
-    room.id = response.room.roomId
-    room.sessionId = response.sessionId
-
-    local on_error = function(err)
-      callback(err)
-      room:off()
-    end
-
-    local on_join = function()
-      room:off('error', on_error)
-      callback(nil, room)
-    end
-
-    room:on('error', on_error)
-    room:on('join', on_join)
-    room:on('leave', function()
-      self.rooms[room.id] = nil
-    end)
-    self.rooms[room.id] = room
-
-    room:connect(self:_build_endpoint(response.room.processId .. "/" .. room.id, {sessionId = room.sessionId}))
+    self:consume_seat_reservation(response, callback)
   end)
+end
+
+function client:consume_seat_reservation(response, callback)
+  local room = Room.new(response.room.name)
+  room.id = response.room.roomId
+  room.sessionId = response.sessionId
+
+  local on_error = function(err)
+    callback(err)
+    room:off()
+  end
+
+  local on_join = function()
+    room:off('error', on_error)
+    callback(nil, room)
+  end
+
+  room:on('error', on_error)
+  room:on('join', on_join)
+  room:on('leave', function()
+    self.rooms[room.id] = nil
+  end)
+  self.rooms[room.id] = room
+
+  room:connect(self:_build_endpoint(response.room.processId .. "/" .. room.id, {sessionId = room.sessionId}))
 end
 
 function client:_build_endpoint(path, options)
