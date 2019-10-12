@@ -21,6 +21,10 @@
   </h3>
 </div>
 
+| Description | Status |
+| ------| -------|
+| Master Branch Build Status | [![Build Status](https://travis-ci.org/colyseus/colyseus-defold.svg?branch=master)](https://travis-ci.org/colyseus/colyseus-defold) |
+
 ## Contributors
 
 Big thanks to [Björn Ritzl](https://github.com/britzl). Without his efforts on
