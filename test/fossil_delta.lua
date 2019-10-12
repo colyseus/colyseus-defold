@@ -7,8 +7,18 @@ function read_file(file)
     return content
 end
 
-function table.clone(org)
-  return {table.unpack(org)}
+function table.clone(orig)
+    local orig_type = type(orig)
+    local copy
+    if orig_type == 'table' then
+        copy = {}
+        for orig_key, orig_value in pairs(orig) do
+            copy[orig_key] = orig_value
+        end
+    else -- number, string, boolean, etc
+        copy = orig
+    end
+    return copy
 end
 
 local function make_array_from_str(str)
