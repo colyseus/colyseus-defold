@@ -213,7 +213,7 @@ end
 function Auth:ping(success_cb)
   self:request("GET", "/auth", {}, function(err, response)
     if err then print("@colyseus/social: " .. tostring(err)) end
-    if success_cb then success_cb(err, response) end
+    self:emit("ping", err, response)
   end)
 end
 
