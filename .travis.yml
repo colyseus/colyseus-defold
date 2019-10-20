@@ -1,25 +1,12 @@
-sudo: required
-
-script:
-  - sudo unlink /usr/bin/gcc && sudo ln -s /usr/bin/gcc-5 /usr/bin/gcc
-  - gcc --version
-
-addons:
-  apt:
-    sources:
-    - ubuntu-toolchain-r-test
-    packages:
-    - gcc-5
-    - g++-5
-
 language: java
 
 jdk:
-  - oraclejdk8
+  - oraclejdk11
+
+# env:
+#   global:
+#     - DEFOLD_AUTH=foobar
+#     - DEFOLD_USER=john.doe@gmail.com
 
 script:
-  - "./.travis/run_headless_tests.sh"
-
-after_success:
-  - bash <(curl -s https://codecov.io/bash)
-
+  - "./.travis/run.sh"
