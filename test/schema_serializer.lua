@@ -1,21 +1,23 @@
 local schema = require 'colyseus.serialization.schema.schema'
 
-local State = schema.define({
+return function()
+
+  local State = schema.define({
     ["fieldString"] = "string",
     ["_order"] = { "fieldString" },
-});
+  });
 
-describe("colyseus", function()
-  describe("schema serializer", function()
-    it("should decode complex UTF-8 characters", function()
-      local bytes = { 0, 166, 208, 179, 209, 133, 208, 177 }
+  describe("colyseus", function()
+    describe("schema serializer", function()
+      it("should decode complex UTF-8 characters", function()
+        local bytes = { 0, 166, 208, 179, 209, 133, 208, 177 }
 
-      local state = State:new()
-      state:decode(bytes);
+        local state = State:new()
+        state:decode(bytes);
 
-      assert.are.same(state.fieldString, "гхб")
+        assert_same(state.fieldString, "гхб")
+      end)
+
     end)
-
   end)
-end)
-
+end

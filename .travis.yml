@@ -1,17 +1,25 @@
-language: c
-
-env:
-  global:
-    - LUAROCKS=2.3.0
-  matrix:
-    - LUA=luajit
-    # - LUA=luajit2.0
-    # - LUA=luajit2.1
-
-before_install:
-  - source .travis/setenv_lua.sh
-  - luarocks install busted
+sudo: required
 
 script:
-  - busted test/*.lua
+  - sudo unlink /usr/bin/gcc && sudo ln -s /usr/bin/gcc-5 /usr/bin/gcc
+  - gcc --version
+
+addons:
+  apt:
+    sources:
+    - ubuntu-toolchain-r-test
+    packages:
+    - gcc-5
+    - g++-5
+
+language: java
+
+jdk:
+  - oraclejdk8
+
+script:
+  - "./.travis/run_headless_tests.sh"
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
 
