@@ -4,7 +4,7 @@ version = 0.10
 dependencies = https://github.com/britzl/defold-luasec/archive/master.zip,https://github.com/britzl/defold-luasocket/archive/0.11.zip,https://github.com/britzl/defold-websocket/archive/master.zip,https://github.com/britzl/deftest/archive/master.zip
 
 [bootstrap]
-main_collection = /example/main.collectionc
+main_collection = /example/testsuite.collectionc
 
 [input]
 use_accelerometer = 0

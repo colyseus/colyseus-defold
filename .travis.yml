@@ -3,10 +3,11 @@ language: java
 jdk:
   - oraclejdk11
 
-# env:
-#   global:
-#     - DEFOLD_AUTH=foobar
-#     - DEFOLD_USER=john.doe@gmail.com
+env:
+  global:
+    - DEFOLD_BOOSTRAP_COLLECTION=example/testsuite.collection
+    # - DEFOLD_AUTH=foobar
+    # - DEFOLD_USER=john.doe@gmail.com
 
 script:
   - "./.travis/run.sh"
