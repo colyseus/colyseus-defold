@@ -5,7 +5,7 @@ jdk:
 
 env:
   global:
-    - DEFOLD_BOOSTRAP_COLLECTION=example/testsuite.collection
+    - DEFOLD_BOOSTRAP_COLLECTION=/example/testsuite.collection
     # - DEFOLD_AUTH=foobar
     # - DEFOLD_USER=john.doe@gmail.com
 
