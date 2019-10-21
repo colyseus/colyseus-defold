@@ -25,6 +25,11 @@
 | ------| -------|
 | Master Branch Build Status | [![Build Status](https://travis-ci.org/colyseus/colyseus-defold.svg?branch=master)](https://travis-ci.org/colyseus/colyseus-defold) |
 
+## Test suite
+
+This project uses [deftest](https://github.com/britzl/deftest) for testing, the
+assertion functions are documented by [@britzl](https://github.com/britzl) here: https://github.com/britzl/deftest#custom-asserts
+
 ## Contributors
 
 Big thanks to [Björn Ritzl](https://github.com/britzl). Without his efforts on
