@@ -7,6 +7,7 @@
 
 local schema = require 'colyseus.serialization.schema.schema'
 
+
 local PrimitiveTypes = schema.define({
     ["int8"] = "int8",
     ["uint8"] = "uint8",

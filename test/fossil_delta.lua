@@ -54,29 +54,28 @@ return function()
     return str
   end
 
-  describe("colyseus", function()
-    describe("fossil_delta", function()
-      it("should expose 'create' and 'apply' methods", function()
-        assert(fossil_delta.create)
-        assert(fossil_delta.apply)
-      end)
+  describe("fossil delta", function()
 
-      it("should create delta", function()
-        assert_same(fossil_delta.create(origin[1], target[1]), delta[1])
-        assert_same(fossil_delta.create(origin[2], target[2]), delta[2])
-        assert_same(fossil_delta.create(origin[3], target[3]), delta[3])
-        assert_same(fossil_delta.create(origin[4], target[4]), delta[4])
-        assert_same(fossil_delta.create(origin[5], target[5]), delta[5])
-      end)
-
-      it("should apply delta", function()
-        assert_same(fossil_delta.apply(table.clone(origin[1]), delta[1]), target[1])
-        assert_same(fossil_delta.apply(table.clone(origin[2]), delta[2]), target[2])
-        assert_same(fossil_delta.apply(table.clone(origin[3]), delta[3]), target[3])
-        assert_same(fossil_delta.apply(table.clone(origin[4]), delta[4]), target[4])
-        assert_same(fossil_delta.apply(table.clone(origin[5]), delta[5]), target[5])
-      end)
-
+    it("should expose 'create' and 'apply' methods", function()
+      assert(fossil_delta.create)
+      assert(fossil_delta.apply)
     end)
+
+    it("should create delta", function()
+      assert_same(fossil_delta.create(origin[1], target[1]), delta[1])
+      assert_same(fossil_delta.create(origin[2], target[2]), delta[2])
+      assert_same(fossil_delta.create(origin[3], target[3]), delta[3])
+      assert_same(fossil_delta.create(origin[4], target[4]), delta[4])
+      assert_same(fossil_delta.create(origin[5], target[5]), delta[5])
+    end)
+
+    it("should apply delta", function()
+      assert_same(fossil_delta.apply(table.clone(origin[1]), delta[1]), target[1])
+      assert_same(fossil_delta.apply(table.clone(origin[2]), delta[2]), target[2])
+      assert_same(fossil_delta.apply(table.clone(origin[3]), delta[3]), target[3])
+      assert_same(fossil_delta.apply(table.clone(origin[4]), delta[4]), target[4])
+      assert_same(fossil_delta.apply(table.clone(origin[5]), delta[5]), target[5])
+    end)
+
   end)
 end
