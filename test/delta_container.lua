@@ -21,12 +21,12 @@ function error_callback(change)
 end
 
 return function()
-  describe("colyseus", function()
+  describe("fossil delta", function()
     local data
     local container
     local num_calls
 
-    describe("delta_listener", function()
+    describe("state_container", function()
 
       before(function()
         num_calls = 0

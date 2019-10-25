@@ -137,10 +137,10 @@ function Room:on_message (binary_string, cursor)
     -- print("PREVIOUS CODE", self.previous_code)
 
     if self.previous_code == protocol.ROOM_STATE then
-      self:set_state(binary_string, it)
+      self:set_state(utils.string_to_byte_array(binary_string), it)
 
     elseif self.previous_code == protocol.ROOM_STATE_PATCH then
-      self:patch(binary_string, it)
+      self:patch(utils.string_to_byte_array(binary_string), it)
 
     elseif self.previous_code == protocol.ROOM_DATA then
       local msgpack_cursor = {

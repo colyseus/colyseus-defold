@@ -68,6 +68,7 @@ function map_schema:clone()
     cloned['on_add'] = self['on_add']
     cloned['on_remove'] = self['on_remove']
     cloned['on_change'] = self['on_change']
+
     return cloned
 end
 

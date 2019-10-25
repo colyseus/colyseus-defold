@@ -132,10 +132,10 @@ function uint64 (bytes, it)
 end
 
 function float32(bytes, it)
-    local b1 = bytes[it.offset]
-    local b2 = bytes[it.offset + 1]
-    local b3 = bytes[it.offset + 2]
-    local b4 = bytes[it.offset + 3]
+    local b4 = bytes[it.offset]
+    local b3 = bytes[it.offset + 1]
+    local b2 = bytes[it.offset + 2]
+    local b1 = bytes[it.offset + 3]
     local sign = b1 > 0x7F
     local expo = (b1 % 0x80) * 0x2 + math.floor(b2 / 0x80)
     local mant = ((b2 % 0x80) * 0x100 + b3) * 0x100 + b4
@@ -149,7 +149,7 @@ function float32(bytes, it)
         n = sign * 0.0
     elseif expo == 0xFF then
         if mant == 0 then
-            n = sign * huge
+            n = sign * math.huge
         else
             n = 0.0/0.0
         end
@@ -161,14 +161,14 @@ function float32(bytes, it)
 end
 
 function float64(bytes, it)
-    local b1 = bytes[it.offset + 7]
-    local b2 = bytes[it.offset + 6]
-    local b3 = bytes[it.offset + 5]
-    local b4 = bytes[it.offset + 4]
-    local b5 = bytes[it.offset + 3]
-    local b6 = bytes[it.offset + 2]
-    local b7 = bytes[it.offset + 1]
     local b8 = bytes[it.offset]
+    local b7 = bytes[it.offset + 1]
+    local b6 = bytes[it.offset + 2]
+    local b5 = bytes[it.offset + 3]
+    local b4 = bytes[it.offset + 4]
+    local b3 = bytes[it.offset + 5]
+    local b2 = bytes[it.offset + 6]
+    local b1 = bytes[it.offset + 7]
 
     -- TODO: detect big/little endian?
 
@@ -194,7 +194,7 @@ function float64(bytes, it)
         n = sign * 0.0
     elseif expo == 0x7FF then
         if mant == 0 then
-            n = sign * huge
+            n = sign * math.huge
         else
             n = 0.0/0.0
         end
@@ -519,6 +519,9 @@ function Schema:decode(bytes, it)
 
     local total_bytes = #bytes
     while it.offset <= total_bytes do
+        local is_nil = decode.nil_check(bytes, it)
+        if is_nil then it.offset = it.offset + 1 end
+
         local index = bytes[it.offset]
         it.offset = it.offset + 1
 
@@ -544,16 +547,15 @@ function Schema:decode(bytes, it)
             break
         end
 
-        if type(ftype) == "table" and ftype['new'] ~= nil then
-            if decode.nil_check(bytes, it) then
-                it.offset = it.offset + 1
-                value = nil
-            else
-                -- decode child Schema instance
-                value = self[field] or self:create_instance_type(bytes, it, ftype)
-                value:decode(bytes, it)
-                has_change = true
-            end
+        if is_nil then
+            value = nil
+            has_change = true
+
+        elseif type(ftype) == "table" and ftype['new'] ~= nil then
+            -- decode child Schema instance
+            value = self[field] or self:create_instance_type(bytes, it, ftype)
+            value:decode(bytes, it)
+            has_change = true
 
         elseif type(ftype) == "table" and ftype['map'] == nil then
             -- decode array
@@ -562,7 +564,6 @@ function Schema:decode(bytes, it)
 
             local value_ref = self[field] or array_schema:new()
             value = value_ref:clone() -- create new reference for array
-
 
             local new_length = decode.number(bytes, it)
             local num_changes = math.min(decode.number(bytes, it), new_length)
@@ -641,17 +642,6 @@ function Schema:decode(bytes, it)
                             is_new = true
                         end
 
-                        if decode.nil_check(bytes, it) then
-                            it.offset = it.offset + 1
-
-                            -- call on_remove from array_schema
-                            if value_ref['on_remove'] ~= nil then
-                                value_ref['on_remove'](item, new_index)
-                            end
-
-                            break -- continue
-                        end
-
                         item:decode(bytes, it)
                         value[new_index] = item
 
@@ -704,6 +694,9 @@ function Schema:decode(bytes, it)
                         break -- continue
                     end
 
+                    local is_nil_item = decode.nil_check(bytes, it)
+                    if is_nil_item then it.offset = it.offset + 1 end
+
                     -- index change check
                     local previous_key
                     if decode.index_change_check(bytes, it) then
@@ -719,7 +712,7 @@ function Schema:decode(bytes, it)
                     local map_index
                     if has_map_index then
                         map_index = decode.number(bytes, it) + 1
-                        new_key = value.__keys[map_index]
+                        new_key = value_ref.__keys[map_index]
                     else
                         new_key = decode.string(bytes, it)
                     end
@@ -737,9 +730,7 @@ function Schema:decode(bytes, it)
                         item = value_ref[new_key]
                     end
 
-                    if decode.nil_check(bytes, it) then
-                        it.offset = it.offset + 1
-
+                    if is_nil_item then
                         if item ~= nil and type(item) == "table" and item['on_remove'] ~= nil then
                             item['on_remove']()
                         end
