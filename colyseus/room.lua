@@ -95,8 +95,8 @@ function Room:on_batch_message(binary_string)
   end
 end
 
-function Room:on_message (binary_string, cursor)
-  local it = { offset = 1 }
+function Room:on_message (binary_string, it)
+  -- local it = { offset = 1 }
   local message = utils.string_to_byte_array(binary_string)
 
   local code = message[it.offset]
@@ -149,7 +149,7 @@ function Room:on_message (binary_string, cursor)
     self:emit("message", data)
   end
 
-  cursor.offset = cursor.offset + it.offset - 1
+  -- cursor.offset = cursor.offset + it.offset - 1
 end
 
 function Room:set_state (encoded_state, it)
