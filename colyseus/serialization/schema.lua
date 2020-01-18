@@ -19,13 +19,13 @@ end
 function schema_serializer:set_state(encoded_state, it)
   -- print("schema_serializer:set_state")
 
-  self.state:decode(utils.string_to_byte_array(encoded_state), it)
+  self.state:decode(encoded_state, it)
 end
 
 function schema_serializer:patch(binary_patch, it)
   -- print("schema_serializer:patch")
 
-  self.state:decode(utils.string_to_byte_array(binary_patch), it)
+  self.state:decode(binary_patch, it)
 end
 
 function schema_serializer:handshake(bytes, it)

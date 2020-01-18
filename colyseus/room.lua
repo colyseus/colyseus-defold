@@ -131,10 +131,10 @@ function Room:on_message (binary_string, cursor)
     self:leave()
 
   elseif code == protocol.ROOM_STATE then
-    self:set_state(binary_string, it)
+    self:set_state(message, it)
 
   elseif code == protocol.ROOM_STATE_PATCH then
-    self:patch(binary_string, it)
+    self:patch(message, it)
 
   elseif code == protocol.ROOM_DATA then
     local msgpack_cursor = {
