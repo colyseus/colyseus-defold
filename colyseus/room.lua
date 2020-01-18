@@ -139,7 +139,7 @@ function Room:on_message (binary_string, cursor)
   elseif code == protocol.ROOM_DATA then
     local msgpack_cursor = {
         s = binary_string,
-        i = 1,
+        i = it.offset,
         j = #binary_string,
         underflow = function() error "missing bytes" end,
     }
