@@ -542,8 +542,8 @@ function Schema:decode(bytes, it)
         -- WORKAROUND for LUA on emscripten environment
         -- (reached end of buffer)
         if not field then
-            -- print("FIELD NOT FOUND, byte =>", index, ", previous byte =>", bytes[it.offset - 2])
-            it.offset = it.offset - 1
+            print("DANGER: invalid field found at index:", index," - skipping patch data after offset:", it.offset)
+            it.offset = total_bytes
             break
         end
 
