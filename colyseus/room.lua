@@ -88,10 +88,10 @@ end
 function Room:on_batch_message(binary_string)
   local total_bytes = #binary_string
   local cursor = { offset = 1 }
-  -- print("Room:on_batch_message, bytes =>", total_bytes)
+  -- print("Room:on_batch_message, total_bytes =>", total_bytes)
   while cursor.offset <= total_bytes do
-    -- print("Room:on_message (batch",total_bytes,"), offset =>", cursor.offset, ", byte on offset =>", string.byte(binary_string, cursor.offset))
-    self:on_message(binary_string:sub(cursor.offset), cursor)
+    -- print("Room:on_message (total_bytes:",total_bytes,"), offset =>", cursor.offset, ", byte on offset =>", string.byte(binary_string, cursor.offset))
+    self:on_message(binary_string, cursor)
   end
 end
 
