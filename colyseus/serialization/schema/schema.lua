@@ -538,13 +538,17 @@ function Schema:decode(bytes, it)
         local change = nil
         local has_change = false
 
+        --
         -- FIXME: this may cause issues if the `index` provided actually matches a field.
+        --
         -- WORKAROUND for LUA on emscripten environment
-        -- (reached end of buffer)
+        --   End of buffer has been probably reached.
+        --   Revert an offset, as a new message may be next to it.
+        --
         if not field then
-            print("DANGER: invalid field found at index:", index," - skipping patch data after offset:", it.offset)
-            it.offset = total_bytes
-            break
+          print("DANGER: invalid field found at index:", index," - skipping patch data after offset:", it.offset)
+          it.offset = it.offset - 1
+          break
         end
 
         if is_nil then
