@@ -564,7 +564,6 @@ function Schema:decode(bytes, it)
         elseif type(ftype) == "table" and ftype['map'] == nil then
             -- decode array
             local typeref = ftype[1]
-            change = {}
 
             local value_ref = self[field] or array_schema:new()
             value = value_ref:clone() -- create new reference for array
@@ -572,14 +571,15 @@ function Schema:decode(bytes, it)
             local new_length = decode.number(bytes, it)
             local num_changes = math.min(decode.number(bytes, it), new_length)
 
-            has_change = (num_changes > 0)
+            local has_removal = (#value >= new_length)
+            has_change = (num_changes > 0) or has_removal
 
             -- FIXME: this may not be reliable. possibly need to encode this variable during
             -- serialization
             local has_index_change = false
 
             -- ensure current array has the same length as encoded one
-            if #value >= new_length then
+            if has_removal then
                 local new_values = array_schema:new()
                 new_values['on_add'] = value_ref['on_add']
                 new_values['on_remove'] = value_ref['on_remove']
@@ -662,8 +662,6 @@ function Schema:decode(bytes, it)
                     elseif value_ref['on_change'] ~= nil then
                         value_ref['on_change'](value[new_index], new_index)
                     end
-
-                    table.insert(change, value[new_index])
 
                     break -- continue
                 until true
@@ -779,7 +777,7 @@ function Schema:decode(bytes, it)
         if self["on_change"] and has_change then
             table.insert(changes, {
                 field = field,
-                value = change or value,
+                value = value,
                 previous_value = self[field]
             })
         end
