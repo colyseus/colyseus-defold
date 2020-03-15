@@ -5,7 +5,8 @@ local protocol = require('colyseus.protocol')
 
 local EventEmitter = require('colyseus.eventemitter')
 local utils = require('colyseus.utils')
-local decode = require('colyseus.serialization.schema.schema')
+local decode = require('colyseus.serialization.schema.schema').decode
+local encode = require('colyseus.serialization.schema.encode')
 local storage = require('colyseus.storage')
 local serialization = require('colyseus.serialization')
 
@@ -126,7 +127,7 @@ function Room:_on_message (binary_string, it)
     self:emit("join")
 
     -- acknowledge JOIN_ROOM
-    self.connection:send({ protocol.JOIN_ROOM })
+    self.connection:send(utils.byte_array_to_string({ protocol.JOIN_ROOM }))
 
   elseif code == protocol.JOIN_ERROR then
     local err = decode.string(message, it)
@@ -141,22 +142,24 @@ function Room:_on_message (binary_string, it)
   elseif code == protocol.ROOM_STATE_PATCH then
     self:patch(message, it)
 
-  elseif code === Protocol.ROOM_DATA_SCHEMA then
-    local context = self.serializer:get_state()._context;
-    local t = context:get(bytes[1])
+  elseif code == protocol.ROOM_DATA_SCHEMA then
+    local context = self.serializer:get_state()._context
 
-    local message = t:new()
-    message:decode(bytes, { offset: 2 })
+    local message_type = context:get(message[it.offset])
+    local schema_message = message_type:new()
 
-    self:_dispatch_message(t, message)
+    it.offset = it.offset + 1
+    schema_message:decode(message, it)
+
+    self:_dispatch_message(message_type, schema_message)
 
   elseif code == protocol.ROOM_DATA then
-    local t
+    local message_type
 
-    if decode.string_check(bytes, it) then
-      t = decode.string(bytes, it)
+    if decode.string_check(message, it) then
+      message_type = decode.string(message, it)
     else
-      t = decode.number(bytes, it)
+      message_type = decode.number(message, it)
     end
 
     local msgpack_cursor = {
@@ -168,7 +171,7 @@ function Room:_on_message (binary_string, it)
     local data = msgpack.unpack_cursor(msgpack_cursor)
     it.offset = msgpack_cursor.i
 
-    self:_dispatch_message(t, data)
+    self:_dispatch_message(message_type, data)
   end
 
   -- cursor.offset = cursor.offset + it.offset - 1
@@ -187,7 +190,7 @@ end
 function Room:leave(consented)
   if self.connection.state == "OPEN" then
     if consented or consented == nil then
-      self.connection:send({ protocol.LEAVE_ROOM })
+      self.connection:send(utils.byte_array_to_string({ protocol.LEAVE_ROOM }))
     else
       self.connection:close()
     end
@@ -196,31 +199,46 @@ function Room:leave(consented)
   end
 end
 
-function Room:send (data)
-  self.connection:send({ protocol.ROOM_DATA, data })
+function Room:send (message_type, message)
+  local encoded = msgpack.pack(message)
+  local initial_bytes = { protocol.ROOM_DATA }
+  local mtype = type(message_type)
+
+  if mtype == "string" then
+      encode.string(initial_bytes, message_type);
+
+  elseif mtype == "number" then
+      encode.number(initial_bytes, message_type);
+  else
+    error("Protocol.ROOM_DATA: message type not supported '" .. tostring(type) .. "'")
+  end
+
+  self.connection:send(utils.byte_array_to_string(initial_bytes) .. encoded);
 end
 
 function Room:_dispatch_message (message_type, message)
-  local t = self:get_message_handler_key(message_type);
+  local type_key = self:get_message_handler_key(message_type);
 
-  if self.on_message_handlers[t] then
-    self.on_message_handlers[message_type](message);
+  if self.on_message_handlers[type_key] then
+    self.on_message_handlers[type_key](message);
 
   elseif self.on_message_handlers['*'] then
-    self.on_message_handlers['*'](type, message)
+    self.on_message_handlers['*'](message_type, message)
+
   else
-    print('on_message not registered for type "' .. message_type .. '".')
+    print('on_message not registered for type "' .. tostring(message_type) .. '".')
   end
 end
 
 function Room:get_message_handler_key(message_type)
   local t = type(message_type)
-  if t == "function" then
-    return message_type._typeid
+
+  if t == "table" then
+    return "s" .. tostring(message_type._typeid)
   elseif t == "string" then
     return message_type
   elseif t == "number" then
-    return "i" .. message_type
+    return "i" .. tostring(message_type)
   else
     error("invalid message type.")
   end

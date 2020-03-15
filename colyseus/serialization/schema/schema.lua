@@ -31,26 +31,6 @@ function utf8_read(bytes, offset, length)
   return table.concat(bytearr)
 end
 
-function bit_logic_rshift(n, bits)
-    if(n <= 0) then
-        n = bit.bnot(math.abs(n)) + 1
-    end
-    for i=1, bits do
-        n = n/2
-    end
-    return math.floor(n)
-end
-
-function bit_rshift(value, n)
-    local r = bit.rshift(value, n)
-
-    if r < 0 and n == 0 then
-        return bit.rshift(r, 1) * 2
-    else
-        return r
-    end
-end
-
 function boolean (bytes, it)
     return uint8(bytes, it) == 1
 end
@@ -930,6 +910,7 @@ end
 return {
     define = define,
     reflection_decode = reflection_decode,
-    string = decode.string,
+    decode = decode,
+    encode = encode,
     pprint = pprint
 }
