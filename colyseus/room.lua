@@ -162,16 +162,20 @@ function Room:_on_message (binary_string, it)
       message_type = decode.number(message, it)
     end
 
-    local msgpack_cursor = {
-        s = binary_string,
-        i = it.offset,
-        j = #binary_string,
-        underflow = function() error "missing bytes" end,
-    }
-    local data = msgpack.unpack_cursor(msgpack_cursor)
-    it.offset = msgpack_cursor.i
+    local message = nil
 
-    self:_dispatch_message(message_type, data)
+    if #binary_string > it.offset then
+      local msgpack_cursor = {
+          s = binary_string,
+          i = it.offset,
+          j = #binary_string,
+          underflow = function() error "missing bytes" end,
+      }
+      message = msgpack.unpack_cursor(msgpack_cursor)
+      it.offset = msgpack_cursor.i
+    end
+
+    self:_dispatch_message(message_type, message)
   end
 
   -- cursor.offset = cursor.offset + it.offset - 1
@@ -200,7 +204,6 @@ function Room:leave(consented)
 end
 
 function Room:send (message_type, message)
-  local encoded = msgpack.pack(message)
   local initial_bytes = { protocol.ROOM_DATA }
   local mtype = type(message_type)
 
@@ -211,6 +214,14 @@ function Room:send (message_type, message)
       encode.number(initial_bytes, message_type);
   else
     error("Protocol.ROOM_DATA: message type not supported '" .. tostring(type) .. "'")
+  end
+
+  local encoded
+
+  if message ~= nil then
+    encoded = msgpack.pack(message)
+  else
+    encoded = ''
   end
 
   self.connection:send(utils.byte_array_to_string(initial_bytes) .. encoded);
