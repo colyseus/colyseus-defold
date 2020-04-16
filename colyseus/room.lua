@@ -129,9 +129,10 @@ function Room:_on_message (binary_string, it)
     -- acknowledge JOIN_ROOM
     self.connection:send(utils.byte_array_to_string({ protocol.JOIN_ROOM }))
 
-  elseif code == protocol.JOIN_ERROR then
-    local err = decode.string(message, it)
-    self:emit("error", err)
+  elseif code == protocol.ERROR then
+    local code = decode.number(message, it)
+    local error = decode.string(message, it)
+    self:emit("error", { code = code, error = error })
 
   elseif code == protocol.LEAVE_ROOM then
     self:leave()

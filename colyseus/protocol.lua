@@ -6,7 +6,7 @@ return {
 
   -- Room-related (9~19)
   JOIN_REQUEST = 9,
-  JOIN_ROOM = 10,
+  ERROR = 10,
   JOIN_ERROR = 11,
   LEAVE_ROOM = 12,
   ROOM_DATA = 13,
