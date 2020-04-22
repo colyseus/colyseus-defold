@@ -56,6 +56,20 @@ class DemoRoom extends colyseus.Room {
       this.state.turn = "turn" + Math.random()
     }, 1000);
 
+    this.onMessage("type1", (client, message) => console.log("Received type1 message =>", message));
+    this.onMessage(0, (client, message) => console.log("Received 0 message =>", message));
+
+    this.onMessage("*", (client, type, message) => {
+      this.broadcast("broadcast", { data: "something" });
+
+      console.log(message, "received from", client.sessionId);
+      this.state.messages.push(new Message(client.sessionId + " sent " + message));
+
+      for (let message of this.state.messages) {
+        message.message += "a";
+      }
+    });
+
     console.log("ChatRoom created!", options);
   }
 
@@ -69,22 +83,16 @@ class DemoRoom extends colyseus.Room {
 
     console.log("User:", user);
     this.state.players[client.sessionId] = new Player({ x: 0, y: 0 });
-    this.send(client, { hello: "world!" })
+
+    client.send("data", { hello: "world!" });
+
+    const message = new Message("Schema-based message!");
+    client.send(message);
   }
 
   onLeave (client) {
     console.log("client left!", client.sessionId);
     delete this.state.players[client.sessionId];
-  }
-
-  onMessage (client, data) {
-    this.broadcast({broadcasting: "something"});
-    console.log(data, "received from", client.sessionId);
-    this.state.messages.push(new Message(client.sessionId + " sent " + data));
-
-    for (let message of this.state.messages) {
-      message.message += "a";
-    }
   }
 
   update () {

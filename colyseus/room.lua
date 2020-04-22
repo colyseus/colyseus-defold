@@ -5,7 +5,8 @@ local protocol = require('colyseus.protocol')
 
 local EventEmitter = require('colyseus.eventemitter')
 local utils = require('colyseus.utils')
-local decode = require('colyseus.serialization.schema.schema')
+local decode = require('colyseus.serialization.schema.schema').decode
+local encode = require('colyseus.serialization.schema.encode')
 local storage = require('colyseus.storage')
 local serialization = require('colyseus.serialization')
 
@@ -34,6 +35,7 @@ function Room:init(name)
   self.name = name
   self.connection = Connection.new()
   self.serializer = serialization.get_serializer('fossil-delta').new()
+  self.on_message_handlers = {}
 
   -- remove all listeners on leave
   self:on('leave', function()
@@ -47,7 +49,7 @@ end
 
 function Room:connect (endpoint)
   self.connection:on("message", function(message)
-    self:on_batch_message(message)
+    self:_on_batch_message(message)
   end)
 
   self.connection:on("close", function(e)
@@ -85,17 +87,21 @@ function Room:loop (timeout)
   end
 end
 
-function Room:on_batch_message(binary_string)
+function Room:on_message(type, handler)
+  self.on_message_handlers[self:get_message_handler_key(type)] = handler
+end
+
+function Room:_on_batch_message(binary_string)
   local total_bytes = #binary_string
   local cursor = { offset = 1 }
-  -- print("Room:on_batch_message, total_bytes =>", total_bytes)
+  -- print("Room:_on_batch_message, total_bytes =>", total_bytes)
   while cursor.offset <= total_bytes do
-    -- print("Room:on_message (total_bytes:",total_bytes,"), offset =>", cursor.offset, ", byte on offset =>", string.byte(binary_string, cursor.offset))
-    self:on_message(binary_string, cursor)
+    -- print("Room:_on_message (total_bytes:",total_bytes,"), offset =>", cursor.offset, ", byte on offset =>", string.byte(binary_string, cursor.offset))
+    self:_on_message(binary_string, cursor)
   end
 end
 
-function Room:on_message (binary_string, it)
+function Room:_on_message (binary_string, it)
   -- local it = { offset = 1 }
   local message = utils.string_to_byte_array(binary_string)
 
@@ -121,11 +127,12 @@ function Room:on_message (binary_string, it)
     self:emit("join")
 
     -- acknowledge JOIN_ROOM
-    self.connection:send({ protocol.JOIN_ROOM })
+    self.connection:send(utils.byte_array_to_string({ protocol.JOIN_ROOM }))
 
-  elseif code == protocol.JOIN_ERROR then
-    local err = decode.string(message, it)
-    self:emit("error", err)
+  elseif code == protocol.ERROR then
+    local code = decode.number(message, it)
+    local error = decode.string(message, it)
+    self:emit("error", { code = code, error = error })
 
   elseif code == protocol.LEAVE_ROOM then
     self:leave()
@@ -136,17 +143,40 @@ function Room:on_message (binary_string, it)
   elseif code == protocol.ROOM_STATE_PATCH then
     self:patch(message, it)
 
-  elseif code == protocol.ROOM_DATA then
-    local msgpack_cursor = {
-        s = binary_string,
-        i = it.offset,
-        j = #binary_string,
-        underflow = function() error "missing bytes" end,
-    }
-    local data = msgpack.unpack_cursor(msgpack_cursor)
-    it.offset = msgpack_cursor.i
+  elseif code == protocol.ROOM_DATA_SCHEMA then
+    local context = self.serializer:get_state()._context
 
-    self:emit("message", data)
+    local message_type = context:get(message[it.offset])
+    local schema_message = message_type:new()
+
+    it.offset = it.offset + 1
+    schema_message:decode(message, it)
+
+    self:_dispatch_message(message_type, schema_message)
+
+  elseif code == protocol.ROOM_DATA then
+    local message_type
+
+    if decode.string_check(message, it) then
+      message_type = decode.string(message, it)
+    else
+      message_type = decode.number(message, it)
+    end
+
+    local message = nil
+
+    if #binary_string > it.offset then
+      local msgpack_cursor = {
+          s = binary_string,
+          i = it.offset,
+          j = #binary_string,
+          underflow = function() error "missing bytes" end,
+      }
+      message = msgpack.unpack_cursor(msgpack_cursor)
+      it.offset = msgpack_cursor.i
+    end
+
+    self:_dispatch_message(message_type, message)
   end
 
   -- cursor.offset = cursor.offset + it.offset - 1
@@ -165,7 +195,7 @@ end
 function Room:leave(consented)
   if self.connection.state == "OPEN" then
     if consented or consented == nil then
-      self.connection:send({ protocol.LEAVE_ROOM })
+      self.connection:send(utils.byte_array_to_string({ protocol.LEAVE_ROOM }))
     else
       self.connection:close()
     end
@@ -174,8 +204,56 @@ function Room:leave(consented)
   end
 end
 
-function Room:send (data)
-  self.connection:send({ protocol.ROOM_DATA, data })
+function Room:send (message_type, message)
+  local initial_bytes = { protocol.ROOM_DATA }
+  local mtype = type(message_type)
+
+  if mtype == "string" then
+      encode.string(initial_bytes, message_type);
+
+  elseif mtype == "number" then
+      encode.number(initial_bytes, message_type);
+  else
+    error("Protocol.ROOM_DATA: message type not supported '" .. tostring(type) .. "'")
+  end
+
+  local encoded
+
+  if message ~= nil then
+    encoded = msgpack.pack(message)
+  else
+    encoded = ''
+  end
+
+  self.connection:send(utils.byte_array_to_string(initial_bytes) .. encoded);
+end
+
+function Room:_dispatch_message (message_type, message)
+  local type_key = self:get_message_handler_key(message_type);
+
+  if self.on_message_handlers[type_key] then
+    self.on_message_handlers[type_key](message);
+
+  elseif self.on_message_handlers['*'] then
+    self.on_message_handlers['*'](message_type, message)
+
+  else
+    print('on_message not registered for type "' .. tostring(message_type) .. '".')
+  end
+end
+
+function Room:get_message_handler_key(message_type)
+  local t = type(message_type)
+
+  if t == "table" then
+    return "s" .. tostring(message_type._typeid)
+  elseif t == "string" then
+    return message_type
+  elseif t == "number" then
+    return "i" .. tostring(message_type)
+  else
+    error("invalid message type.")
+  end
 end
 
 return Room

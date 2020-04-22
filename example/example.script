@@ -73,10 +73,14 @@ function init(self)
           -- pprint(changes)
         end
 
-        room:on("message", function(message)
-            print("colyseus-defold: message received!")
+        room:on_message("broadcast", function(message)
+          print("colyseus-defold: 'broadcast' message received =>")
+          pprint(message)
+        end)
 
-            -- pprint(message)
+        room:on_message("data", function(message)
+          print("colyseus-defold: 'data' message received =>")
+          pprint(message)
         end)
 
         room:on("statechange", function(state)
@@ -88,6 +92,9 @@ function init(self)
         room:on("leave", function()
           print("left '" .. room.name .. "'")
         end)
+
+        room:send("type1", { hello = "world" })
+        room:send(0, { hello = "world" })
 
       end)
 

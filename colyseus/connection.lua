@@ -30,13 +30,14 @@ end
 
 function connection:send(data)
   if self.ws and self.ws.state == "OPEN" then
+
     if self.is_html5 then
       -- binary frames are sent by default on HTML5
-      self.ws:send(msgpack.pack(data))
+      self.ws:send(data)
 
     else
       -- force binary frame on native platforms
-      self.ws:send(msgpack.pack(data), 0x2)
+      self.ws:send(data, 0x2)
     end
 
   else
