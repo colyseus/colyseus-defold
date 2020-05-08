@@ -127,7 +127,7 @@ function Room:_on_message (binary_string, it)
     self:emit("join")
 
     -- acknowledge JOIN_ROOM
-    self.connection:send(utils.byte_array_to_string({ protocol.JOIN_ROOM }))
+    self.connection:send(utils.byte_array_to_string({ protocol.JOIN_ROOM, 0 })) -- 0 is necessary for HTML5 builds (null-terminated string)
 
   elseif code == protocol.ERROR then
     local code = decode.number(message, it)
@@ -195,7 +195,7 @@ end
 function Room:leave(consented)
   if self.connection.state == "OPEN" then
     if consented or consented == nil then
-      self.connection:send(utils.byte_array_to_string({ protocol.LEAVE_ROOM }))
+      self.connection:send(utils.byte_array_to_string({ protocol.LEAVE_ROOM, 0 }))
     else
       self.connection:close()
     end
