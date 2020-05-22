@@ -20,7 +20,7 @@ local spec = {
 -- END SPEC --
 
 -- START DECODE --
-function utf8_read(bytes, offset, length)
+local function utf8_read(bytes, offset, length)
   local bytearr = {}
   local len = offset + length
   for i = offset, len - 1 do
@@ -31,25 +31,21 @@ function utf8_read(bytes, offset, length)
   return table.concat(bytearr)
 end
 
-function boolean (bytes, it)
-    return uint8(bytes, it) == 1
-end
-
-function int8 (bytes, it)
-    return bit.arshift(bit.lshift(uint8(bytes, it), 24), 24)
-end
-
-function uint8 (bytes, it)
+local function uint8 (bytes, it)
     local int = bytes[it.offset]
     it.offset = it.offset + 1
     return int
 end
 
-function int16 (bytes, it)
-    return bit.arshift(bit.lshift(uint16(bytes, it), 16), 16)
+local function int8 (bytes, it)
+    return bit.arshift(bit.lshift(uint8(bytes, it), 24), 24)
 end
 
-function uint16 (bytes, it)
+local function boolean (bytes, it)
+    return uint8(bytes, it) == 1
+end
+
+local function uint16 (bytes, it)
     local n1 = bytes[it.offset]
     it.offset = it.offset + 1
 
@@ -59,7 +55,11 @@ function uint16 (bytes, it)
     return bit.bor(n1, bit.lshift(n2, 8))
 end
 
-function int32 (bytes, it)
+local function int16 (bytes, it)
+    return bit.arshift(bit.lshift(uint16(bytes, it), 16), 16)
+end
+
+local function int32 (bytes, it)
     local b4 = bytes[it.offset]
     local b3 = bytes[it.offset + 1]
     local b2 = bytes[it.offset + 2]
@@ -72,7 +72,7 @@ function int32 (bytes, it)
     end
 end
 
-function uint32 (bytes, it)
+local function uint32 (bytes, it)
     local b4 = bytes[it.offset]
     local b3 = bytes[it.offset + 1]
     local b2 = bytes[it.offset + 2]
@@ -81,7 +81,7 @@ function uint32 (bytes, it)
     return ((b1 * 0x100 + b2) * 0x100 + b3) * 0x100 + b4
 end
 
-function int64 (bytes, it)
+local function int64 (bytes, it)
     local b8 = bytes[it.offset]
     local b7 = bytes[it.offset + 1]
     local b6 = bytes[it.offset + 2]
@@ -98,7 +98,7 @@ function int64 (bytes, it)
     end
 end
 
-function uint64 (bytes, it)
+local function uint64 (bytes, it)
     local b8 = bytes[it.offset]
     local b7 = bytes[it.offset + 1]
     local b6 = bytes[it.offset + 2]
@@ -111,7 +111,7 @@ function uint64 (bytes, it)
     return ((((((b1 * 0x100 + b2) * 0x100 + b3) * 0x100 + b4) * 0x100 + b5) * 0x100 + b6) * 0x100 + b7) * 0x100 + b8
 end
 
-function float32(bytes, it)
+local function float32(bytes, it)
     local b4 = bytes[it.offset]
     local b3 = bytes[it.offset + 1]
     local b2 = bytes[it.offset + 2]
@@ -140,7 +140,7 @@ function float32(bytes, it)
     return n
 end
 
-function float64(bytes, it)
+local function float64(bytes, it)
     local b8 = bytes[it.offset]
     local b7 = bytes[it.offset + 1]
     local b6 = bytes[it.offset + 2]
@@ -185,7 +185,7 @@ function float64(bytes, it)
     return n
 end
 
-function _string (bytes, it)
+local function _string (bytes, it)
   local prefix = bytes[it.offset]
   it.offset = it.offset + 1
 
@@ -209,7 +209,7 @@ function _string (bytes, it)
   return value
 end
 
-function string_check (bytes, it)
+local function string_check (bytes, it)
   local prefix = bytes[it.offset]
   return (
     -- fixstr
@@ -223,7 +223,7 @@ function string_check (bytes, it)
   )
 end
 
-function number (bytes, it)
+local function number (bytes, it)
   local prefix = bytes[it.offset]
   it.offset = it.offset + 1
 
@@ -276,20 +276,20 @@ function number (bytes, it)
   end
 end
 
-function number_check (bytes, it)
+local function number_check (bytes, it)
   local prefix = bytes[it.offset]
   return (prefix < 128 or (prefix >= 202 and prefix <= 211))
 end
 
-function array_check (bytes, it)
+local function array_check (bytes, it)
   return bytes[it.offset] < 160
 end
 
-function nil_check (bytes, it)
+local function nil_check (bytes, it)
   return bytes[it.offset] == spec.NIL
 end
 
-function index_change_check (bytes, it)
+local function index_change_check (bytes, it)
   return bytes[it.offset] == spec.INDEX_CHANGE
 end
 
@@ -405,7 +405,7 @@ local pprint = pprint or function(node)
     print(output_str)
 end
 
-function decode_primitive_type (ftype, bytes, it)
+local function decode_primitive_type (ftype, bytes, it)
     local func = decode[ftype]
     if func then return func(bytes, it) else return nil end
 end
