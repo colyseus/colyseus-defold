@@ -1,15 +1,15 @@
 local bit = require 'colyseus.serialization.bit'
 
-function uint8 (bytes, num)
+local function uint8 (bytes, num)
   table.insert(bytes, bit.band(num, 255))
 end
 
-function uint16(bytes, value)
+local function uint16(bytes, value)
   table.insert(bytes, bit.band(value, 255))
   table.insert(bytes, bit.band(bit.arshift(value, 8), 255))
 end
 
-function uint32(bytes, value)
+local function uint32(bytes, value)
   local b4 = bit.arshift(value, 24)
   local b3 = bit.arshift(value, 16)
   local b2 = bit.arshift(value, 8)
@@ -21,7 +21,7 @@ function uint32(bytes, value)
   table.insert(bytes, bit.band(b4, 255))
 end
 
-function utf8_length(str)
+local function utf8_length(str)
   local c = 0
   local length = 0
 
@@ -50,7 +50,7 @@ function utf8_length(str)
   return length
 end
 
-function encode_string(bytes, value)
+local function encode_string(bytes, value)
   -- encode `null` strings as empty.
   if not value then value = "" end
 
@@ -90,7 +90,7 @@ function encode_string(bytes, value)
 end
 
 -- START ENCODE --
-function utf8_write(bytes, offset, str)
+local function utf8_write(bytes, offset, str)
   local len = #str
   local c = 0
   local i = 1
@@ -141,7 +141,7 @@ function utf8_write(bytes, offset, str)
   end
 end
 
-function encode_number(bytes, num)
+local function encode_number(bytes, num)
   table.insert(bytes, num)
 end
 
