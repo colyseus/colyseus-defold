@@ -50,45 +50,6 @@ local function utf8_length(str)
   return length
 end
 
-local function encode_string(bytes, value)
-  -- encode `null` strings as empty.
-  if not value then value = "" end
-
-  local length = utf8_length(value)
-  local size = 0
-
-  -- fixstr
-  if length < 0x20 then
-    table.insert(bytes, bit.bor(length, 0xa0))
-    size = 1
-
-  -- str 8
-  elseif length < 0x100 then
-    table.insert(bytes, 0xd9)
-    uint8(bytes, length)
-    size = 2
-
-  -- str 16
-  elseif length < 0x10000 then
-    table.insert(bytes, 0xda)
-    uint16(bytes, length)
-    size = 3
-
-  -- str 32
-  elseif length < 0x100000000 then
-    table.insert(bytes, 0xdb)
-    uint32(bytes, length)
-    size = 5
-
-  else
-    error('String too long')
-  end
-
-  utf8_write(bytes, #bytes, value)
-
-  return size + length
-end
-
 -- START ENCODE --
 local function utf8_write(bytes, offset, str)
   local len = #str
@@ -139,6 +100,45 @@ local function utf8_write(bytes, offset, str)
 
     i = i + 1
   end
+end
+
+local function encode_string(bytes, value)
+  -- encode `null` strings as empty.
+  if not value then value = "" end
+
+  local length = utf8_length(value)
+  local size = 0
+
+  -- fixstr
+  if length < 0x20 then
+    table.insert(bytes, bit.bor(length, 0xa0))
+    size = 1
+
+  -- str 8
+  elseif length < 0x100 then
+    table.insert(bytes, 0xd9)
+    uint8(bytes, length)
+    size = 2
+
+  -- str 16
+  elseif length < 0x10000 then
+    table.insert(bytes, 0xda)
+    uint16(bytes, length)
+    size = 3
+
+  -- str 32
+  elseif length < 0x100000000 then
+    table.insert(bytes, 0xdb)
+    uint32(bytes, length)
+    size = 5
+
+  else
+    error('String too long')
+  end
+
+  utf8_write(bytes, #bytes, value)
+
+  return size + length
 end
 
 local function encode_number(bytes, num)
