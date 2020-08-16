@@ -9,6 +9,7 @@ local ldexp = math.ldexp or mathx.ldexp
 
 local array_schema = require 'colyseus.serialization.schema.array_schema'
 local map_schema = require 'colyseus.serialization.schema.map_schema'
+local reference_tracker = require 'colyseus.serialization.schema.reference_tracker'
 
 -- START SPEC --
 local spec = {
@@ -482,15 +483,17 @@ function Schema:trigger_all()
     self['on_change'](changes)
 end
 
-function Schema:decode(bytes, it)
+function Schema:decode(bytes, it, refs)
     local changes = {}
 
-    if it == nil then
-        it = { offset = 1 }
-    end
+    -- default iterator
+    if it == nil then it = { offset = 1 } end
+
+    -- default reference tracker
+    if refs == nil then refs = reference_tracker:new() end
 
     local schema = self._schema
-    local fields_by_index = self._order
+    local fields_by_index = self._fields_by_index
 
     -- skip TYPE_ID of existing instances
     if bytes[it.offset] == spec.TYPE_ID then
@@ -792,12 +795,12 @@ local define = function(fields, context, typeid)
     end
 
     DerivedSchema._schema = {}
-    DerivedSchema._order = fields and fields['_order'] or {}
+    DerivedSchema._fields_by_index = fields and fields['_fields_by_index'] or {}
     DerivedSchema._context = context
 
     context:add(DerivedSchema, typeid)
 
-    for i, field in pairs(DerivedSchema._order) do
+    for i, field in pairs(DerivedSchema._fields_by_index) do
         DerivedSchema._schema[field] = fields[field]
     end
 
@@ -809,20 +812,20 @@ local reflection_context = Context:new()
 local ReflectionField = define({
     ["name"] = "string",
     ["type"] = "string",
-    ["referenced_type"] = "uint8",
-    ["_order"] = {"name", "type", "referenced_type"}
+    ["referenced_type"] = "number",
+    ["_fields_by_index"] = {"name", "type", "referenced_type"}
 }, reflection_context)
 
 local ReflectionType = define({
-    ["id"] = "uint8",
+    ["id"] = "number",
     ["fields"] = { ReflectionField },
-    ["_order"] = {"id", "fields"}
+    ["_fields_by_index"] = {"id", "fields"}
 }, reflection_context)
 
 local Reflection = define({
     ["types"] = { ReflectionType },
-    ["root_type"] = "uint8",
-    ["_order"] = {"types", "root_type"}
+    ["root_type"] = "number",
+    ["_fields_by_index"] = {"types", "root_type"}
 }, reflection_context)
 
 local reflection_decode = function (bytes, it)
@@ -833,7 +836,7 @@ local reflection_decode = function (bytes, it)
 
     local add_field_to_schema = function(schema_class, field_name, field_type)
         schema_class._schema[field_name] = field_type
-        table.insert(schema_class._order, field_name)
+        table.insert(schema_class._fields_by_index, field_name)
     end
 
     local schema_types = {}
@@ -881,8 +884,8 @@ local reflection_decode = function (bytes, it)
     local root_type = schema_types[reflection.root_type]
     local root_instance = root_type:new()
 
-    for i = 1, #root_type._order do
-        local field_name = root_type._order[i]
+    for i = 1, #root_type._fields_by_index do
+        local field_name = root_type._fields_by_index[i]
         local field_type = root_type._schema[field_name]
 
         if type(field_type) ~= "string" then

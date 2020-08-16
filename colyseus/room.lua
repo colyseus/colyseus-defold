@@ -26,7 +26,7 @@ function Room.new(name)
     previous_code = nil
   })
   setmetatable(room, Room)
-  room:init(name, options)
+  room:init(name)
   return room
 end
 
@@ -34,7 +34,7 @@ function Room:init(name)
   self.id = nil
   self.name = name
   self.connection = Connection.new()
-  self.serializer = serialization.get_serializer('fossil-delta').new()
+  self.serializer = nil
   self.on_message_handlers = {}
 
   -- remove all listeners on leave
@@ -114,10 +114,6 @@ function Room:_on_message (binary_string, it)
     local serializer = serialization.get_serializer(self.serializer_id)
     if not serializer then
       error("missing serializer: " .. self.serializer_id);
-    end
-
-    if self.serializer_id ~= "fossil-delta" then
-      self.serializer = serializer.new()
     end
 
     if #message > it.offset and self.serializer.handshake ~= nil then
