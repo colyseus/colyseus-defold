@@ -49,7 +49,7 @@ end
 
 function Room:connect (endpoint)
   self.connection:on("message", function(message)
-    self:_on_batch_message(message)
+    self:_on_message(message, { offset = 1 })
   end)
 
   self.connection:on("close", function(e)
@@ -79,12 +79,6 @@ end
 -- fossil-delta serializer only
 function Room:remove_listener (listener)
   return self.serializer.state:remove_listener(listener)
-end
-
-function Room:loop (timeout)
-  if self.connection ~= nil then
-    self.connection:loop(timeout)
-  end
 end
 
 function Room:on_message(type, handler)

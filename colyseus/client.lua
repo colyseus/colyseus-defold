@@ -41,12 +41,6 @@ function client:get_available_rooms(room_name, callback)
   self:_request(url, 'GET', headers, nil, callback)
 end
 
-function client:loop(timeout)
-  for k, room in pairs(self.rooms) do
-    room:loop(timeout)
-  end
-end
-
 function client:join_or_create(room_name, options, callback)
   return self:create_matchmake_request('joinOrCreate', room_name, options or {}, callback)
 end

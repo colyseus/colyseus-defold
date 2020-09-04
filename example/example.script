@@ -109,8 +109,6 @@ function final(self)
 end
 
 function update(self, dt)
-  client:loop()
-
    -- Add update code here
    -- Remove this function if not needed
 end
