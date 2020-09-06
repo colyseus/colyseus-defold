@@ -82,7 +82,14 @@ function Room:remove_listener (listener)
 end
 
 function Room:on_message(type, handler)
-  self.on_message_handlers[self:get_message_handler_key(type)] = handler
+  local _self = self
+
+  local message_type = self:get_message_handler_key(type)
+  self.on_message_handlers[message_type] = handler
+
+  return function()
+    _self.on_message_handlers[message_type] = nil
+  end
 end
 
 function Room:_on_batch_message(binary_string)
