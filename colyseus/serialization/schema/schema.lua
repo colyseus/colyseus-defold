@@ -11,14 +11,33 @@ local array_schema = require 'colyseus.serialization.schema.array_schema'
 local map_schema = require 'colyseus.serialization.schema.map_schema'
 local reference_tracker = require 'colyseus.serialization.schema.reference_tracker'
 
--- START SPEC --
+-- START SPEC + OPERATION --
 local spec = {
-    END_OF_STRUCTURE = 193,
-    NIL = 192,
-    INDEX_CHANGE = 212,
+    SWITCH_TO_STRUCTURE = 255,
     TYPE_ID = 213,
 }
--- END SPEC --
+
+local OPERATION = {
+  -- add new structure/primitive
+  ADD = 128,
+
+  -- replace structure/primitive
+  REPLACE = 0,
+
+  -- delete field
+  DELETE = 64,
+
+  -- DELETE field, followed by an ADD
+  DELETE_AND_ADD = 192,
+
+  -- TOUCH is used to determine hierarchy of nested Schema structures during serialization.
+  -- touches are NOT encoded.
+  TOUCH = 1,
+
+  -- MapSchema Operations
+  CLEAR = 10,
+}
+-- END SPEC + OPERATION --
 
 -- START DECODE --
 local function utf8_read(bytes, offset, length)
@@ -484,42 +503,95 @@ function Schema:trigger_all()
 end
 
 function Schema:decode(bytes, it, refs)
-    local changes = {}
-
     -- default iterator
     if it == nil then it = { offset = 1 } end
 
     -- default reference tracker
     if refs == nil then refs = reference_tracker:new() end
 
-    local schema = self._schema
-    local fields_by_index = self._fields_by_index
+    local ref_id = 0
+    local ref = self
 
-    -- skip TYPE_ID of existing instances
-    if bytes[it.offset] == spec.TYPE_ID then
-        it.offset = it.offset + 2
-    end
+    local changes = {}
+    local all_changes = {}
+
+    refs:set(ref_id, ref)
+    all_changes[ref_id] = changes
+
+    -- local schema = self._schema
+    -- local fields_by_index = self._fields_by_index
+
+    -- -- skip TYPE_ID of existing instances
+    -- if bytes[it.offset] == spec.TYPE_ID then
+    --     it.offset = it.offset + 2
+    -- end
 
     local total_bytes = #bytes
     while it.offset <= total_bytes do
-        local is_nil = decode.nil_check(bytes, it)
-        if is_nil then it.offset = it.offset + 1 end
-
-        local index = bytes[it.offset]
+        local byte = bytes[it.offset]
         it.offset = it.offset + 1
 
-        -- reached end of strucutre. skip.
-        if index == spec.END_OF_STRUCTURE then
-            -- print("END_OF_STRUCTURE, breaking at offset:", it.offset)
-            break
+        if byte == spec.SWITCH_TO_STRUCTURE then
+            -- LUA "continue" workaround.
+            -- (repeat/until + break)
+            repeat
+                ref_id = decode.number(bytes, it)
+
+                local next_ref = refs:get(ref_id)
+
+                --
+                -- Trying to access a reference that haven't been decoded yet.
+                --
+                if next_ref == nil then error('"refId" not found: ' .. ref_id) end
+
+                ref = next_ref
+
+                -- create empty list of changes for this refId.
+                changes = {}
+                all_changes[ref_id] = changes
+
+                break -- continue
+            until true
         end
 
-        local field = fields_by_index[index + 1]
-        local ftype = schema[field]
-        local value = nil
+        local is_schema = (ref._schema ~= nil) and true or false
 
-        local change = nil
-        local has_change = false
+        --
+        -- index operation
+        -- compressed: index + operation -> (byte >> 6) << 6
+        -- uncompressed: index -> byte
+        --
+        local operation = (is_schema) and (bit.arshift(bit.lshift(byte, 6), 6)) or byte
+
+        if operation == OPERATION.CLEAR then
+          --
+          -- TODO: refactor me!
+          -- The `.clear()` method is calling `$root.removeRef(refId)` for
+          -- each item inside this collection
+          --
+          ref:clear()
+          continue;
+        end
+
+        local field_index = (is_schema)
+          and (byte % (operation || 255))
+          or decode.number(bytes, it)
+
+        local field_name = (is_schema)
+          and ref._fields_by_index[field_index + 1]
+          or nil
+
+        -- TODO: get type from parent structure if `ref` is a collection.
+        local ftype = ref._schema[field_name]
+
+        local value
+        local previous_value
+
+        local dynamic_index
+
+        if not is_schema then
+        else
+        end
 
         --
         -- FIXME: this may cause issues if the `index` provided actually matches a field.
