@@ -2,23 +2,12 @@ var schema = require('@colyseus/schema');
 var colyseus = require('colyseus');
 var social = require('@colyseus/social');
 
-class Message extends schema.Schema {
-    constructor(message) {
-        super();
-        this.message = message;
-    }
-}
+class Message extends schema.Schema { }
 schema.defineTypes(Message, {
   message: "string"
 });
 
-class Player extends schema.Schema {
-    constructor(args) {
-        super();
-        this.x = args.x;
-        this.y = args.y;
-    }
-}
+class Player extends schema.Schema { }
 schema.defineTypes(Player, {
   x: "number",
   y: "number",
@@ -63,7 +52,9 @@ class DemoRoom extends colyseus.Room {
       this.broadcast("broadcast", { data: "something" });
 
       console.log(message, "received from", client.sessionId);
-      this.state.messages.push(new Message(client.sessionId + " sent " + message));
+      this.state.messages.push(new Message().assign({
+        message: client.sessionId + " sent " + message
+      }));
 
       for (let message of this.state.messages) {
         message.message += "a";
@@ -82,7 +73,7 @@ class DemoRoom extends colyseus.Room {
     console.log("client joined!", client.sessionId);
 
     console.log("User:", user);
-    this.state.players[client.sessionId] = new Player({ x: 0, y: 0 });
+    this.state.players.set(client.sessionId, new Player().assign({ x: 0, y: 0 }));
 
     client.send("data", { hello: "world!" });
 
@@ -92,13 +83,13 @@ class DemoRoom extends colyseus.Room {
 
   onLeave (client) {
     console.log("client left!", client.sessionId);
-    delete this.state.players[client.sessionId];
+    this.state.players.delete(client.sessionId);
   }
 
   update () {
-    for (var sessionId in this.state.players) {
-      this.state.players[sessionId].x += 0.0001;
-    }
+    this.state.players.forEach((player) => {
+      player.x += 0.0001;
+    });
   }
 
   onDispose () {
