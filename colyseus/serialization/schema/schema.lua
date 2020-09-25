@@ -39,6 +39,18 @@ local OPERATION = {
 }
 -- END SPEC + OPERATION --
 
+function instance_of(subject, super)
+	super = tostring(super)
+	local mt = getmetatable(subject)
+
+	while true do
+		if mt == nil then return false end
+		if tostring(mt) == super then return true end
+
+		mt = getmetatable(mt)
+	end
+end
+
 -- START DECODE --
 local function utf8_read(bytes, offset, length)
   local bytearr = {}
@@ -305,12 +317,8 @@ local function array_check (bytes, it)
   return bytes[it.offset] < 160
 end
 
-local function nil_check (bytes, it)
-  return bytes[it.offset] == spec.NIL
-end
-
-local function index_change_check (bytes, it)
-  return bytes[it.offset] == spec.INDEX_CHANGE
+local function switch_structure_check (bytes, it)
+  return bytes[it.offset] == spec.SWITCH_TO_STRUCTURE
 end
 
 local decode = {
@@ -330,8 +338,9 @@ local decode = {
     string_check = string_check,
     number_check = number_check,
     array_check = array_check,
-    nil_check = nil_check,
-    index_change_check = index_change_check,
+    switch_structure_check = switch_structure_check,
+    -- nil_check = nil_check,
+    -- index_change_check = index_change_check,
 }
 -- END DECODE --
 
@@ -561,20 +570,26 @@ function Schema:decode(bytes, it, refs)
         -- compressed: index + operation -> (byte >> 6) << 6
         -- uncompressed: index -> byte
         --
-        local operation = (is_schema) and (bit.arshift(bit.lshift(byte, 6), 6)) or byte
+        local operation = (is_schema)
+            and (bit.arshift(bit.lshift(byte, 6), 6))
+            or byte
 
         if operation == OPERATION.CLEAR then
-          --
-          -- TODO: refactor me!
-          -- The `.clear()` method is calling `$root.removeRef(refId)` for
-          -- each item inside this collection
-          --
-          ref:clear()
-          continue;
+            --
+            -- TODO: refactor me!
+            -- The `.clear()` method is calling `$root.removeRef(refId)` for
+            -- each item inside this collection
+            --
+            -- LUA "continue" workaround.
+            -- (repeat/until + break)
+            repeat
+                ref:clear()
+                break;
+            until true
         end
 
         local field_index = (is_schema)
-          and (byte % (operation || 255))
+          and (byte % (bit.bor(operation, 255)))
           or decode.number(bytes, it)
 
         local field_name = (is_schema)
@@ -582,269 +597,207 @@ function Schema:decode(bytes, it, refs)
           or nil
 
         -- TODO: get type from parent structure if `ref` is a collection.
+        local field_type
+        local child_type
+        local child_primitive_type
         local ftype = ref._schema[field_name]
 
         local value
         local previous_value
-
         local dynamic_index
 
         if not is_schema then
-        else
-        end
+            previous_value = ref['get_by_index'](field_index)
 
-        --
-        -- FIXME: this may cause issues if the `index` provided actually matches a field.
-        --
-        -- WORKAROUND for LUA on emscripten environment
-        --   End of buffer has been probably reached.
-        --   Revert an offset, as a new message may be next to it.
-        --
-        if not field then
-          print("DANGER: invalid field found at index:", index," - skipping patch data after offset:", it.offset)
-          it.offset = it.offset - 1
-          break
-        end
+            if bit.band(operation, OPERATION.ADD) == OPERATION.ADD then
+                dynamic_index = (instance_of(ref, map_schema))
+                    and decode.string(bytes, it)
+                    or field_index
 
-        if is_nil then
-            value = nil
-            has_change = true
+                ref['set_index'](field_index, dynamic_index)
 
-        elseif type(ftype) == "table" and ftype['new'] ~= nil then
-            -- decode child Schema instance
-            value = self[field] or self:create_instance_type(bytes, it, ftype)
-            value:decode(bytes, it)
-            has_change = true
-
-        elseif type(ftype) == "table" and ftype['map'] == nil then
-            -- decode array
-            local typeref = ftype[1]
-
-            local value_ref = self[field] or array_schema:new()
-            value = value_ref:clone() -- create new reference for array
-
-            local new_length = decode.number(bytes, it)
-            local num_changes = math.min(decode.number(bytes, it), new_length)
-
-            local has_removal = (#value >= new_length)
-            has_change = (num_changes > 0) or has_removal
-
-            -- FIXME: this may not be reliable. possibly need to encode this variable during
-            -- serialization
-            local has_index_change = false
-
-            -- ensure current array has the same length as encoded one
-            if has_removal then
-                local new_values = array_schema:new()
-                new_values['on_add'] = value_ref['on_add']
-                new_values['on_remove'] = value_ref['on_remove']
-                new_values['on_change'] = value_ref['on_change']
-
-                for i, item in ipairs(value) do
-                    if i > new_length then
-                        -- call "on_removed" on exceeding items
-                        if type(item) == "table" and item["on_remove"] ~= nil then
-                            item["on_remove"]()
-                        end
-
-                        -- call on_remove from array_schema
-                        if value_ref["on_remove"] ~= nil then
-                            value_ref["on_remove"](item, i)
-                        end
-                    else
-                        table.insert(new_values, item)
-                    end
-                end
-
-                value = new_values
+            else
+                dynamic_index = ref['get_index'](field_index)
             end
 
-            local i = 0
-            while i < num_changes do
-                local new_index = decode.number(bytes, it)
+        else
+            previous_value = ref[field_name]
+        end
 
-                -- lua indexes start at 1
-                if new_index ~= nil then
-                    new_index = new_index + 1
-                end
+        --
+        -- DELETE operations
+        --
+        if bit.band(operation, OPERATION.DELETE) == OPERATION.DELETE then
+          if operation ~= OPERATION.DELETE_AND_ADD then
+              ref['delete_by_index'](field_index)
+          end
+
+          -- Flag `refId` for garbage collection.
+          if previous_value ~= nil and previous_value.__refid ~= nil then
+              refs:remove(previous_value.__refid)
+          end
+
+          value = nil
+        end
+
+        if field_name == nil then
+          print("@colyseus/schema: definition mismatch");
+
+          --
+          -- TODO: review this carefully.
+          -- Nested break/continue loops in LUA are weird: https://stackoverflow.com/questions/23090836/how-to-jump-out-of-the-outer-loop-if-inner-for-loop-is-executed-in-lua
+          --
+
+          -- --
+          -- -- keep skipping next bytes until reaches a known structure
+          -- -- by local decoder.
+          -- --
+          -- local next_iterator = { offset = it.offset }
+          -- while (it.offset < total_bytes) do
+          --     if (decode.switch_structure_check(bytes, it)) then
+          --         next_iterator.offset = it.offset + 1;
+
+          --         if (refs:has(decode.number(bytes, next_iterator))) then
+          --             break
+          --         end
+          --     end
+
+          --     it.offset = it.offset + 1
+          -- end
+
+          -- continue;
+
+        elseif operation == OPERATION.DELETE then
+          --
+          -- ??
+          -- Don't do anything...
+          --
+
+        elseif field_type == "ref" then
+          ref_id = decode.number(bytes, it)
+          value = refs:get(ref_id)
+
+          if operation ~= OPERATION.REPLACE then
+              local concrete_child_type = self:get_schema_type(bytes, it, child_type);
+
+              if value == nil then
+                  value = concrete_child_type:new()
+                  value.__refid = ref_id
+
+                  if previous_value ~= nil then
+                      value['on_change'] = previous_value['on_change'];
+                      value['on_remove'] = previous_value['on_remove'];
+                      -- value.$listeners = previous_value.$listeners;
+
+                      if (
+                          previous_value.__refid and
+                          previous_value.__refid ~= ref_id
+                      ) then
+                          refs:remove(previous_value.__refid);
+                      end
+                  end
+              end
+
+              refs:set(ref_id, value, (value ~= previous_value));
+          end
+
+        elseif child_type == nil then
+          --
+          -- primitive value!
+          --
+          value = decode_primitive_type(field_type, bytes, it)
+
+        else
+          ref_id = decode.number(bytes, it)
+          value = refs:get(ref_id)
+
+          local value_ref = (refs:has(ref_id))
+            and previous_value
+            or child_type:new()
+
+          value = value_ref:clone()
+          value.__refid = ref_id
+
+          if previous_value ~= nil then
+              value['on_add'] = previous_value['on_add']
+              value['on_remove'] = previous_value['on_remove']
+              value['on_change'] = previous_value['on_change']
+
+              if (
+                previous_value.__refid ~= nil and
+                previous_value.__refid ~= ref_id
+              ) then
+
+                refs:remove(previous_value.__refid)
+
+                -- //
+                -- // Trigger onRemove if structure has been replaced.
+                -- //
+                -- const deletes: DataChange[] = [];
+                -- const entries: IterableIterator<[any, any]> = previousValue.entries();
+                -- let iter: IteratorResult<[any, any]>;
+                -- while ((iter = entries.next()) && !iter.done) {
+                --     const [key, value] = iter.value;
+                --     deletes.push({
+                --         op: OPERATION.DELETE,
+                --         field: key,
+                --         value: undefined,
+                --         previousValue: value,
+                --     });
+                -- }
                 --
+                -- allChanges.set(previousValue['$changes'].refId, deletes);
 
-                -- index change check
-                local index_change_from
-                if (decode.index_change_check(bytes, it)) then
-                    decode.uint8(bytes, it)
-                    index_change_from = decode.number(bytes, it) + 1
-                    has_index_change = true
-                end
+              end
+          end
 
-                local is_new = (not has_index_change and not value[new_index]) or (has_index_change and index_change_from == nil);
-
-                -- LUA: do/end block is necessary due to `break`
-                -- workaround because lack of `continue` statement in LUA
-                local break_outer_loop = false
-                repeat
-                    if typeref['new'] ~= nil then -- is instance of Schema
-                        local item
-
-                        if has_index_change and index_change_from == nil and new_index ~= nil then
-                            item = self:create_instance_type(bytes, it, typeref)
-
-                        elseif (index_change_from ~= nil) then
-                            item = value_ref[index_change_from]
-
-                        elseif (new_index ~= nil) then
-                            item = value_ref[new_index]
-                        end
-
-                        if item == nil then
-                            item = self:create_instance_type(bytes, it, typeref)
-                            is_new = true
-                        end
-
-                        item:decode(bytes, it)
-                        value[new_index] = item
-
-                    else
-                        value[new_index] = decode_primitive_type(typeref, bytes, it)
-                    end
-
-                    -- add on_add from array_schema
-                    if is_new then
-                        if value_ref['on_add'] ~= nil then
-                            value_ref['on_add'](value[new_index], new_index)
-                        end
-
-                    elseif value_ref['on_change'] ~= nil then
-                        value_ref['on_change'](value[new_index], new_index)
-                    end
-
-                    break -- continue
-                until true
-
-                -- workaround because lack of `continue` statement in LUA
-                if break_outer_loop then break end
-
-                i = i + 1
-            end
-
-        elseif type(ftype) == "table" and ftype['map'] ~= nil then
-            -- decode map
-            local typeref = ftype['map']
-
-            local value_ref = self[field] or map_schema:new()
-            value = value_ref:clone()
-
-            local length = decode.number(bytes, it)
-            has_change = (length > 0)
-
-            -- FIXME: this may not be reliable. possibly need to encode this variable during
-            -- serializagion
-            local has_index_change = false
-
-            local i = 0
-            while i < length do
-                local break_outer_loop = false
-                repeat
-                    -- `encodeAll` may indicate a higher number of indexes it actually encodes
-                    if bytes[it.offset] == nil or bytes[it.offset] == spec.END_OF_STRUCTURE then
-                        break_outer_loop = true
-                        break -- continue
-                    end
-
-                    local is_nil_item = decode.nil_check(bytes, it)
-                    if is_nil_item then it.offset = it.offset + 1 end
-
-                    -- index change check
-                    local previous_key
-                    if decode.index_change_check(bytes, it) then
-                        decode.uint8(bytes, it)
-                        previous_key = value.__keys[decode.number(bytes, it)+1]
-                        has_index_change = true
-                    end
-
-                    local has_map_index = decode.number_check(bytes, it)
-                    local is_schema_type = type(typeref) ~= "string";
-
-                    local new_key
-                    local map_index
-                    if has_map_index then
-                        map_index = decode.number(bytes, it) + 1
-                        new_key = value_ref.__keys[map_index]
-                    else
-                        new_key = decode.string(bytes, it)
-                    end
-
-                    local item
-                    local is_new = (not has_index_change and not value_ref[new_key]) or (has_index_change and previous_key == nil and has_map_index)
-
-                    if is_new and is_schema_type then
-                        item = self:create_instance_type(bytes, it, typeref)
-
-                    elseif previous_key ~= nil then
-                        item = value_ref[previous_key]
-
-                    else
-                        item = value_ref[new_key]
-                    end
-
-                    if is_nil_item then
-                        if item ~= nil and type(item) == "table" and item['on_remove'] ~= nil then
-                            item['on_remove']()
-                        end
-
-                        if value_ref['on_remove'] ~= nil then
-                            value_ref['on_remove'](item, new_key)
-                        end
-
-                        value:set(new_key, nil)
-                        break -- continue
-
-                    elseif not is_schema_type then
-                        value:set(new_key, decode_primitive_type(typeref, bytes, it))
-
-                    else
-                        value:set(new_key, item:decode(bytes, it))
-                    end
-
-                    if is_new then
-                        if value_ref['on_add'] ~= nil then
-                            value_ref['on_add'](value[new_key], new_key)
-                        end
-
-                    elseif value_ref['on_change'] ~= nil then
-                        value_ref['on_change'](value[new_key], new_key)
-                    end
-
-                    break -- continue
-                until true
-
-                if break_outer_loop then break end
-
-                i = i + 1
-            end
-
-        else
-            -- decode primivite type
-            value = decode_primitive_type(ftype, bytes, it)
-            has_change = true
+          refs:set(ref_id, value, value_ref ~= previous_value)
         end
 
-        if self["on_change"] and has_change then
-            table.insert(changes, {
-                field = field,
-                value = value,
-                previous_value = self[field]
-            })
+        local has_change = (previous_value ~= value)
+
+        if value ~= nil then
+          ref['set_by_index'](field_index, dynamic_index, value)
+          -- if (_ref is Schema)
+					-- {
+					-- 	((Schema)_ref)[fieldName] = value;
+					-- }
+					-- else if (_ref is ISchemaCollection)
+					-- {
+					-- 	((ISchemaCollection)_ref).SetByIndex(fieldIndex, dynamicIndex, value);
+          -- }
+
         end
 
-        self[field] = value
+        if has_change then
+          table.insert(changes, {
+            op = operation,
+            field = field_name,
+            dynamic_index = dynamic_index,
+            previous_value = previous_value,
+          })
+        end
+
     end
 
-    if self["on_change"] ~= nil and table.getn(changes) then
-        self["on_change"](changes)
-    end
+    self:_trigger_changes(all_changes)
+
+    refs:garbage_collection()
 
     return self
+end
+
+function Schema:get_schema_type(bytes, it, default_type)
+  local schema_type = default_type;
+
+  if (bytes[it.offset] == spec.TYPE_ID) then
+    it.offset = it.offset + 1
+
+    local type_id = decode.number(bytes, it)
+    schema_type = self._context:get(type_id)
+  end
+
+  return schema_type;
 end
 
 function Schema:create_instance_type(bytes, it, typeref)

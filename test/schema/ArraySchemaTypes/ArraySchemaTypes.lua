@@ -2,7 +2,7 @@
 -- THIS FILE HAS BEEN GENERATED AUTOMATICALLY
 -- DO NOT CHANGE IT MANUALLY UNLESS YOU KNOW WHAT YOU'RE DOING
 -- 
--- GENERATED USING @colyseus/schema 0.4.61
+-- GENERATED USING @colyseus/schema 1.0.0-alpha.56
 -- 
 
 local schema = require 'colyseus.serialization.schema.schema'
@@ -13,7 +13,7 @@ local ArraySchemaTypes = schema.define({
     ["arrayOfNumbers"] = { "number" },
     ["arrayOfStrings"] = { "string" },
     ["arrayOfInt32"] = { "int32" },
-    ["_order"] = { "arrayOfSchemas", "arrayOfNumbers", "arrayOfStrings", "arrayOfInt32" },
+    ["_fields_by_index"] = { "arrayOfSchemas", "arrayOfNumbers", "arrayOfStrings", "arrayOfInt32" },
 
     ["on_change"] = function(changes)
         -- on change logic here

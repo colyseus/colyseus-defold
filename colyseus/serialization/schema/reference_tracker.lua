@@ -11,14 +11,21 @@ function reference_tracker:new()
     return instance
 end
 
-function reference_tracker:add(refId, ref)
-  self.refs[refId] = ref
-  self.ref_counts[refId] = (self.ref_counts[refId] or 0) + 1
+function reference_tracker:has(ref_id)
+  return self.refs[ref_id] ~= nil
 end
 
-function reference_tracker:remove(refId, ref)
+function reference_tracker:set(ref_id, ref, increment_count)
+  self.refs[ref_id] = ref
+
+  if increment_count == nil or increment_count == true then
+    self.ref_counts[ref_id] = (self.ref_counts[ref_id] or 0) + 1
+  end
+end
+
+function reference_tracker:remove(ref_id, ref)
   table.insert(self.deleted_refs, ref);
-  self.ref_counts[refId] = self.ref_counts[refId] - 1;
+  self.ref_counts[ref_id] = self.ref_counts[ref_id] - 1;
 end
 
 function reference_tracker:garbage_collection()
