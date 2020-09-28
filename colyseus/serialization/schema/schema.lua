@@ -40,15 +40,15 @@ local OPERATION = {
 -- END SPEC + OPERATION --
 
 function instance_of(subject, super)
-	super = tostring(super)
-	local mt = getmetatable(subject)
+  super = tostring(super)
+  local mt = getmetatable(subject)
 
-	while true do
-		if mt == nil then return false end
-		if tostring(mt) == super then return true end
+  while true do
+    if mt == nil then return false end
+    if tostring(mt) == super then return true end
 
-		mt = getmetatable(mt)
-	end
+    mt = getmetatable(mt)
+  end
 end
 
 -- START DECODE --
@@ -434,8 +434,8 @@ local pprint = pprint or function(node)
     print(output_str)
 end
 
-local function decode_primitive_type (ftype, bytes, it)
-    local func = decode[ftype]
+local function decode_primitive_type (field_type, bytes, it)
+    local func = decode[field_type]
     if func then return func(bytes, it) else return nil end
 end
 
@@ -527,40 +527,29 @@ function Schema:decode(bytes, it, refs)
     refs:set(ref_id, ref)
     all_changes[ref_id] = changes
 
-    -- local schema = self._schema
-    -- local fields_by_index = self._fields_by_index
-
-    -- -- skip TYPE_ID of existing instances
-    -- if bytes[it.offset] == spec.TYPE_ID then
-    --     it.offset = it.offset + 2
-    -- end
-
     local total_bytes = #bytes
     while it.offset <= total_bytes do
         local byte = bytes[it.offset]
         it.offset = it.offset + 1
 
         if byte == spec.SWITCH_TO_STRUCTURE then
+            ref_id = decode.number(bytes, it)
+
+            local next_ref = refs:get(ref_id)
+
+            --
+            -- Trying to access a reference that haven't been decoded yet.
+            --
+            if next_ref == nil then error('"refId" not found: ' .. ref_id) end
+
+            ref = next_ref
+
+            -- create empty list of changes for this refId.
+            changes = {}
+            all_changes[ref_id] = changes
+
             -- LUA "continue" workaround.
-            -- (repeat/until + break)
-            repeat
-                ref_id = decode.number(bytes, it)
-
-                local next_ref = refs:get(ref_id)
-
-                --
-                -- Trying to access a reference that haven't been decoded yet.
-                --
-                if next_ref == nil then error('"refId" not found: ' .. ref_id) end
-
-                ref = next_ref
-
-                -- create empty list of changes for this refId.
-                changes = {}
-                all_changes[ref_id] = changes
-
-                break -- continue
-            until true
+            repeat break until true
         end
 
         local is_schema = (ref._schema ~= nil) and true or false
@@ -580,12 +569,10 @@ function Schema:decode(bytes, it, refs)
             -- The `.clear()` method is calling `$root.removeRef(refId)` for
             -- each item inside this collection
             --
+            ref:clear()
+
             -- LUA "continue" workaround.
-            -- (repeat/until + break)
-            repeat
-                ref:clear()
-                break;
-            until true
+            repeat break until true
         end
 
         local field_index = (is_schema)
@@ -597,10 +584,9 @@ function Schema:decode(bytes, it, refs)
           or nil
 
         -- TODO: get type from parent structure if `ref` is a collection.
-        local field_type
+        local field_type = ref._schema[field_name]
         local child_type
         local child_primitive_type
-        local ftype = ref._schema[field_name]
 
         local value
         local previous_value
@@ -644,28 +630,24 @@ function Schema:decode(bytes, it, refs)
           print("@colyseus/schema: definition mismatch");
 
           --
-          -- TODO: review this carefully.
-          -- Nested break/continue loops in LUA are weird: https://stackoverflow.com/questions/23090836/how-to-jump-out-of-the-outer-loop-if-inner-for-loop-is-executed-in-lua
+          -- keep skipping next bytes until reaches a known structure
+          -- by local decoder.
           --
+          local next_iterator = { offset = it.offset }
+          while it.offset <= total_bytes do
+              if decode.switch_structure_check(bytes, it) then
+                  next_iterator.offset = it.offset + 1;
 
-          -- --
-          -- -- keep skipping next bytes until reaches a known structure
-          -- -- by local decoder.
-          -- --
-          -- local next_iterator = { offset = it.offset }
-          -- while (it.offset < total_bytes) do
-          --     if (decode.switch_structure_check(bytes, it)) then
-          --         next_iterator.offset = it.offset + 1;
+                  if refs:has(decode.number(bytes, next_iterator)) then
+                      break
+                  end
+              end
 
-          --         if (refs:has(decode.number(bytes, next_iterator))) then
-          --             break
-          --         end
-          --     end
+              it.offset = it.offset + 1
+          end
 
-          --     it.offset = it.offset + 1
-          -- end
-
-          -- continue;
+          -- LUA "continue" workaround.
+          repeat break until true
 
         elseif operation == OPERATION.DELETE then
           --
