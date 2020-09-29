@@ -1,6 +1,6 @@
 [project]
 title = Colyseus Defold Client
-version = 0.13
+version = 0.14
 dependencies = https://github.com/britzl/defold-luasec/archive/master.zip,https://github.com/britzl/defold-luasocket/archive/0.11.zip,https://github.com/britzl/defold-websocket/archive/master.zip,https://github.com/britzl/deftest/archive/master.zip
 
 [bootstrap]

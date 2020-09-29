@@ -1,14 +1,15 @@
 --
 -- @colyseus/schema decoder for LUA
--- Do not modify this file unless you know exactly what you're doing.
 --
 -- This file is part of Colyseus: https://github.com/colyseus/colyseus
 --
 local bit = require 'colyseus.serialization.bit'
 local ldexp = math.ldexp or mathx.ldexp
 
-local array_schema = require 'colyseus.serialization.schema.array_schema'
-local map_schema = require 'colyseus.serialization.schema.map_schema'
+local encode = require 'colyseus.serialization.schema.encode'
+local types = require 'colyseus.serialization.schema.types'
+local map_schema = require 'colyseus.serialization.schema.types.map_schema'
+-- local array_schema = require 'colyseus.serialization.schema.array_schema'
 local reference_tracker = require 'colyseus.serialization.schema.reference_tracker'
 
 -- START SPEC + OPERATION --
@@ -540,11 +541,11 @@ function Schema:decode(bytes, it, refs)
             --
             -- Trying to access a reference that haven't been decoded yet.
             --
-            if next_ref == nil then error('"refId" not found: ' .. ref_id) end
+            if next_ref == nil then error('"ref_id" not found: ' .. ref_id) end
 
             ref = next_ref
 
-            -- create empty list of changes for this refId.
+            -- create empty list of changes for this ref_id.
             changes = {}
             all_changes[ref_id] = changes
 
@@ -560,13 +561,13 @@ function Schema:decode(bytes, it, refs)
         -- uncompressed: index -> byte
         --
         local operation = (is_schema)
-            and (bit.arshift(bit.lshift(byte, 6), 6))
+            and (bit.lshift(bit.arshift(byte, 6), 6))
             or byte
 
         if operation == OPERATION.CLEAR then
             --
             -- TODO: refactor me!
-            -- The `.clear()` method is calling `$root.removeRef(refId)` for
+            -- The `.clear()` method is calling `$root.removeRef(ref_id)` for
             -- each item inside this collection
             --
             ref:clear()
@@ -576,34 +577,33 @@ function Schema:decode(bytes, it, refs)
         end
 
         local field_index = (is_schema)
-          and (byte % (bit.bor(operation, 255)))
+          and (byte % ((operation == 0) and 255 or operation))
           or decode.number(bytes, it)
 
         local field_name = (is_schema)
           and ref._fields_by_index[field_index + 1]
-          or nil
+          or ""
 
-        -- TODO: get type from parent structure if `ref` is a collection.
-        local field_type = ref._schema[field_name]
-        local child_type
-        local child_primitive_type
+        local field_type = (is_schema)
+          and ref._schema[field_name]
+          or ref.__child_type
 
         local value
         local previous_value
         local dynamic_index
 
         if not is_schema then
-            previous_value = ref['get_by_index'](field_index)
+            previous_value = ref:get_by_index(field_index)
 
             if bit.band(operation, OPERATION.ADD) == OPERATION.ADD then
                 dynamic_index = (instance_of(ref, map_schema))
                     and decode.string(bytes, it)
                     or field_index
 
-                ref['set_index'](field_index, dynamic_index)
+                ref:set_index(field_index, dynamic_index)
 
             else
-                dynamic_index = ref['get_index'](field_index)
+                dynamic_index = ref:get_index(field_index)
             end
 
         else
@@ -615,10 +615,10 @@ function Schema:decode(bytes, it, refs)
         --
         if bit.band(operation, OPERATION.DELETE) == OPERATION.DELETE then
           if operation ~= OPERATION.DELETE_AND_ADD then
-              ref['delete_by_index'](field_index)
+              ref:delete_by_index(field_index)
           end
 
-          -- Flag `refId` for garbage collection.
+          -- Flag `ref_id` for garbage collection.
           if previous_value ~= nil and previous_value.__refid ~= nil then
               refs:remove(previous_value.__refid)
           end
@@ -655,12 +655,15 @@ function Schema:decode(bytes, it, refs)
           -- Don't do anything...
           --
 
-        elseif field_type == "ref" then
+        elseif field_type['ref'] ~= nil then
+          --
+          -- Direct schema reference ("ref")
+          --
           ref_id = decode.number(bytes, it)
           value = refs:get(ref_id)
 
           if operation ~= OPERATION.REPLACE then
-              local concrete_child_type = self:get_schema_type(bytes, it, child_type);
+              local concrete_child_type = self:get_schema_type(bytes, it, field_type['ref']);
 
               if value == nil then
                   value = concrete_child_type:new()
@@ -683,22 +686,25 @@ function Schema:decode(bytes, it, refs)
               refs:set(ref_id, value, (value ~= previous_value));
           end
 
-        elseif child_type == nil then
+        elseif type(field_type) == "string" then
           --
           -- primitive value!
           --
           value = decode_primitive_type(field_type, bytes, it)
 
         else
+          local collection_type_id = next(field_type)
+
           ref_id = decode.number(bytes, it)
           value = refs:get(ref_id)
 
           local value_ref = (refs:has(ref_id))
             and previous_value
-            or child_type:new()
+            or types.get_type(collection_type_id):new() -- get 'map_schema'/'array_schema' constructor
 
           value = value_ref:clone()
           value.__refid = ref_id
+          value.__child_type = field_type[collection_type_id]
 
           if previous_value ~= nil then
               value['on_add'] = previous_value['on_add']
@@ -728,7 +734,7 @@ function Schema:decode(bytes, it, refs)
                 --     });
                 -- }
                 --
-                -- allChanges.set(previousValue['$changes'].refId, deletes);
+                -- allChanges.set(previousValue['$changes'].__ref_id, deletes);
 
               end
           end
@@ -739,7 +745,7 @@ function Schema:decode(bytes, it, refs)
         local has_change = (previous_value ~= value)
 
         if value ~= nil then
-          ref['set_by_index'](field_index, dynamic_index, value)
+          ref:set_by_index(field_index, dynamic_index, value)
           -- if (_ref is Schema)
 					-- {
 					-- 	((Schema)_ref)[fieldName] = value;
@@ -767,6 +773,22 @@ function Schema:decode(bytes, it, refs)
     refs:garbage_collection()
 
     return self
+end
+
+function Schema:set_by_index(field_index, dynamic_index, value)
+  self[ self._fields_by_index[field_index + 1] ] = value
+end
+
+function Schema:get_by_index(field_index)
+  return self[ self._fields_by_index[field_index + 1] ]
+end
+
+function Schema:delete_by_index(field_index)
+  self[ self._fields_by_index[field_index + 1] ] = nil
+end
+
+function Schema:_trigger_changes(all_changes)
+  print("TODO: _trigger_changes()")
 end
 
 function Schema:get_schema_type(bytes, it, default_type)
@@ -872,14 +894,14 @@ local reflection_decode = function (bytes, it)
                     field.type = string.sub(field.type, 1, child_type_index - 1)
                 end
 
-                if field.type == "array" then
-                    add_field_to_schema(schema_type, field.name, { referenced_type })
-
-                elseif field.type == "map" then
-                    add_field_to_schema(schema_type, field.name, { map = referenced_type })
-
-                elseif field.type == "ref" then
+                if field.type == "ref" then
                     add_field_to_schema(schema_type, field.name, referenced_type)
+
+                else
+                    -- { map = referenced_type }
+                    -- { array = referenced_type }
+                    -- ...etc
+                    add_field_to_schema(schema_type, field.name, { [field.type] = referenced_type })
                 end
 
             else
@@ -904,11 +926,10 @@ local reflection_decode = function (bytes, it)
                 root_instance[field_name] = field_type:new()
 
             elseif type(field_type) == "table" then
-                if field_type.map ~= nil then
-                    root_instance[field_name] = map_schema:new()
-                else
-                    root_instance[field_name] = array_schema:new()
-                end
+                local collection_type_id = next(field_type)
+                local collection = types.get_type(collection_type_id)
+                root_instance[field_name] = collection:new()
+                root_instance[field_name].__child_type = field_type[collection_type_id]
             end
         end
     end

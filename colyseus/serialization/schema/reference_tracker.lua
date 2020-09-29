@@ -15,6 +15,10 @@ function reference_tracker:has(ref_id)
   return self.refs[ref_id] ~= nil
 end
 
+function reference_tracker:get(ref_id)
+  return self.refs[ref_id]
+end
+
 function reference_tracker:set(ref_id, ref, increment_count)
   self.refs[ref_id] = ref
 

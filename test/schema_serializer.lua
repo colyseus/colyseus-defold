@@ -16,7 +16,7 @@ return function()
     describe("edge cases", function()
       local State = schema.define({
         ["fieldString"] = "string",
-        ["_order"] = { "fieldString" },
+        ["_fields_by_index"] = { "fieldString" },
       });
 
       it("should decode complex UTF-8 characters", function()
@@ -43,8 +43,8 @@ return function()
       assert_equal(state.uint32, 4294967295);
       assert_equal(state.int64, -9223372036854775808);
       assert_equal(state.uint64, 9007199254740991);
-      assert_equal(state.float32, -math.huge); -- This doesn't look right!
-      assert_equal(state.float64, 1.7976931348623157e+308);
+      assert_equal(tostring(state.float32), tostring(-3.4028234663853E37));
+      assert_equal(tostring(state.float64), tostring(1.7976931348623E308));
 
       assert_equal(state.varint_int8, -128);
       assert_equal(state.varint_uint8, 255);
@@ -54,8 +54,8 @@ return function()
       assert_equal(state.varint_uint32, 4294967295);
       assert_equal(state.varint_int64, -9223372036854775808);
       assert_equal(state.varint_uint64, 9007199254740991);
-      assert_equal(state.varint_float32, -3.40282347e+38);
-      assert_equal(tostring(state.varint_float64), tostring(1.7976931348623e+308)); -- why need to cast to string for them to be the same here?
+      assert_equal(tostring(state.varint_float32), tostring(-3.40282347E38));
+      assert_equal(tostring(state.varint_float64), tostring(1.7976931348623E307));
 
       assert_equal(state.str, "Hello world");
       assert_equal(state.boolean, true);
