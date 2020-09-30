@@ -529,7 +529,7 @@ function Schema:decode(bytes, it, refs)
     all_changes[ref_id] = changes
 
     local total_bytes = #bytes
-    while it.offset <= total_bytes do
+    while it.offset <= total_bytes do repeat
         local byte = bytes[it.offset]
         it.offset = it.offset + 1
 
@@ -550,7 +550,7 @@ function Schema:decode(bytes, it, refs)
             all_changes[ref_id] = changes
 
             -- LUA "continue" workaround.
-            repeat break until true
+            break
         end
 
         local is_schema = (ref._schema ~= nil) and true or false
@@ -573,7 +573,7 @@ function Schema:decode(bytes, it, refs)
             ref:clear()
 
             -- LUA "continue" workaround.
-            repeat break until true
+            break
         end
 
         local field_index = (is_schema)
@@ -647,7 +647,7 @@ function Schema:decode(bytes, it, refs)
           end
 
           -- LUA "continue" workaround.
-          repeat break until true
+          break
 
         elseif operation == OPERATION.DELETE then
           --
@@ -655,7 +655,7 @@ function Schema:decode(bytes, it, refs)
           -- Don't do anything...
           --
 
-        elseif field_type['ref'] ~= nil then
+        elseif field_type['_schema'] ~= nil then
           --
           -- Direct schema reference ("ref")
           --
@@ -663,7 +663,7 @@ function Schema:decode(bytes, it, refs)
           value = refs:get(ref_id)
 
           if operation ~= OPERATION.REPLACE then
-              local concrete_child_type = self:get_schema_type(bytes, it, field_type['ref']);
+              local concrete_child_type = self:get_schema_type(bytes, it, field_type);
 
               if value == nil then
                   value = concrete_child_type:new()
@@ -766,7 +766,7 @@ function Schema:decode(bytes, it, refs)
           })
         end
 
-    end
+    until true end
 
     self:_trigger_changes(all_changes)
 
