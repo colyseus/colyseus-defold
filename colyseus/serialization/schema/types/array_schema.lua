@@ -21,7 +21,7 @@ end
 
 -- length
 function array_schema:length()
-  return self:__len()
+  return #self.items
 end
 
 -- getter
