@@ -4,15 +4,15 @@ local array_schema = require('colyseus.serialization.schema.types.array_schema')
 local types = {}
 local typemap = {}
 
-function types:register_type(id, constructor)
+function types.register_type(id, constructor)
   typemap[id] = constructor
 end
 
-function types:unregister_type(id)
+function types.unregister_type(id)
   typemap[id] = nil
 end
 
-function types:get_type(id)
+function types.get_type(id)
   return typemap[id]
 end
 
