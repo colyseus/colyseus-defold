@@ -576,17 +576,17 @@ function Schema:decode(bytes, it, refs)
             break
         end
 
-        local field_index = (is_schema)
+        local field_index = ((is_schema)
           and (byte % ((operation == 0) and 255 or operation))
-          or decode.number(bytes, it)
+          or decode.number(bytes, it)) + 1 -- lua indexes start in 1 instead of 0
 
         local field_name = (is_schema)
-          and ref._fields_by_index[field_index + 1]
+          and ref._fields_by_index[field_index]
           or ""
 
         local field_type = (is_schema)
           and ref._schema[field_name]
-          or ref.__child_type
+          or ref._child_type
 
         local value
         local previous_value
@@ -619,7 +619,7 @@ function Schema:decode(bytes, it, refs)
           end
 
           -- Flag `ref_id` for garbage collection.
-          if previous_value ~= nil and previous_value.__refid ~= nil then
+          if type(previous_value) == "table" and previous_value.__refid ~= nil then
               refs:remove(previous_value.__refid)
           end
 
@@ -704,7 +704,7 @@ function Schema:decode(bytes, it, refs)
 
           value = value_ref:clone()
           value.__refid = ref_id
-          value.__child_type = field_type[collection_type_id]
+          value._child_type = field_type[collection_type_id]
 
           if previous_value ~= nil then
               value['on_add'] = previous_value['on_add']
@@ -715,31 +715,27 @@ function Schema:decode(bytes, it, refs)
                 previous_value.__refid ~= nil and
                 previous_value.__refid ~= ref_id
               ) then
-
                 refs:remove(previous_value.__refid)
 
-                -- //
-                -- // Trigger onRemove if structure has been replaced.
-                -- //
-                -- const deletes: DataChange[] = [];
-                -- const entries: IterableIterator<[any, any]> = previousValue.entries();
-                -- let iter: IteratorResult<[any, any]>;
-                -- while ((iter = entries.next()) && !iter.done) {
-                --     const [key, value] = iter.value;
-                --     deletes.push({
-                --         op: OPERATION.DELETE,
-                --         field: key,
-                --         value: undefined,
-                --         previousValue: value,
-                --     });
-                -- }
                 --
-                -- allChanges.set(previousValue['$changes'].__ref_id, deletes);
+                -- Trigger onRemove if structure has been replaced.
+                --
+                local deletes = {}
+                previous_value:each(function(val, key)
+                  table.insert(deletes, {
+                    op = OPERATION.DELETE,
+                    field = key,
+                    value = nil,
+                    previous_value = val,
+                  })
+                end)
+
+                all_changes[previous_value.__refid] = deletes
 
               end
           end
 
-          refs:set(ref_id, value, value_ref ~= previous_value)
+          refs:set(ref_id, value, (value_ref ~= previous_value))
         end
 
         local has_change = (previous_value ~= value)
@@ -776,15 +772,15 @@ function Schema:decode(bytes, it, refs)
 end
 
 function Schema:set_by_index(field_index, dynamic_index, value)
-  self[ self._fields_by_index[field_index + 1] ] = value
+  self[ self._fields_by_index[field_index] ] = value
 end
 
 function Schema:get_by_index(field_index)
-  return self[ self._fields_by_index[field_index + 1] ]
+  return self[ self._fields_by_index[field_index] ]
 end
 
 function Schema:delete_by_index(field_index)
-  self[ self._fields_by_index[field_index + 1] ] = nil
+  self[ self._fields_by_index[field_index] ] = nil
 end
 
 function Schema:_trigger_changes(all_changes)
@@ -929,7 +925,7 @@ local reflection_decode = function (bytes, it)
                 local collection_type_id = next(field_type)
                 local collection = types.get_type(collection_type_id)
                 root_instance[field_name] = collection:new()
-                root_instance[field_name].__child_type = field_type[collection_type_id]
+                root_instance[field_name]._child_type = field_type[collection_type_id]
             end
         end
     end
@@ -943,5 +939,5 @@ return {
     reflection_decode = reflection_decode,
     decode = decode,
     encode = encode,
-    pprint = pprint
+    pprint = pprint,
 }

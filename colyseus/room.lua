@@ -7,7 +7,6 @@ local EventEmitter = require('colyseus.eventemitter')
 local utils = require('colyseus.utils')
 local decode = require('colyseus.serialization.schema.schema').decode
 local encode = require('colyseus.serialization.schema.encode')
-local storage = require('colyseus.storage')
 local serialization = require('colyseus.serialization')
 
 Room = {}

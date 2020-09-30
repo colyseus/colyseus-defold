@@ -27,8 +27,8 @@ function reference_tracker:set(ref_id, ref, increment_count)
   end
 end
 
-function reference_tracker:remove(ref_id, ref)
-  table.insert(self.deleted_refs, ref);
+function reference_tracker:remove(ref_id)
+  table.insert(self.deleted_refs, ref_id);
   self.ref_counts[ref_id] = self.ref_counts[ref_id] - 1;
 end
 
