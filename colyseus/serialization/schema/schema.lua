@@ -580,9 +580,11 @@ function Schema:decode(bytes, it, refs)
           and (byte % ((operation == 0) and 255 or operation))
           or decode.number(bytes, it)) + 1 -- lua indexes start in 1 instead of 0
 
-        local field_name = (is_schema)
-          and ref._fields_by_index[field_index]
-          or ""
+        local field_name
+        if is_schema
+        then field_name = ref._fields_by_index[field_index]
+        else field_name = ""
+        end
 
         local field_type = (is_schema)
           and ref._schema[field_name]
