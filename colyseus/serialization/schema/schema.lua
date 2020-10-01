@@ -9,7 +9,6 @@ local ldexp = math.ldexp or mathx.ldexp
 local encode = require 'colyseus.serialization.schema.encode'
 local types = require 'colyseus.serialization.schema.types'
 local map_schema = require 'colyseus.serialization.schema.types.map_schema'
--- local array_schema = require 'colyseus.serialization.schema.array_schema'
 local reference_tracker = require 'colyseus.serialization.schema.reference_tracker'
 
 -- START SPEC + OPERATION --
@@ -19,23 +18,19 @@ local spec = {
 }
 
 local OPERATION = {
-  -- add new structure/primitive
+  -- ADD new structure/primitive
   ADD = 128,
 
-  -- replace structure/primitive
+  -- REPLACE structure/primitive
   REPLACE = 0,
 
-  -- delete field
+  -- DELETE field
   DELETE = 64,
 
   -- DELETE field, followed by an ADD
   DELETE_AND_ADD = 192,
 
-  -- TOUCH is used to determine hierarchy of nested Schema structures during serialization.
-  -- touches are NOT encoded.
-  TOUCH = 1,
-
-  -- MapSchema Operations
+  -- Collection Operations
   CLEAR = 10,
 }
 -- END SPEC + OPERATION --
@@ -495,8 +490,8 @@ function Schema:new(obj)
     -- initialize child schema structures
     if self._schema ~= nil then
       for field, field_type in pairs(self._schema) do
-          if type(self._schema[field]) ~= "string" then
-              self[field] = (field_type['new'] ~= nil)
+          if type(field_type) ~= "string" then
+              obj[field] = (field_type['new'] ~= nil)
                   and field_type:new()
                   or types.get_type(next(field_type)):new()
           end
@@ -582,7 +577,7 @@ function Schema:decode(bytes, it, refs)
             -- The `.clear()` method is calling `$root.removeRef(ref_id)` for
             -- each item inside this collection
             --
-            ref:clear()
+            ref:clear(refs)
 
             -- LUA "continue" workaround.
             break
@@ -786,15 +781,15 @@ function Schema:decode(bytes, it, refs)
 end
 
 function Schema:set_by_index(field_index, dynamic_index, value)
-  self[ self._fields_by_index[field_index] ] = value
+  self[self._fields_by_index[field_index]] = value
 end
 
 function Schema:get_by_index(field_index)
-  return self[ self._fields_by_index[field_index] ]
+  return self[self._fields_by_index[field_index]]
 end
 
 function Schema:delete_by_index(field_index)
-  self[ self._fields_by_index[field_index] ] = nil
+  self[self._fields_by_index[field_index]] = nil
 end
 
 function Schema:_trigger_changes(all_changes)

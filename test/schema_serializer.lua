@@ -269,34 +269,34 @@ return function()
       assert_equal(client.player1, client.player2);
       assert_equal(client.player1.position, client.player2.position);
       assert_equal(refs.ref_counts[client.player1.__refid], 2);
-      assert_equal(5, #refs.refs);
+      assert_equal(5, refs:count());
 
       client:decode({ 130, 1, 131, 2, 64, 65 }, nil, refs);
+      assert_equal(nil, client.player1);
       assert_equal(nil, client.player2);
-      assert_equal(nil, client.player2);
-      assert_equal(3, #refs.refs);
+      assert_equal(3, refs:count());
 
       client:decode({ 255, 1, 128, 0, 5, 128, 1, 5, 128, 2, 5, 128, 3, 6, 255, 5, 128, 7, 255, 6, 128, 8, 255, 7, 128, 10, 129, 10, 255, 8, 128, 10, 129, 10 }, nil, refs);
-      assert_equal(client.arrayOfPlayers[0], client.arrayOfPlayers[1]);
       assert_equal(client.arrayOfPlayers[1], client.arrayOfPlayers[2]);
-      assert_not_equal(client.arrayOfPlayers[2], client.arrayOfPlayers[3]);
-      assert_equal(7, #refs.refs);
+      assert_equal(client.arrayOfPlayers[2], client.arrayOfPlayers[3]);
+      assert_not_equal(client.arrayOfPlayers[3], client.arrayOfPlayers[4]);
+      assert_equal(7, refs:count());
 
       client:decode({ 255, 1, 64, 3, 64, 2, 64, 1 }, nil, refs);
       assert_equal(1, client.arrayOfPlayers:length());
-      assert_equal(5, #refs.refs);
+      assert_equal(5, refs:count());
       local previous_array_schema__refid = client.arrayOfPlayers.__refid;
 
       -- Replacing ArraySchema
       client:decode({ 130, 9, 255, 9, 128, 0, 10, 255, 10, 128, 11, 255, 11, 128, 10, 129, 20 }, nil, refs);
-      assert_equal(false, refs.refs.ContainsKey(previous_array_schema__refid));
+      assert_equal(false, refs:has(previous_array_schema__refid));
       assert_equal(1, client.arrayOfPlayers:length());
-      assert_equal(5, #refs.refs);
+      assert_equal(5, refs:count());
 
       -- Clearing ArraySchema
       client:decode({ 255, 9, 10 }, nil, refs);
       assert_equal(0, client.arrayOfPlayers:length());
-      assert_equal(3, #refs.refs);
+      assert_equal(3, refs:count());
     end)
 
   end)
