@@ -132,15 +132,15 @@ return function()
       --
       -- TODO: schema-codegen should auto-initialize MapSchema on constructor
       --
-      -- state.mapOfSchemas['on_add'] = function (value, key) print("OnAdd, mapOfSchemas => " .. key) end;
-      -- state.mapOfNumbers['on_add'] = function (value, key) print("OnAdd, mapOfNumbers => " .. key) end;
-      -- state.mapOfStrings['on_add'] = function (value, key) print("OnAdd, mapOfStrings => " .. key) end;
-      -- state.mapOfInt32['on_add'] = function (value, key) print("OnAdd, mapOfInt32 => " .. key) end;
-      --
-      -- state.mapOfSchemas['on_remove'] = function (value, key) print("OnRemove, mapOfSchemas => " .. key) end;
-      -- state.mapOfNumbers['on_remove'] = function (value, key) print("OnRemove, mapOfNumbers => " .. key) end;
-      -- state.mapOfStrings['on_remove'] = function (value, key) print("OnRemove, mapOfStrings => " .. key) end;
-      -- state.mapOfInt32['on_remove'] = function (value, key) print("OnRemove, mapOfInt32 => " .. key) end;
+      state.mapOfSchemas['on_add'] = function (value, key) print("OnAdd, mapOfSchemas => " .. key, value) end;
+      state.mapOfNumbers['on_add'] = function (value, key) print("OnAdd, mapOfNumbers => " .. key, value) end;
+      state.mapOfStrings['on_add'] = function (value, key) print("OnAdd, mapOfStrings => " .. key, value) end;
+      state.mapOfInt32['on_add'] = function (value, key) print("OnAdd, mapOfInt32 => " .. key, value) end;
+
+      state.mapOfSchemas['on_remove'] = function (value, key) print("OnRemove, mapOfSchemas => " .. key, value) end;
+      state.mapOfNumbers['on_remove'] = function (value, key) print("OnRemove, mapOfNumbers => " .. key, value) end;
+      state.mapOfStrings['on_remove'] = function (value, key) print("OnRemove, mapOfStrings => " .. key, value) end;
+      state.mapOfInt32['on_remove'] = function (value, key) print("OnRemove, mapOfInt32 => " .. key, value) end;
 
       local refs = reference_tracker:new()
       state:decode(bytes, nil, refs)

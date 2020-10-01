@@ -526,6 +526,8 @@ function Schema:decode(bytes, it, refs)
     -- default reference tracker
     if refs == nil then refs = reference_tracker:new() end
 
+    self.__refs = refs
+
     local ref_id = 1
     local ref = self
 
@@ -751,15 +753,6 @@ function Schema:decode(bytes, it, refs)
 
         if value ~= nil then
           ref:set_by_index(field_index, dynamic_index, value)
-          -- if (_ref is Schema)
-					-- {
-					-- 	((Schema)_ref)[fieldName] = value;
-					-- }
-					-- else if (_ref is ISchemaCollection)
-					-- {
-					-- 	((ISchemaCollection)_ref).SetByIndex(fieldIndex, dynamicIndex, value);
-          -- }
-
         end
 
         if has_change then
@@ -767,6 +760,7 @@ function Schema:decode(bytes, it, refs)
             op = operation,
             field = field_name,
             dynamic_index = dynamic_index,
+            value = value,
             previous_value = previous_value,
           })
         end
@@ -793,7 +787,65 @@ function Schema:delete_by_index(field_index)
 end
 
 function Schema:_trigger_changes(all_changes)
-  print("TODO: _trigger_changes()")
+  local refs = self.__refs
+
+  for ref_id, changes in pairs(all_changes) do
+    local ref = refs:get(ref_id)
+    local is_schema = ref['_schema'] ~= nil
+
+    for _, change in ipairs(changes) do
+
+      if not is_schema then
+        if change.op == OPERATION.ADD and change.previous_value == nil then
+          if ref['on_add'] ~= nil then
+            ref['on_add'](change.value, change.dynamic_index)
+          end
+
+        elseif change.op == OPERATION.DELETE then
+          --
+          -- FIXME: `previous_value` should always be available.
+          -- ADD + DELETE operations are still encoding DELETE operation.
+          --
+          if change.previous_value ~= nil and ref['on_remove'] then
+            ref['on_remove'](change.previous_value, change.dynamic_index or change.field)
+          end
+
+        elseif change.op == OPERATION.DELETE_AND_ADD then
+          if change.previous_value ~= nil and ref['on_remove'] then
+            ref['on_remove'](change.previous_value, change.dynamic_index)
+          end
+          if ref['on_add'] then
+            ref['on_add'](change.value, change.dynamic_index)
+          end
+
+        elseif (
+          change.op == OPERATION.REPLACE or
+          change.value ~= change.previous_value
+        ) then
+          if ref['on_change'] then
+            ref['on_change'](change.value, change.dynamic_index)
+          end
+        end
+      end
+
+      --
+      -- trigger onRemove on child structure.
+      --
+      if (
+        bit.band(change.op, OPERATION.DELETE) == OPERATION.DELETE and
+        type(change.previous_value) == "table" and
+        change.previous_value['_schema'] ~= nil and
+        change.previous_value['on_remove']
+      ) then
+        change.previous_value['on_remove']()
+      end
+
+    end
+
+    if is_schema and ref['on_change'] then
+      ref['on_change'](changes)
+    end
+  end
 end
 
 function Schema:get_schema_type(bytes, it, default_type)
