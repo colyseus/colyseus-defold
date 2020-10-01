@@ -502,21 +502,15 @@ function Schema:new(obj)
 end
 
 function Schema:trigger_all()
-    -- skip if 'on_change' is not set
-    if self['on_change'] == nil then return end
+  --
+  -- first state not received from the server yet.
+  -- nothing to trigger.
+  --
+  if self.__refs == nil then return end
 
-    local changes = {}
-    for field, _ in pairs(self._schema) do
-        if self[field] ~= nil then
-            table.insert(changes, {
-                field = field,
-                value = self[field],
-                previous_value = nil
-            })
-        end
-    end
-
-    self['on_change'](changes)
+  local all_changes = {}
+  self:_trigger_all_fill_changes(self, all_changes, self.__refs)
+  self:_trigger_changes(all_changes)
 end
 
 function Schema:decode(bytes, it, refs)
@@ -767,7 +761,7 @@ function Schema:decode(bytes, it, refs)
 
     until true end
 
-    self:_trigger_changes(all_changes)
+    self:_trigger_changes(all_changes, refs)
 
     refs:garbage_collection()
 
@@ -786,9 +780,55 @@ function Schema:delete_by_index(field_index)
   self[self._fields_by_index[field_index]] = nil
 end
 
-function Schema:_trigger_changes(all_changes)
-  local refs = self.__refs
+function Schema:_trigger_all_fill_changes(ref, all_changes, refs)
+  -- skip if trying to enqueue a structure more than once.
+  if all_changes[ref.__refid] ~= nil then return end
 
+  local changes = {}
+  all_changes[ref.__refid] = changes
+
+  if ref._schema ~= nil then
+    for field, field_type in pairs(ref._schema) do
+      if ref[field] ~= nil then
+        table.insert(changes, {
+          op = OPERATION.ADD,
+          field = field,
+          value = ref[field],
+          previous_value = nil
+        })
+
+        if (
+          type(ref[field]) == "table" and (
+            ref[field]['_schema'] ~= nil or
+            ref[field]._child_type ~= nil
+          )
+        ) then
+          self:_trigger_all_fill_changes(ref[field], all_changes, refs)
+        end
+      end
+    end
+
+  else
+    local has_schema_child = ref._child_type['_schema']
+
+    ref:each(function(value, key)
+      table.insert(changes, {
+        op = OPERATION.ADD,
+        field = nil,
+        dynamic_index = key,
+        value = value,
+      })
+
+      if has_schema_child then
+        self:_trigger_all_fill_changes(value, all_changes, refs)
+      end
+
+    end)
+
+  end
+end
+
+function Schema:_trigger_changes(all_changes, refs)
   for ref_id, changes in pairs(all_changes) do
     local ref = refs:get(ref_id)
     local is_schema = ref['_schema'] ~= nil
