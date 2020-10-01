@@ -491,6 +491,18 @@ function Schema:new(obj)
     obj = obj or {}
     setmetatable(obj, self)
     self.__index = self
+
+    -- initialize child schema structures
+    if self._schema ~= nil then
+      for field, field_type in pairs(self._schema) do
+          if type(self._schema[field]) ~= "string" then
+              self[field] = (field_type['new'] ~= nil)
+                  and field_type:new()
+                  or types.get_type(next(field_type)):new()
+          end
+      end
+    end
+
     return obj
 end
 
@@ -519,7 +531,7 @@ function Schema:decode(bytes, it, refs)
     -- default reference tracker
     if refs == nil then refs = reference_tracker:new() end
 
-    local ref_id = 0
+    local ref_id = 1
     local ref = self
 
     local changes = {}
@@ -534,7 +546,7 @@ function Schema:decode(bytes, it, refs)
         it.offset = it.offset + 1
 
         if byte == spec.SWITCH_TO_STRUCTURE then
-            ref_id = decode.number(bytes, it)
+            ref_id = decode.number(bytes, it) + 1
 
             local next_ref = refs:get(ref_id)
 
@@ -661,7 +673,7 @@ function Schema:decode(bytes, it, refs)
           --
           -- Direct schema reference ("ref")
           --
-          ref_id = decode.number(bytes, it)
+          ref_id = decode.number(bytes, it) + 1
           value = refs:get(ref_id)
 
           if operation ~= OPERATION.REPLACE then
@@ -697,7 +709,7 @@ function Schema:decode(bytes, it, refs)
         else
           local collection_type_id = next(field_type)
 
-          ref_id = decode.number(bytes, it)
+          ref_id = decode.number(bytes, it) + 1
           value = refs:get(ref_id)
 
           local value_ref = (refs:has(ref_id))

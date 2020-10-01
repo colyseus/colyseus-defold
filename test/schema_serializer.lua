@@ -10,6 +10,8 @@ return function()
   local MapSchemaInt8 = require 'test.schema.MapSchemaInt8.MapSchemaInt8'
   local StateV1 = require 'test.schema.BackwardsForwards.StateV1'
   local StateV2 = require 'test.schema.BackwardsForwards.StateV2'
+  local FilteredTypesState = require 'test.schema.FilteredTypes.State'
+  local InstanceSharingTypes = require 'test.schema.InstanceSharingTypes.State'
 
   describe("schema serializer", function()
 
@@ -242,6 +244,59 @@ return function()
       local statev1 =  StateV1:new()
       statev1:decode(statev2bytes);
       assert_equal(statev1.str, "Hello world");
+    end)
+
+    it("FilteredTypesTest", function()
+      local client1 = FilteredTypesState:new()
+      client1:decode({ 255, 0, 130, 1, 128, 2, 128, 2, 255, 1, 128, 0, 4, 255, 2, 128, 163, 111, 110, 101, 255, 2, 128, 163, 111, 110, 101, 255, 4, 128, 163, 111, 110, 101 })
+      assert_equal("one", client1.playerOne.name);
+      assert_equal("one", client1.players[1].name);
+      assert_equal(nil, client1.playerTwo.name);
+
+      local client2 =  FilteredTypesState:new()
+      client2:decode({ 255, 0, 130, 1, 129, 3, 129, 3, 255, 1, 128, 1, 5, 255, 3, 128, 163, 116, 119, 111, 255, 3, 128, 163, 116, 119, 111, 255, 5, 128, 163, 116, 119, 111 })
+      assert_equal("two", client2.playerTwo.name);
+      assert_equal("two", client2.players[1].name);
+      -- assert_equal("two", client2.players[1].name);
+      assert_equal(nil, client2.playerOne.name);
+    end)
+
+    it("InstanceSharingTypes", function()
+      local refs = reference_tracker:new()
+      local client = InstanceSharingTypes:new()
+
+      client:decode({ 130, 1, 131, 2, 128, 3, 129, 3, 255, 1, 255, 2, 255, 3, 128, 4, 255, 3, 128, 4, 255, 4, 128, 10, 129, 10, 255, 4, 128, 10, 129, 10 }, nil, refs);
+      assert_equal(client.player1, client.player2);
+      assert_equal(client.player1.position, client.player2.position);
+      assert_equal(refs.ref_counts[client.player1.__refid], 2);
+      assert_equal(5, #refs.refs);
+
+      client:decode({ 130, 1, 131, 2, 64, 65 }, nil, refs);
+      assert_equal(nil, client.player2);
+      assert_equal(nil, client.player2);
+      assert_equal(3, #refs.refs);
+
+      client:decode({ 255, 1, 128, 0, 5, 128, 1, 5, 128, 2, 5, 128, 3, 6, 255, 5, 128, 7, 255, 6, 128, 8, 255, 7, 128, 10, 129, 10, 255, 8, 128, 10, 129, 10 }, nil, refs);
+      assert_equal(client.arrayOfPlayers[0], client.arrayOfPlayers[1]);
+      assert_equal(client.arrayOfPlayers[1], client.arrayOfPlayers[2]);
+      assert_not_equal(client.arrayOfPlayers[2], client.arrayOfPlayers[3]);
+      assert_equal(7, #refs.refs);
+
+      client:decode({ 255, 1, 64, 3, 64, 2, 64, 1 }, nil, refs);
+      assert_equal(1, client.arrayOfPlayers:length());
+      assert_equal(5, #refs.refs);
+      local previous_array_schema__refid = client.arrayOfPlayers.__refid;
+
+      -- Replacing ArraySchema
+      client:decode({ 130, 9, 255, 9, 128, 0, 10, 255, 10, 128, 11, 255, 11, 128, 10, 129, 20 }, nil, refs);
+      assert_equal(false, refs.refs.ContainsKey(previous_array_schema__refid));
+      assert_equal(1, client.arrayOfPlayers:length());
+      assert_equal(5, #refs.refs);
+
+      -- Clearing ArraySchema
+      client:decode({ 255, 9, 10 }, nil, refs);
+      assert_equal(0, client.arrayOfPlayers:length());
+      assert_equal(3, #refs.refs);
     end)
 
   end)

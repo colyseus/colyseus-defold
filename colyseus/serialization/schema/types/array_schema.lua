@@ -3,6 +3,7 @@ local array_schema = {}
 function array_schema:new(obj)
   obj = obj or {
     items = {},
+    keys = {},
     indexes = {},
     props = {},
   }
@@ -51,6 +52,12 @@ end
 
 function array_schema:set_by_index(index, dynamic_index, value)
   self.indexes[index] = dynamic_index
+
+  -- insert key
+  if self.items[dynamic_index] == nil then
+      table.insert(self.keys, dynamic_index)
+  end
+
   self.items[dynamic_index] = value
 end
 
@@ -59,11 +66,20 @@ function array_schema:get_index(index)
 end
 
 function array_schema:get_by_index(index)
-  return self.items[self.indexes[index]]
+  return self.items[self.keys[index]]
 end
 
 function array_schema:delete_by_index(index)
   local dynamic_index = self.indexes[index]
+
+  -- delete key
+  for i, k in pairs(self.keys) do
+    if k == dynamic_index then
+      table.remove(self.keys, i)
+      break
+    end
+  end
+
   self.items[dynamic_index] = nil
   self.indexes[dynamic_index] = nil
 end
@@ -95,6 +111,7 @@ end
 function array_schema:clone()
   return array_schema:new({
     items = table.clone(self.items),
+    keys = table.clone(self.keys),
     indexes = table.clone(self.indexes),
     props = self.props,
   })
