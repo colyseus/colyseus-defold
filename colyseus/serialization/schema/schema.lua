@@ -845,12 +845,12 @@ local ReflectionField = define({
 
 local ReflectionType = define({
     ["id"] = "number",
-    ["fields"] = { ReflectionField },
+    ["fields"] = { array = ReflectionField },
     ["_fields_by_index"] = {"id", "fields"}
 }, reflection_context)
 
 local Reflection = define({
-    ["types"] = { ReflectionType },
+    ["types"] = { array = ReflectionType },
     ["root_type"] = "number",
     ["_fields_by_index"] = {"types", "root_type"}
 }, reflection_context)
@@ -868,14 +868,14 @@ local reflection_decode = function (bytes, it)
 
     local schema_types = {}
 
-    for i, reflection_type in ipairs(reflection.types) do
+    reflection.types:each(function(reflection_type)
         schema_types[reflection_type.id] = define({}, context, reflection_type.id)
-    end
+    end)
 
-    for i = 1, #reflection.types do
+    for i = 1, reflection.types:length() do
         local reflection_type = reflection.types[i]
 
-        for j = 1, #reflection_type.fields do
+        for j = 1, reflection_type.fields:length() do
             local schema_type = schema_types[reflection_type.id]
             local field = reflection_type.fields[j]
 

@@ -1,5 +1,5 @@
-local Schema = require('colyseus.serialization.schema.schema')
-local ReferenceTracker = require('colyseus.serialization.schema.reference_tracker')
+local schema = require('colyseus.serialization.schema.schema')
+local reference_tracker = require('colyseus.serialization.schema.reference_tracker')
 
 local schema_serializer = {}
 schema_serializer.__index = schema_serializer
@@ -7,7 +7,7 @@ schema_serializer.__index = schema_serializer
 function schema_serializer.new ()
   local instance = {
     state = nil,
-    refs = ReferenceTracker:new()
+    refs = reference_tracker:new()
   }
   setmetatable(instance, schema_serializer)
   return instance
@@ -30,7 +30,7 @@ function schema_serializer:teardown()
 end
 
 function schema_serializer:handshake(bytes, it)
-  self.state = Schema.reflection_decode(bytes, it)
+  self.state = schema.reflection_decode(bytes, it)
 end
 
 return schema_serializer
