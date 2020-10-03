@@ -47,6 +47,27 @@ function instance_of(subject, super)
   end
 end
 
+--
+-- ordered_array
+-- the ordered array is used to keep track of "all_changes", and ordered ref_id per change, as they are identified.
+--
+local ordered_array = {}
+function ordered_array:new(obj)
+    obj = {
+        items = {},
+        keys = {},
+    }
+    setmetatable(obj, ordered_array)
+    return obj
+end
+function ordered_array:__index(key)
+    return (type(key)=="number") and self.items[key] or rawget(self, key)
+end
+function ordered_array:__newindex(key, value)
+    self.items[key] = value
+    table.insert(self.keys, key)
+end
+
 -- START DECODE --
 local function utf8_read(bytes, offset, length)
   local bytearr = {}
@@ -502,15 +523,17 @@ function Schema:new(obj)
 end
 
 function Schema:trigger_all()
+  local refs = self.__refs
+
   --
   -- first state not received from the server yet.
   -- nothing to trigger.
   --
-  if self.__refs == nil then return end
+  if refs == nil then return end
 
-  local all_changes = {}
-  self:_trigger_all_fill_changes(self, all_changes, self.__refs)
-  self:_trigger_changes(all_changes)
+  local all_changes = ordered_array:new()
+  self:_trigger_all_fill_changes(self, all_changes, refs)
+  self:_trigger_changes(all_changes, refs)
 end
 
 function Schema:decode(bytes, it, refs)
@@ -526,7 +549,8 @@ function Schema:decode(bytes, it, refs)
     local ref = self
 
     local changes = {}
-    local all_changes = {}
+    -- local all_changes = {}
+    local all_changes = ordered_array:new()
 
     refs:set(ref_id, ref)
     all_changes[ref_id] = changes
@@ -785,7 +809,7 @@ function Schema:_trigger_all_fill_changes(ref, all_changes, refs)
   if all_changes[ref.__refid] ~= nil then return end
 
   local changes = {}
-  all_changes[ref.__refid] = changes
+  all_changes[ref.__refid or 1] = changes
 
   if ref._schema ~= nil then
     for field, field_type in pairs(ref._schema) do
@@ -829,9 +853,10 @@ function Schema:_trigger_all_fill_changes(ref, all_changes, refs)
 end
 
 function Schema:_trigger_changes(all_changes, refs)
-  for ref_id, changes in pairs(all_changes) do
+  for _, ref_id in ipairs(all_changes.keys) do
     local ref = refs:get(ref_id)
     local is_schema = ref['_schema'] ~= nil
+    local changes = all_changes[ref_id]
 
     for _, change in ipairs(changes) do
 
