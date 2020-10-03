@@ -87,7 +87,14 @@ function Room:loop (timeout)
 end
 
 function Room:on_message(type, handler)
-  self.on_message_handlers[self:get_message_handler_key(type)] = handler
+  local _self = self
+
+  local message_type = self:get_message_handler_key(type)
+  self.on_message_handlers[message_type] = handler
+
+  return function()
+    _self.on_message_handlers[message_type] = nil
+  end
 end
 
 function Room:_on_batch_message(binary_string)
@@ -111,9 +118,9 @@ function Room:_on_message (binary_string, it)
     self.serializer_id = decode.string(message, it)
 
     local serializer = serialization.get_serializer(self.serializer_id)
-    if not serializer then
-      error("missing serializer: " .. self.serializer_id);
-    end
+    if not serializer then error("missing serializer: " .. self.serializer_id); end
+
+    self.serializer = serializer:new()
 
     if #message > it.offset and self.serializer.handshake ~= nil then
       self.serializer:handshake(message, it)
