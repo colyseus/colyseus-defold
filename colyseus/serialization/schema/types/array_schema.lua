@@ -98,7 +98,7 @@ end
 function array_schema:trigger_all()
   if type(self) ~= "table" or self['on_add'] == nil then return end
   for _, dynamic_index in ipairs(self.indexes) do
-    self['on_add'](dynamic_index, self.items[dynamic_index])
+    self['on_add'](self.items[dynamic_index], dynamic_index)
   end
 end
 
