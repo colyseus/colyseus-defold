@@ -61,11 +61,10 @@ function init(self)
         room.state.players['on_add'] = function(player, i)
           print("new player")
           pprint(player)
-        end
-
-        room.state.players['on_change'] = function(changes)
-          print("player changed")
-          pprint(changes)
+          player['on_change'] = function(changes)
+            print("player changed")
+            pprint(changes)
+          end
         end
 
         room.state['on_change'] = function(changes)
