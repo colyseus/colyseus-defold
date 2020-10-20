@@ -146,9 +146,10 @@ function Room:_on_message (binary_string, it)
     self:patch(message, it)
 
   elseif code == protocol.ROOM_DATA_SCHEMA then
-    local context = self.serializer:get_state()._context
+    local typeid = decode.number(message, it)
 
-    local message_type = context:get(message[it.offset])
+    local context = self.serializer:get_state()._context
+    local message_type = context:get(typeid)
     local schema_message = message_type:new()
 
     it.offset = it.offset + 1
