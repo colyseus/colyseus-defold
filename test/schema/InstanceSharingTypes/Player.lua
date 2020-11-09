@@ -6,12 +6,11 @@
 -- 
 
 local schema = require 'colyseus.serialization.schema.schema'
+local Position = require 'test.schema.InstanceSharingTypes.Position'
 
-
-local MapSchemaInt8 = schema.define({
-    ["status"] = "string",
-    ["mapOfInt8"] = { map = "int8" },
-    ["_fields_by_index"] = { "status", "mapOfInt8" },
+local Player = schema.define({
+    ["position"] = Position,
+    ["_fields_by_index"] = { "position" },
 })
 
-return MapSchemaInt8
+return Player

@@ -8,10 +8,9 @@
 local schema = require 'colyseus.serialization.schema.schema'
 
 
-local MapSchemaInt8 = schema.define({
-    ["status"] = "string",
-    ["mapOfInt8"] = { map = "int8" },
-    ["_fields_by_index"] = { "status", "mapOfInt8" },
+local Player = schema.define({
+    ["name"] = "string",
+    ["_fields_by_index"] = { "name" },
 })
 
-return MapSchemaInt8
+return Player
