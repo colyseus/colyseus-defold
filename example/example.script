@@ -3,16 +3,6 @@ local Colyseus = require "colyseus.client"
 local client
 local room
 
---[[
---
--- OPTIONAL: defold-websocket allows to set a `connect_timeout` option.
---
-
-local ColyseusConnection = require "colyseus.connection"
-ColyseusConnection.config = { connect_timeout = 10 }
-
---]]
-
 function init(self)
     msg.post(".", "acquire_input_focus")
 
@@ -33,69 +23,58 @@ function init(self)
       end)
     end)
 
-    client.auth:login(function(err, auth)
-      print("AUTH DATA:")
-      pprint(auth)
+    -- join "demo" room
+    client:join_or_create("my_room", function(err, room)
+      if (err) then
+        print("JOIN ERROR: " .. err)
+        return
+      end
 
-      client.auth.username = "jakebadlands"
-      client.auth:save(function(err, data)
-        print("auth saved successfuly!")
+      -- print("PLAYERS:")
+      -- pprint(room.state.players)
+      -- pprint(room.state.messages)
+      print("successfully joined '" .. room.name .. "'")
+
+      room.state.messages['on_add'] = function(msg, i)
+        print("message arrived", msg.message)
+      end
+
+      room.state.players['on_add'] = function(player, i)
+        print("new player")
+        pprint(player)
+        player['on_change'] = function(changes)
+          print("player changed")
+          pprint(changes)
+        end
+      end
+
+      room.state['on_change'] = function(changes)
+        -- print("state changes")
+        -- pprint(changes)
+      end
+
+      room:on_message("broadcast", function(message)
+        print("colyseus-defold: 'broadcast' message received =>")
+        pprint(message)
       end)
 
-      -- join "demo" room
-      client:join_or_create("demo", function(err, room)
-        if (err) then
-          print("JOIN ERROR: " .. err)
-          return
-        end
-
-        -- print("PLAYERS:")
-        -- pprint(room.state.players)
-        -- pprint(room.state.messages)
-        print("successfully joined '" .. room.name .. "'")
-
-        room.state.messages['on_add'] = function(msg, i)
-          print("message arrived", msg.message)
-        end
-
-        room.state.players['on_add'] = function(player, i)
-          print("new player")
-          pprint(player)
-          player['on_change'] = function(changes)
-            print("player changed")
-            pprint(changes)
-          end
-        end
-
-        room.state['on_change'] = function(changes)
-          -- print("state changes")
-          -- pprint(changes)
-        end
-
-        room:on_message("broadcast", function(message)
-          print("colyseus-defold: 'broadcast' message received =>")
-          pprint(message)
-        end)
-
-        room:on_message("data", function(message)
-          print("colyseus-defold: 'data' message received =>")
-          pprint(message)
-        end)
-
-        room:on("statechange", function(state)
-          -- room:send("Hello world!")
-          -- print("STATE CHANGE")
-          -- pprint(state)
-        end)
-
-        room:on("leave", function()
-          print("left '" .. room.name .. "'")
-        end)
-
-        room:send("type1", { hello = "world" })
-        room:send(0, { hello = "world" })
-
+      room:on_message("data", function(message)
+        print("colyseus-defold: 'data' message received =>")
+        pprint(message)
       end)
+
+      room:on("statechange", function(state)
+        -- room:send("Hello world!")
+        -- print("STATE CHANGE")
+        -- pprint(state)
+      end)
+
+      room:on("leave", function()
+        print("left '" .. room.name .. "'")
+      end)
+
+      room:send("type1", { hello = "world" })
+      room:send(0, { hello = "world" })
 
     end)
 
