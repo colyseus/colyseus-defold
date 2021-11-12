@@ -718,11 +718,8 @@ function Schema:decode(bytes, it, refs)
           value.__refid = __refid
           value._child_type = field_type[collection_type_id]
 
-          print("DECODING COLLECTION", field_name, field_type, "ref_id:", __refid, "has previous_value?", previous_value)
-
           if previous_value ~= nil then
               -- copy callbacks
-              print("copy previous callbacks...", previous_value.__callbacks)
               value.__callbacks = previous_value.__callbacks
 
               if (
@@ -756,15 +753,6 @@ function Schema:decode(bytes, it, refs)
         end
 
         if has_change then
-
-          -- print("ADD CHANGE!")
-          -- print("ref_id:", ref_id)
-          -- print("op:", operation)
-          -- print("field:", field_name)
-          -- print("dynamic_index:", dynamic_index)
-          -- print("value:", value)
-          -- print("previous_value:", previous_value)
-
           table.insert(all_changes, {
             ref_id = ref_id,
             op = operation,
@@ -817,7 +805,6 @@ function Schema:_trigger_changes(changes, refs)
         local delete_callbacks = (change.previous_value.__callbacks and change.previous_value.__callbacks[OPERATION.DELETE])
         if delete_callbacks then
           for _, callback in pairs(delete_callbacks) do
-            print("TRIGGER DELETE")
             callback()
           end
         end
