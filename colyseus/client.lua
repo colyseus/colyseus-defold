@@ -1,12 +1,11 @@
 local Connection = require('colyseus.connection')
-local Auth = require('colyseus.auth')
 local Room = require('colyseus.room')
-local Push = require('colyseus.push')
 local protocol = require('colyseus.protocol')
 local EventEmitter = require('colyseus.eventemitter')
 local storage = require('colyseus.storage')
 
-local utils = require('colyseus.utils')
+local utils = require('colyseus.utils.utils')
+local URL = require('colyseus.utils.url')
 local decode = require('colyseus.serialization.schema.schema')
 local JSON = require('colyseus.serialization.json')
 local msgpack = require('colyseus.messagepack.MessagePack')
@@ -21,22 +20,26 @@ function client.new (endpoint)
   return instance
 end
 
-function client:init(endpoint)
-  self.hostname = endpoint
+function client:init(endpoint_or_settings)
+  if type(endpoint_or_settings) == "string" then
+    local parsed_url = URL.parse(endpoint_or_settings)
+    self.settings = {}
+    self.settings.hostname = parsed_url.host
+    self.settings.port = parsed_url.port
+    self.settings.use_ssl = (parsed_url.scheme == "wss")
 
-  -- ensure the ends with "/", to concat with path during create_connection.
-  if string.sub(self.hostname, -1) ~= "/" then
-    self.hostname = self.hostname .. "/"
+  else
+    self.settings = endpoint_or_settings
   end
 
-  self.auth = Auth.new(endpoint)
-  self.push = Push.new(endpoint)
-
-  self.rooms = {}
+  -- ensure hostname does not end with "/"
+  if string.sub(self.settings.hostname, -1) == "/" then
+    self.settings.hostname = self.settings.hostname:sub(0, -2)
+  end
 end
 
 function client:get_available_rooms(room_name, callback)
-  local url = "http" .. self.hostname:sub(3) .. "matchmake/" .. room_name
+  local url = self:_build_http_endpoint("/matchmake/" .. room_name)
   local headers = { ['Accept'] = 'application/json' }
   self:_request(url, 'GET', headers, nil, callback)
 end
@@ -67,16 +70,13 @@ function client:create_matchmake_request(method, room_name, options, callback)
     options = {}
   end
 
-  if self.auth:has_token() then
-    options.token = self.auth.token
-  end
-
   local headers = {
     ['Accept'] = 'application/json',
     ['Content-Type'] = 'application/json'
   }
 
-  local url = "http" .. self.hostname:sub(3) .. "matchmake/" .. method .. "/" .. room_name
+  local url = self:_build_http_endpoint("/matchmake/" .. method .. "/" .. room_name)
+
   self:_request(url, 'POST', headers, JSON.encode(options), function(err, response)
     if (err) then return callback(err) end
 
@@ -101,16 +101,11 @@ function client:consume_seat_reservation(response, callback)
 
   room:on('error', on_error)
   room:on('join', on_join)
-  room:on('leave', function()
-    self.rooms[room.id] = nil
-  end)
-  self.rooms[room.id] = room
 
-  room:connect(self:_build_endpoint(response.room.processId .. "/" .. room.id, {sessionId = room.sessionId}))
+  room:connect(self:_build_ws_endpoint(response.room, { sessionId = room.sessionId }))
 end
 
-function client:_build_endpoint(path, options)
-  path = path or ""
+function client:_build_ws_endpoint(room, options)
   options = options or {}
 
   local params = {}
@@ -118,8 +113,31 @@ function client:_build_endpoint(path, options)
     table.insert(params, k .. "=" .. tostring(v))
   end
 
-  return self.hostname .. path .. "?" .. table.concat(params, "&")
+  -- build request endpoint
+  local protocol = (self.settings.use_ssl and "wss") or "ws"
+  local port = ((self.settings.port ~= 80 and self.settings.port ~= 443) and ":" .. self.settings.port) or ""
+  local public_address = (room.publicAddress) or self.settings.hostname .. port
+
+  return protocol .. "://" .. public_address .. "/" .. room.processId .. "/" .. room.roomId .. "?" .. table.concat(params, "&")
 end
+
+function client:_build_http_endpoint(path, query_params)
+  query_params = query_params or {}
+
+  local params = {}
+  for k, v in pairs(query_params) do
+    table.insert(params, k .. "=" .. tostring(v))
+  end
+
+  -- build request endpoint
+  local protocol = (self.settings.use_ssl and "https") or "http"
+  local port = ((self.settings.port ~= 80 and self.settings.port ~= 443) and ":" .. self.settings.port) or ""
+  local public_address = self.settings.hostname .. port
+  -- local public_address = (room.publicAddress) or self.settings.hostname .. port
+
+  return protocol .. "://" .. public_address .. path .. "?" .. table.concat(params, "&")
+end
+
 
 function client:_request(url, method, headers, body, callback)
   http.request(url, method, function(self, id, response)

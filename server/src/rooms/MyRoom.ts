@@ -6,7 +6,7 @@ export class MyRoom extends Room<MyRoomState> {
   onCreate (options: any) {
     this.setState(new MyRoomState());
 
-    // For "get_available_rooms" 
+    // For "get_available_rooms"
     this.setMetadata({
       bool: true,
       str: "string",
@@ -32,13 +32,13 @@ export class MyRoom extends Room<MyRoomState> {
       this.broadcast("broadcast", { data: "something" });
 
       console.log(message, "received from", client.sessionId);
-      this.state.messages.push(new Message().assign({
-        message: client.sessionId + " sent " + message
-      }));
+      // this.state.messages.push(new Message().assign({
+      //   message: client.sessionId + " sent " + message
+      // }));
 
-      for (let message of this.state.messages) {
-        message.message += "a";
-      }
+      // for (let message of this.state.messages) {
+      //   message.message += "a";
+      // }
     });
 
     console.log("ChatRoom created!", options);

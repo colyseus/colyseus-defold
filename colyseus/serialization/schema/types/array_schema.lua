@@ -1,3 +1,8 @@
+local callback_helpers = require 'colyseus.serialization.schema.types.helpers'
+
+local constants = require 'colyseus.serialization.schema.constants'
+local OPERATION = constants.OPERATION;
+
 local array_schema = {}
 
 function array_schema:new(obj)
@@ -95,11 +100,20 @@ function array_schema:clear(refs)
   self.items = {}
 end
 
-function array_schema:trigger_all()
-  if type(self) ~= "table" or self['on_add'] == nil then return end
-  for _, dynamic_index in ipairs(self.indexes) do
-    self['on_add'](self.items[dynamic_index], dynamic_index)
-  end
+function array_schema:on_add(callback, trigger_all)
+  if trigger_all == nil then trigger_all = true end -- use trigger_all by default.
+  if self.__callbacks == nil then self.__callbacks = {} end
+  return callback_helpers.add_callback(self.__callbacks, OPERATION.ADD, callback, (trigger_all and self) or nil)
+end
+
+function array_schema:on_remove(callback)
+  if self.__callbacks == nil then self.__callbacks = {} end
+  return callback_helpers.add_callback(self.__callbacks, OPERATION.DELETE, callback)
+end
+
+function array_schema:on_change(callback)
+  if self.__callbacks == nil then self.__callbacks = {} end
+  return callback_helpers.add_callback(self.__callbacks, OPERATION.REPLACE, callback)
 end
 
 function array_schema:each(cb)

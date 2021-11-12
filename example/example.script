@@ -25,33 +25,36 @@ function init(self)
 
     -- join "demo" room
     client:join_or_create("my_room", function(err, room)
+      print("\n\nclient:join_or_create(), callback =>\n\n")
       if (err) then
-        print("JOIN ERROR: " .. err)
+        print("JOIN ERROR:")
+        pprint(err)
         return
       end
 
       -- print("PLAYERS:")
       -- pprint(room.state.players)
       -- pprint(room.state.messages)
+      print("============================================")
       print("successfully joined '" .. room.name .. "'")
+      print("============================================")
 
-      room.state.messages['on_add'] = function(msg, i)
+      room.state.messages:on_add(function(msg, i)
         print("message arrived", msg.message)
-      end
+      end)
 
-      room.state.players['on_add'] = function(player, i)
-        print("new player")
-        pprint(player)
-        player['on_change'] = function(changes)
-          print("player changed")
-          pprint(changes)
-        end
-      end
+      room.state.players:on_add(function(player, i)
+        print("NEW PLAYER!! i =>", i, "player =>", player)
 
-      room.state['on_change'] = function(changes)
-        -- print("state changes")
-        -- pprint(changes)
-      end
+        player:listen("x", function(value, prevous_value)
+          print("player.x has changed! value =>", value, "prevous_value =>", prevous_value)
+        end)
+
+        -- player:on_change(function(changes)
+        --   print("player changed")
+        --   pprint(changes)
+        -- end)
+      end)
 
       room:on_message("broadcast", function(message)
         print("colyseus-defold: 'broadcast' message received =>")
@@ -99,9 +102,6 @@ end
 function on_input(self, action_id, action)
   -- Add input-handling code here
   -- Remove this function if not needed
-  if action_id == hash("click") and action.pressed then
-    client.push:register()
-  end
 end
 
 function on_reload(self)

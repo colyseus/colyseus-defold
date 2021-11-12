@@ -1,7 +1,7 @@
 local msgpack = require('colyseus.messagepack.MessagePack')
 local delta = require('colyseus.serialization.fossil_delta.fossil_delta')
 local StateContainer = require('colyseus.state_listener.state_container')
-local utils = require('colyseus.utils')
+local utils = require('colyseus.utils.utils')
 
 local fossil_delta = {}
 fossil_delta.__index = fossil_delta

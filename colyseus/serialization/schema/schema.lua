@@ -9,31 +9,12 @@ local ldexp = math.ldexp or mathx.ldexp
 local encode = require 'colyseus.serialization.schema.encode'
 local types = require 'colyseus.serialization.schema.types'
 local map_schema = require 'colyseus.serialization.schema.types.map_schema'
+local callback_helpers = require 'colyseus.serialization.schema.types.helpers'
 local reference_tracker = require 'colyseus.serialization.schema.reference_tracker'
 
--- START SPEC + OPERATION --
-local spec = {
-    SWITCH_TO_STRUCTURE = 255,
-    TYPE_ID = 213,
-}
-
-local OPERATION = {
-  -- ADD new structure/primitive
-  ADD = 128,
-
-  -- REPLACE structure/primitive
-  REPLACE = 0,
-
-  -- DELETE field
-  DELETE = 64,
-
-  -- DELETE field, followed by an ADD
-  DELETE_AND_ADD = 192,
-
-  -- Collection Operations
-  CLEAR = 10,
-}
--- END SPEC + OPERATION --
+local constants = require 'colyseus.serialization.schema.constants'
+local SPEC = constants.SPEC;
+local OPERATION = constants.OPERATION;
 
 function instance_of(subject, super)
   super = tostring(super)
@@ -335,7 +316,7 @@ local function array_check (bytes, it)
 end
 
 local function switch_structure_check (bytes, it)
-  return bytes[it.offset] == spec.SWITCH_TO_STRUCTURE
+  return bytes[it.offset] == SPEC.SWITCH_TO_STRUCTURE
 end
 
 local decode = {
@@ -499,7 +480,6 @@ function Context:add(schema, typeid)
 end
 -- END CONTEXT CLASS --
 
-
 -- START SCHEMA CLASS --
 local Schema = {}
 
@@ -522,18 +502,31 @@ function Schema:new(obj)
     return obj
 end
 
-function Schema:trigger_all()
-  local refs = self.__refs
+function Schema:on_change(callback)
+  if self.__callbacks == nil then self.__callbacks = {} end
+  return callback_helpers.add_callback(self.__callbacks, OPERATION.REPLACE, callback);
+end
 
-  --
-  -- first state not received from the server yet.
-  -- nothing to trigger.
-  --
-  if refs == nil then return end
+function Schema:on_remove()
+  if self.__callbacks == nil then self.__callbacks = {} end
+  return callback_helpers.add_callback(self.__callbacks, OPERATION.DELETE, callback);
+end
 
-  local all_changes = ordered_array:new()
-  self:_trigger_all_fill_changes(self, all_changes, refs)
-  self:_trigger_changes(all_changes, refs)
+function Schema:listen(field_name, callback)
+  if self.__callbacks == nil then self.__callbacks = {} end
+  if self.__callbacks[field_name] == nil then self.__callbacks[field_name] = {} end
+
+  table.insert(self.__callbacks[field_name], callback)
+
+  -- return un-register callback.
+  return function()
+    for index, value in pairs(self.__callbacks[field_name]) do
+      if value == callback then
+        table.remove(self.__callbacks[field_name], index)
+        break
+      end
+    end
+  end
 end
 
 function Schema:decode(bytes, it, refs)
@@ -547,20 +540,16 @@ function Schema:decode(bytes, it, refs)
 
     local ref_id = 1
     local ref = self
-
-    local changes = {}
-    -- local all_changes = {}
-    local all_changes = ordered_array:new()
-
     refs:set(ref_id, ref)
-    all_changes[ref_id] = changes
+
+    local all_changes = {}
 
     local total_bytes = #bytes
     while it.offset <= total_bytes do repeat
         local byte = bytes[it.offset]
         it.offset = it.offset + 1
 
-        if byte == spec.SWITCH_TO_STRUCTURE then
+        if byte == SPEC.SWITCH_TO_STRUCTURE then
             ref_id = decode.number(bytes, it) + 1
 
             local next_ref = refs:get(ref_id)
@@ -571,13 +560,7 @@ function Schema:decode(bytes, it, refs)
             if next_ref == nil then error('"ref_id" not found: ' .. ref_id) end
 
             ref = next_ref
-
-            -- create empty list of changes for this ref_id.
-            changes = {}
-            all_changes[ref_id] = changes
-
-            -- LUA "continue" workaround.
-            break
+            break -- LUA "continue" workaround.
         end
 
         local is_schema = (ref._schema ~= nil) and true or false
@@ -608,9 +591,10 @@ function Schema:decode(bytes, it, refs)
           or decode.number(bytes, it)) + 1 -- lua indexes start in 1 instead of 0
 
         local field_name
-        if is_schema
-        then field_name = ref._fields_by_index[field_index]
-        else field_name = ""
+        if is_schema then
+          field_name = ref._fields_by_index[field_index]
+        else
+          field_name = ""
         end
 
         local field_type = (is_schema)
@@ -688,31 +672,30 @@ function Schema:decode(bytes, it, refs)
           --
           -- Direct schema reference ("ref")
           --
-          ref_id = decode.number(bytes, it) + 1
-          value = refs:get(ref_id)
+          local __refid = decode.number(bytes, it) + 1
+          value = refs:get(__refid)
 
           if operation ~= OPERATION.REPLACE then
               local concrete_child_type = self:get_schema_type(bytes, it, field_type);
 
               if value == nil then
                   value = concrete_child_type:new()
-                  value.__refid = ref_id
+                  value.__refid = __refid
 
                   if previous_value ~= nil then
-                      value['on_change'] = previous_value['on_change'];
-                      value['on_remove'] = previous_value['on_remove'];
-                      -- value.$listeners = previous_value.$listeners;
+                      -- copy previous callbacks
+                      value.__callbacks = previous_value.__callbacks
 
                       if (
                           previous_value.__refid and
-                          previous_value.__refid ~= ref_id
+                          previous_value.__refid ~= __refid
                       ) then
                           refs:remove(previous_value.__refid);
                       end
                   end
               end
 
-              refs:set(ref_id, value, (value ~= previous_value));
+              refs:set(__refid, value, (value ~= previous_value));
           end
 
         elseif type(field_type) == "string" then
@@ -724,47 +707,46 @@ function Schema:decode(bytes, it, refs)
         else
           local collection_type_id = next(field_type)
 
-          ref_id = decode.number(bytes, it) + 1
-          value = refs:get(ref_id)
+          local __refid = decode.number(bytes, it) + 1
+          value = refs:get(__refid)
 
-          local value_ref = (refs:has(ref_id))
+          local value_ref = (refs:has(__refid))
             and previous_value
             or types.get_type(collection_type_id):new() -- get 'map_schema'/'array_schema' constructor
 
           value = value_ref:clone()
-          value.__refid = ref_id
+          value.__refid = __refid
           value._child_type = field_type[collection_type_id]
 
+          print("DECODING COLLECTION", field_name, field_type, "ref_id:", __refid, "has previous_value?", previous_value)
+
           if previous_value ~= nil then
-              value['on_add'] = previous_value['on_add']
-              value['on_remove'] = previous_value['on_remove']
-              value['on_change'] = previous_value['on_change']
+              -- copy callbacks
+              print("copy previous callbacks...", previous_value.__callbacks)
+              value.__callbacks = previous_value.__callbacks
 
               if (
                 previous_value.__refid ~= nil and
-                previous_value.__refid ~= ref_id
+                previous_value.__refid ~= __refid
               ) then
                 refs:remove(previous_value.__refid)
 
                 --
-                -- Trigger onRemove if structure has been replaced.
+                -- Trigger on_remove() if structure has been replaced.
                 --
-                local deletes = {}
                 previous_value:each(function(val, key)
-                  table.insert(deletes, {
+                  table.insert(all_changes, {
+                    __refid = previous_value.__refid,
                     op = OPERATION.DELETE,
                     field = key,
                     value = nil,
                     previous_value = val,
                   })
                 end)
-
-                all_changes[previous_value.__refid] = deletes
-
               end
           end
 
-          refs:set(ref_id, value, (value_ref ~= previous_value))
+          refs:set(__refid, value, (value_ref ~= previous_value))
         end
 
         local has_change = (previous_value ~= value)
@@ -774,7 +756,17 @@ function Schema:decode(bytes, it, refs)
         end
 
         if has_change then
-          table.insert(changes, {
+
+          -- print("ADD CHANGE!")
+          -- print("ref_id:", ref_id)
+          -- print("op:", operation)
+          -- print("field:", field_name)
+          -- print("dynamic_index:", dynamic_index)
+          -- print("value:", value)
+          -- print("previous_value:", previous_value)
+
+          table.insert(all_changes, {
+            ref_id = ref_id,
             op = operation,
             field = field_name,
             dynamic_index = dynamic_index,
@@ -804,66 +796,65 @@ function Schema:delete_by_index(field_index)
   self[self._fields_by_index[field_index]] = nil
 end
 
-function Schema:_trigger_all_fill_changes(ref, all_changes, refs)
-  -- skip if trying to enqueue a structure more than once.
-  if all_changes[ref.__refid] ~= nil then return end
+function Schema:_trigger_changes(changes, refs)
+  local unique_ref_ids = {}
 
-  local changes = {}
-  all_changes[ref.__refid or 1] = changes
+  for _, change in pairs(changes) do
+    repeat
+      local ref_id = change.ref_id
+      local ref = refs:get(ref_id)
+      local is_schema = (ref['_schema'] ~= nil)
+      local callbacks = ref.__callbacks
 
-  if ref._schema ~= nil then
-    for field, field_type in pairs(ref._schema) do
-      if ref[field] ~= nil then
-        table.insert(changes, {
-          op = OPERATION.ADD,
-          field = field,
-          value = ref[field],
-          previous_value = nil
-        })
-
-        if (
-          type(ref[field]) == "table" and (
-            ref[field]['_schema'] ~= nil or
-            ref[field]._child_type ~= nil
-          )
-        ) then
-          self:_trigger_all_fill_changes(ref[field], all_changes, refs)
+      --
+      -- trigger on_remove() on child structure.
+      --
+      if (
+        bit.band(change.op, OPERATION.DELETE) == OPERATION.DELETE and
+        type(change.previous_value) == "table" and
+        change.previous_value['_schema'] ~= nil
+      ) then
+        local delete_callbacks = (change.previous_value.__callbacks and change.previous_value.__callbacks[OPERATION.DELETE])
+        if delete_callbacks then
+          for _, callback in pairs(delete_callbacks) do
+            print("TRIGGER DELETE")
+            callback()
+          end
         end
       end
-    end
 
-  else
-    local has_schema_child = ref._child_type['_schema']
+      -- "continue" if no callbacks are set
+      if callbacks == nil then break end
 
-    ref:each(function(value, key)
-      table.insert(changes, {
-        op = OPERATION.ADD,
-        field = nil,
-        dynamic_index = key,
-        value = value,
-      })
+      if is_schema then
+        -- is schema
 
-      if has_schema_child then
-        self:_trigger_all_fill_changes(value, all_changes, refs)
-      end
+        -- ensure on_change() is triggered only once per schema instance.
+        if unique_ref_ids[ref_id] == nil then
+          local replace_callbacks = callbacks[OPERATION.REPLACE]
+          if replace_callbacks ~= nil then
+            for _, callback in pairs(replace_callbacks) do
+              callback(changes)
+            end
+          end
+        end
 
-    end)
+        local field_callbacks = callbacks[change.field]
+        if field_callbacks ~= nil then
+          for _, callback in pairs(field_callbacks) do
+            callback(change.value, change.previous_value)
+          end
+        end
 
-  end
-end
+      else
+        -- is a collection/custom type
 
-function Schema:_trigger_changes(all_changes, refs)
-  for _, ref_id in ipairs(all_changes.keys) do
-    local ref = refs:get(ref_id)
-    local is_schema = ref['_schema'] ~= nil
-    local changes = all_changes[ref_id]
-
-    for _, change in ipairs(changes) do
-
-      if not is_schema then
         if change.op == OPERATION.ADD and change.previous_value == nil then
-          if ref['on_add'] ~= nil then
-            ref['on_add'](change.value, change.dynamic_index)
+          local add_callbacks = callbacks[OPERATION.ADD]
+          if add_callbacks ~= nil then
+            for _, callback in pairs(add_callbacks) do
+              callback(change.value, change.dynamic_index)
+            end
           end
 
         elseif change.op == OPERATION.DELETE then
@@ -871,52 +862,51 @@ function Schema:_trigger_changes(all_changes, refs)
           -- FIXME: `previous_value` should always be available.
           -- ADD + DELETE operations are still encoding DELETE operation.
           --
-          if change.previous_value ~= nil and ref['on_remove'] then
-            ref['on_remove'](change.previous_value, change.dynamic_index or change.field)
+          local delete_callbacks = callbacks[OPERATION.DELETE]
+          if change.previous_value ~= nil and delete_callbacks ~= nil then
+            for _, callback in pairs(delete_callbacks) do
+              callback(change.previous_value, change.dynamic_index or change.field)
+            end
           end
 
         elseif change.op == OPERATION.DELETE_AND_ADD then
-          if change.previous_value ~= nil and ref['on_remove'] then
-            ref['on_remove'](change.previous_value, change.dynamic_index)
-          end
-          if ref['on_add'] then
-            ref['on_add'](change.value, change.dynamic_index)
+          local delete_callbacks = callbacks[OPERATION.DELETE]
+          local add_callbacks = callbacks[OPERATION.ADD]
+
+          if change.previous_value ~= nil and delete_callbacks ~= nil then
+            for _, callback in pairs(delete_callbacks) do
+              callback(change.previous_value, change.dynamic_index)
+            end
           end
 
-        elseif (
-          change.op == OPERATION.REPLACE or
-          change.value ~= change.previous_value
-        ) then
-          if ref['on_change'] then
-            ref['on_change'](change.value, change.dynamic_index)
+          if add_callbacks ~= nil then
+            for _, callback in pairs(add_callbacks) do
+              callback(change.value, change.dynamic_index)
+            end
+          end
+        end
+
+        if change.value ~= change.previous_value then
+          local replace_callbacks = callbacks[OPERATION.REPLACE]
+          if replace_callbacks ~= nil then
+            for _, callback in pairs(replace_callbacks) do
+              callback(change.value, change.dynamic_index or change.field)
+            end
           end
         end
       end
 
-      --
-      -- trigger onRemove on child structure.
-      --
-      if (
-        bit.band(change.op, OPERATION.DELETE) == OPERATION.DELETE and
-        type(change.previous_value) == "table" and
-        change.previous_value['_schema'] ~= nil and
-        change.previous_value['on_remove']
-      ) then
-        change.previous_value['on_remove']()
-      end
+      unique_ref_ids[ref_id] = true
 
-    end
-
-    if is_schema and ref['on_change'] then
-      ref['on_change'](changes)
-    end
+      break
+    until true
   end
 end
 
 function Schema:get_schema_type(bytes, it, default_type)
   local schema_type = default_type;
 
-  if (bytes[it.offset] == spec.TYPE_ID) then
+  if (bytes[it.offset] == SPEC.TYPE_ID) then
     it.offset = it.offset + 1
 
     local type_id = decode.number(bytes, it)
@@ -927,7 +917,7 @@ function Schema:get_schema_type(bytes, it, default_type)
 end
 
 function Schema:create_instance_type(bytes, it, typeref)
-    if bytes[it.offset] == spec.TYPE_ID then
+    if bytes[it.offset] == SPEC.TYPE_ID then
         it.offset = it.offset + 1
         local another_type = self._context:get(decode.uint8(bytes, it))
         return another_type:new()

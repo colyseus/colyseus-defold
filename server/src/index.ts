@@ -1,8 +1,10 @@
 import http from "http";
 import express from "express";
 import cors from "cors";
+
 import { Server } from "colyseus";
 import { monitor } from "@colyseus/monitor";
+import { WebSocketTransport } from "@colyseus/ws-transport";
 
 import { MyRoom } from "./rooms/MyRoom";
 
@@ -14,7 +16,9 @@ app.use(express.json())
 
 const server = http.createServer(app);
 const gameServer = new Server({
-  server,
+  transport: new WebSocketTransport({
+    server,
+  })
 });
 
 // register your room handlers

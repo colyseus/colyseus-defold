@@ -4,7 +4,7 @@ local Connection = require('colyseus.connection')
 local protocol = require('colyseus.protocol')
 
 local EventEmitter = require('colyseus.eventemitter')
-local utils = require('colyseus.utils')
+local utils = require('colyseus.utils.utils')
 local decode = require('colyseus.serialization.schema.schema').decode
 local encode = require('colyseus.serialization.schema.encode')
 local serialization = require('colyseus.serialization')

@@ -1,4 +1,8 @@
-local utils = require "colyseus.utils"
+--
+-- @colyseus/social has been deprecated.
+-- you can manually require "colyseus.auth" if you still rely on it.
+--
+local utils = require "colyseus.utils.utils"
 local storage = require "colyseus.storage"
 local EventEmitter = require('colyseus.eventemitter')
 local Connection = require('colyseus.connection')
