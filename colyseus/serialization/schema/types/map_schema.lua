@@ -77,13 +77,8 @@ function map_schema:delete_by_index(index)
   self.indexes[index] = nil
 end
 
-function map_schema:clear(refs)
-  if self._child_type['_schema'] ~= nil then
-    self:each(function(item)
-      refs:remove(item.__refid)
-    end)
-  end
-
+function map_schema:clear(changes, refs)
+  callback_helpers.remove_child_refs(self, changes, refs)
   self.indexes = {}
   self.items = {}
 end

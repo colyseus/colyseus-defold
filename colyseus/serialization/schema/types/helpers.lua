@@ -2,6 +2,9 @@
 -- schema callback helpers
 --
 
+local constants = require 'colyseus.serialization.schema.constants'
+local OPERATION = constants.OPERATION;
+
 local M = {}
 
 function M.add_callback(__callbacks, op, callback, existing)
@@ -16,7 +19,6 @@ function M.add_callback(__callbacks, op, callback, existing)
   -- - OPERATION.REPLACE
   --
   if existing ~= nil then
-    print("EXISTING?", existing:length())
     existing:each(function(item, key)
       callback(item, key)
     end)
@@ -33,22 +35,22 @@ function M.add_callback(__callbacks, op, callback, existing)
   end
 end
 
-function M.remove_child_refs(collection, changes)
-  -- local need_remove_ref =  (typeof (this.$changes.getType()) !== "string");
+function M.remove_child_refs(collection, changes, refs)
+  local need_remove_ref = (collection._child_type['_schema'] ~= nil);
 
-  -- this.$items.forEach((item: any, key: any) => {
-  --     changes.push({
-  --         refId: this.$changes.refId,
-  --         op: OPERATION.DELETE,
-  --         field: key,
-  --         value: undefined,
-  --         previousValue: item
-  --     });
+  collection:each(function(item, key)
+      table.insert(changes, {
+          __refid = collection.__refid,
+          op = OPERATION.DELETE,
+          field = key,
+          value = nil,
+          previous_value = item
+      })
 
-  --     if (need_remove_ref) {
-  --         this.$changes.root.removeRef(item['$changes'].refId);
-  --     }
-  -- });
+      if need_remove_ref then
+          refs:remove(item.__refid)
+      end
+  end)
 end
 
 return M

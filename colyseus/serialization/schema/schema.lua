@@ -580,7 +580,7 @@ function Schema:decode(bytes, it, refs)
             -- The `.clear()` method is calling `$root.removeRef(ref_id)` for
             -- each item inside this collection
             --
-            ref:clear(refs)
+            ref:clear(all_changes, refs)
 
             -- LUA "continue" workaround.
             break
@@ -754,7 +754,7 @@ function Schema:decode(bytes, it, refs)
 
         if has_change then
           table.insert(all_changes, {
-            ref_id = ref_id,
+            __refid = ref_id,
             op = operation,
             field = field_name,
             dynamic_index = dynamic_index,
@@ -789,7 +789,7 @@ function Schema:_trigger_changes(changes, refs)
 
   for _, change in pairs(changes) do
     repeat
-      local ref_id = change.ref_id
+      local ref_id = change.__refid
       local ref = refs:get(ref_id)
       local is_schema = (ref['_schema'] ~= nil)
       local callbacks = ref.__callbacks
@@ -858,14 +858,13 @@ function Schema:_trigger_changes(changes, refs)
 
         elseif change.op == OPERATION.DELETE_AND_ADD then
           local delete_callbacks = callbacks[OPERATION.DELETE]
-          local add_callbacks = callbacks[OPERATION.ADD]
-
           if change.previous_value ~= nil and delete_callbacks ~= nil then
             for _, callback in pairs(delete_callbacks) do
               callback(change.previous_value, change.dynamic_index)
             end
           end
 
+          local add_callbacks = callbacks[OPERATION.ADD]
           if add_callbacks ~= nil then
             for _, callback in pairs(add_callbacks) do
               callback(change.value, change.dynamic_index)

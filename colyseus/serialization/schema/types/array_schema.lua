@@ -89,13 +89,8 @@ function array_schema:delete_by_index(index)
   self.indexes[dynamic_index] = nil
 end
 
-function array_schema:clear(refs)
-  if self._child_type['_schema'] ~= nil then
-    self:each(function(item)
-      refs:remove(item.__refid)
-    end)
-  end
-
+function array_schema:clear(changes, refs)
+  callback_helpers.remove_child_refs(self, changes, refs)
   self.indexes = {}
   self.items = {}
 end
