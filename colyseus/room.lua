@@ -22,6 +22,7 @@ end
 function Room.new(name)
   local room = EventEmitter:new({
     serializer_id = nil,
+    reconnection_token = nil,
     previous_code = nil
   })
   setmetatable(room, Room)
@@ -109,10 +110,16 @@ function Room:_on_message (binary_string, it)
   it.offset = it.offset + 1
 
   if code == protocol.JOIN_ROOM then
+    local reconnection_token = decode.string(message, it)
     self.serializer_id = decode.string(message, it)
 
     local serializer = serialization.get_serializer(self.serializer_id)
     if not serializer then error("missing serializer: " .. self.serializer_id); end
+
+    self.reconnection_token = {
+      room_id = self.room_id,
+      reconnection_token = reconnection_token,
+    }
 
     self.serializer = serializer:new()
 

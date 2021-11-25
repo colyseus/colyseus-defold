@@ -60,8 +60,14 @@ function client:join_by_id(room_id, options, callback)
   return self:create_matchmake_request('joinById', room_id, options or {}, callback)
 end
 
-function client:reconnect(room_id, session_id, callback)
-  return self:create_matchmake_request('joinById', room_id, { sessionId = session_id }, callback)
+function client:reconnect(reconnection_token, callback)
+  if type(reconnection_token) == "string" and type(callback) == "string" then
+    error("DEPRECATED: :reconnect() now only accepts 'reconnection_token' as argument.\nYou can get this token from previously connected `room.reconnection_token`")
+  end
+
+  return self:create_matchmake_request('reconnect', reconnection_token.room_id, {
+    reconnectionToken = reconnection_token.reconnection_token
+  }, callback)
 end
 
 function client:create_matchmake_request(method, room_name, options, callback)
@@ -80,14 +86,22 @@ function client:create_matchmake_request(method, room_name, options, callback)
   self:_request(url, 'POST', headers, JSON.encode(options), function(err, response)
     if (err) then return callback(err) end
 
+    -- forward reconnection token during "reconnect" methods.
+    if method == "reconnect" then
+      response.reconnectionToken = options.reconnectionToken
+    end
+
     self:consume_seat_reservation(response, callback)
   end)
 end
 
 function client:consume_seat_reservation(response, callback)
   local room = Room.new(response.room.name)
-  room.id = response.room.roomId
-  room.sessionId = response.sessionId
+  room.id = response.room.roomId -- TODO: deprecate .id
+  room.room_id = response.room.roomId
+
+  room.sessionId = response.sessionId -- TODO: deprecate .sessionId
+  room.session_id = response.sessionId
 
   local on_error = function(err)
     callback(err, nil)
@@ -102,7 +116,14 @@ function client:consume_seat_reservation(response, callback)
   room:on('error', on_error)
   room:on('join', on_join)
 
-  room:connect(self:_build_ws_endpoint(response.room, { sessionId = room.sessionId }))
+  local options = { sessionId = room.session_id }
+
+  -- forward "reconnection token" in case of reconnection.
+  if response.reconnectionToken ~= nil then
+    options.reconnectionToken = response.reconnectionToken
+  end
+
+  room:connect(self:_build_ws_endpoint(response.room, options))
 end
 
 function client:_build_ws_endpoint(room, options)
