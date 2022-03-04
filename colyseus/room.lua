@@ -181,6 +181,22 @@ function Room:_on_message (binary_string, it)
     end
 
     self:_dispatch_message(message_type, message)
+
+  elseif code == protocol.ROOM_DATA_BYTES then
+    local message_type
+
+    if decode.string_check(message, it) then
+      message_type = decode.string(message, it)
+    else
+      message_type = decode.number(message, it)
+    end
+
+    local byte_array = {}
+    for i = it.offset, #binary_string, 1 do
+      byte_array[#byte_array+1] = message[i]
+    end
+
+    self:_dispatch_message(message_type, byte_array)
   end
 
   -- cursor.offset = cursor.offset + it.offset - 1
@@ -230,6 +246,22 @@ function Room:send (message_type, message)
   end
 
   self.connection:send(utils.byte_array_to_string(initial_bytes) .. encoded);
+end
+
+function Room:send_bytes (message_type, bytes)
+  local initial_bytes = { protocol.ROOM_DATA }
+  local mtype = type(message_type)
+
+  if mtype == "string" then
+      encode.string(initial_bytes, message_type);
+
+  elseif mtype == "number" then
+      encode.number(initial_bytes, message_type);
+  else
+    error("Protocol.ROOM_DATA_BYTES: message type not supported '" .. tostring(type) .. "'")
+  end
+
+  self.connection:send(utils.byte_array_to_string(initial_bytes) .. utils.byte_array_to_string(bytes));
 end
 
 function Room:_dispatch_message (message_type, message)

@@ -14,6 +14,7 @@ return {
   ROOM_STATE_PATCH = 15,
 
   ROOM_DATA_SCHEMA = 16,
+  ROOM_DATA_BYTES = 17,
 
   -- Match-making related (20~29)
   ROOM_LIST = 20,
