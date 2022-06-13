@@ -86,7 +86,6 @@ end
 
 function client:consume_seat_reservation(response, callback, previous_room)
   local room = Room.new(response.room.name)
-  print(response.room)
   room.id = response.room.roomId -- TODO: deprecate .id
   room.room_id = response.room.roomId
 
