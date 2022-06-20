@@ -95,7 +95,7 @@ function client:create_matchmake_request(method, room_name, options, callback)
   end)
 end
 
-function client:consume_seat_reservation(response, callback, previous_room)
+function client:consume_seat_reservation(response, callback, endpoint, previous_room)
   local room = Room.new(response.room.name)
   room.id = response.room.roomId -- TODO: deprecate .id
   room.room_id = response.room.roomId
@@ -118,17 +118,21 @@ function client:consume_seat_reservation(response, callback, previous_room)
 
   local options = { sessionId = room.session_id }
 
+  if endpoint == nil then
+    endpoint = self:_build_ws_endpoint(response.room, options)
+  end
+
   -- forward "reconnection token" in case of reconnection.
   if response.reconnectionToken ~= nil then
     options.reconnectionToken = response.reconnectionToken
   end
 
-  local target_room = previous_room
-  if previous_room == nil then
-    target_room = room
+  local target_room = room
+  if previous_room ~= nil and previous_room ~= '' and response.devMode then
+    target_room = previous_room
   end
 
-  target_room:connect(self:_build_ws_endpoint(response.room, options), target_room, response.devMode and function ()
+  local dev_mode_close_callback = function ()
     local retry_count = 0
     local max_retry_count = 8
 
@@ -141,10 +145,10 @@ function client:consume_seat_reservation(response, callback, previous_room)
     local function retry_connection()
       retry_count = retry_count + 1
 
-      if pcall(client.consume_seat_reservation, client, response, callback, target_room) then
+      if pcall(client.consume_seat_reservation, client, response, callback, endpoint, target_room) then
         print("[Colyseus devMode]: Successfully re-established connection with room " .. target_room.room_id)
       else
-        if retry_count < max_retry_count then
+        if retry_count <= max_retry_count then
           print("[Colyseus devMode]: retrying... (" .. retry_count .. " out of " .. max_retry_count .. ")")
           sleep(2)
           retry_connection()
@@ -156,7 +160,9 @@ function client:consume_seat_reservation(response, callback, previous_room)
 
     sleep(2)
     retry_connection()
-  end)
+  end
+
+  target_room:connect(endpoint, target_room, response.devMode and dev_mode_close_callback or nil)
 end
 
 function client:_build_ws_endpoint(room, options)
