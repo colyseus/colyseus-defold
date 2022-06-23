@@ -20,5 +20,10 @@ return {
   ROOM_LIST = 20,
 
   -- Generic messages (50~60)
-  BAD_REQUEST = 50
+  BAD_REQUEST = 50,
+
+  WS_CLOSE_CODE = {
+    CONSENTED = 4000,
+    DEVMODE_RESTART = 4010
+  }
 }

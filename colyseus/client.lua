@@ -95,7 +95,7 @@ function client:create_matchmake_request(method, room_name, options, callback)
   end)
 end
 
-function client:consume_seat_reservation(response, callback, endpoint, previous_room)
+function client:consume_seat_reservation(response, callback, previous_room)
   local room = Room.new(response.room.name)
   room.id = response.room.roomId -- TODO: deprecate .id
   room.room_id = response.room.roomId
@@ -103,24 +103,7 @@ function client:consume_seat_reservation(response, callback, endpoint, previous_
   room.sessionId = response.sessionId -- TODO: deprecate .sessionId
   room.session_id = response.sessionId
 
-  local on_error = function(err)
-    callback(err, nil)
-    room:off()
-  end
-
-  local on_join = function()
-    room:off('error', on_error)
-    callback(nil, room)
-  end
-
-  room:on('error', on_error)
-  room:on('join', on_join)
-
   local options = { sessionId = room.session_id }
-
-  if endpoint == nil then
-    endpoint = self:_build_ws_endpoint(response.room, options)
-  end
 
   -- forward "reconnection token" in case of reconnection.
   if response.reconnectionToken ~= nil then
@@ -128,41 +111,54 @@ function client:consume_seat_reservation(response, callback, endpoint, previous_
   end
 
   local target_room = room
-  if previous_room ~= nil and previous_room ~= '' and response.devMode then
+  if previous_room ~= nil and response.devMode then
     target_room = previous_room
   end
 
-  local dev_mode_close_callback = function ()
+  local _self = self
+  room:connect(self:_build_ws_endpoint(response.room, options), target_room, response.devMode and function()
+    print("[Colyseus devMode]: Re-establishing connection with room id '" .. room.room_id .. "'...")
+
     local retry_count = 0
     local max_retry_count = 8
-
-    local clock = os.clock
-    local function sleep(n)  -- seconds
-      local t0 = clock()
-      while clock() - t0 <= n do end
-    end
 
     local function retry_connection()
       retry_count = retry_count + 1
 
-      if pcall(client.consume_seat_reservation, client, response, callback, endpoint, target_room) then
-        print("[Colyseus devMode]: Successfully re-established connection with room " .. target_room.room_id)
-      else
-        if retry_count <= max_retry_count then
-          print("[Colyseus devMode]: retrying... (" .. retry_count .. " out of " .. max_retry_count .. ")")
-          sleep(2)
-          retry_connection()
+      -- async check
+      _self:consume_seat_reservation(response, function(err, room)
+        if err == nil and room ~= nil then
+          print("[Colyseus devMode]: Successfully re-established connection with room " .. room.room_id)
         else
-          print("[Colyseus devMode]: Failed to reconnect. Is your server running? Please check server logs.")
+          if retry_count < max_retry_count then
+            print("[Colyseus devMode]: retrying... (" .. retry_count .. " out of " .. max_retry_count .. ")")
+            timer.delay(2, false, retry_connection)
+          else
+            print("[Colyseus devMode]: Failed to reconnect. Is your server running? Please check server logs.")
+          end
         end
-      end
+      end, target_room)
     end
 
-    sleep(2)
-    retry_connection()
+    -- devMode: try to reconnect after 2 seconds.
+    timer.delay(2, false, retry_connection)
+  end or nil)
+
+  local on_join = nil
+  local on_error = nil
+
+  on_error = function(err)
+    target_room:off('join', on_join)
+    callback(err, nil)
   end
 
-  target_room:connect(endpoint, target_room, response.devMode and dev_mode_close_callback or nil)
+  on_join = function()
+    target_room:off('error', on_error)
+    callback(nil, target_room)
+  end
+
+  target_room:once('error', on_error)
+  target_room:once('join', on_join)
 end
 
 function client:_build_ws_endpoint(room, options)

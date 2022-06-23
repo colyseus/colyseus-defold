@@ -31,19 +31,19 @@ function connection:open(endpoint)
 
   self.ws = websocket.connect(endpoint, params, function(self, conn, data)
     if data.event == websocket.EVENT_DISCONNECTED then
-      print("websocket disconnected!")
       this.state = "CLOSED"
+
       this:emit("close", data)
       this.ws = nil
 
     elseif data.event == websocket.EVENT_CONNECTED then
-      print("websocket connected ")
+      print("[Colyseus] websocket connected ")
       this.state = "OPEN"
       this:emit("open")
 
     elseif data.event == websocket.EVENT_ERROR then
-      print("websocket error:", data.error)
-      this:emit("error", data.error)
+      print("[Colyseus] websocket error")
+      this:emit("error", data)
 
     elseif data.event == websocket.EVENT_MESSAGE then
       this:emit("message", data.message)

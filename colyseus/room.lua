@@ -33,7 +33,6 @@ end
 function Room:init(name)
   self.id = nil
   self.name = name
-  self.connection = Connection.new()
   self.serializer = nil
   self.on_message_handlers = {}
 
@@ -48,19 +47,18 @@ function Room:init(name)
 end
 
 function Room:connect (endpoint, room, dev_mode_close_callback)
-  if room == nil or room == '' then
-    room = self
-  end
+  if room == nil then room = self end
+  room.connection = Connection.new()
+
   room.connection:on("message", function(message)
     room:_on_message(message, { offset = 1 })
   end)
 
   room.connection:on("close", function(e)
-    -- TODO: check for handshake errors to emit "error" event?
-    if dev_mode_close_callback == nil then
-      room:emit("leave", e)
-    else
+    if dev_mode_close_callback ~= nil and e.code == protocol.WS_CLOSE_CODE.DEVMODE_RESTART then
       dev_mode_close_callback()
+    else
+      room:emit("leave", e)
     end
   end)
 
