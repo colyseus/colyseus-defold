@@ -9,6 +9,9 @@ local decode = require('colyseus.serialization.schema.schema').decode
 local encode = require('colyseus.serialization.schema.encode')
 local serialization = require('colyseus.serialization')
 
+---@class Room:EventEmitterObject
+---@field state table
+---@field sessionId string
 Room = {}
 Room.__index = function (self, key)
   if key == "state" then
@@ -19,6 +22,9 @@ Room.__index = function (self, key)
   end
 end
 
+---@private
+---@param name string
+---@return Room
 function Room.new(name)
   local room = EventEmitter:new({
     serializer_id = nil,
