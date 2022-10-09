@@ -15,71 +15,70 @@ function init(self)
 
     -- get all available rooms at every 3 seconds (example)
     timer.delay(3, true, function()
-      client:get_available_rooms("", function(err, rooms)
-        if err then
-          print("get_available_rooms error =>")
-          pprint(err)
-        end
-        print("available rooms =>")
-        pprint(rooms)
-      end)
+        client:get_available_rooms("", function(err, rooms)
+            if err then
+                print("get_available_rooms error =>")
+                pprint(err)
+            end
+            print("available rooms =>")
+            pprint(rooms)
+        end)
     end)
 
     -- join "demo" room
     client:join_or_create("my_room", nil, function(err, _room)
-      if (err) then
-        print("JOIN ERROR: " .. err)
-        return
-      end
-_room.id
-      room = _room
-
-      -- print("PLAYERS:")
-      -- pprint(room.state.players)
-      -- pprint(room.state.messages)
-      print("successfully joined '" .. room.name .. "'")
-
-      room.state.messages['on_add'] = function(msg, i)
-        print("message arrived", msg.message)
-      end
-
-      room.state.players['on_add'] = function(player, i)
-        print("new player")
-        pprint(player)
-        player['on_change'] = function(changes)
-          print("player changed")
-          pprint(changes)
+        if (err) then
+            print("JOIN ERROR: " .. err)
+            return
         end
-      end
 
-      room.state['on_change'] = function(changes)
-        -- print("state changes")
-        -- pprint(changes)
-      end
+        room = _room
 
-      room:on_message("broadcast", function(message)
-        print("colyseus-defold: 'broadcast' message received =>")
-        pprint(message)
-      end)
+        -- print("PLAYERS:")
+        -- pprint(room.state.players)
+        -- pprint(room.state.messages)
+        print("successfully joined '" .. room.name .. "'")
 
-      room:on_message("data", function(message)
-        print("colyseus-defold: 'data' message received =>")
-        pprint(message)
-      end)
+        room.state.messages['on_add'] = function(msg, i)
+            print("message arrived", msg.message)
+        end
 
-      room:on("statechange", function(state)
-        -- room:send("Hello world!")
-        -- print("STATE CHANGE")
-        -- pprint(state)
-      end)
+        room.state.players['on_add'] = function(player, i)
+            print("new player")
+            pprint(player)
+            player['on_change'] = function(changes)
+                print("player changed")
+                pprint(changes)
+            end
+        end
 
-      room:on("leave", function()
-        print("left '" .. room.name .. "'")
-      end)
+        room.state['on_change'] = function(changes)
+            -- print("state changes")
+            -- pprint(changes)
+        end
 
-      room:send("type1", { hello = "world" })
-      room:send(0, { hello = "world" })
+        room:on_message("broadcast", function(message)
+            print("colyseus-defold: 'broadcast' message received =>")
+            pprint(message)
+        end)
 
+        room:on_message("data", function(message)
+            print("colyseus-defold: 'data' message received =>")
+            pprint(message)
+        end)
+
+        room:on("statechange", function(state)
+            -- room:send("Hello world!")
+            -- print("STATE CHANGE")
+            -- pprint(state)
+        end)
+
+        room:on("leave", function()
+            print("left '" .. room.name .. "'")
+        end)
+
+        room:send("type1", { hello = "world" })
+        room:send(0, { hello = "world" })
 
 
     end)
@@ -93,24 +92,24 @@ function final(self)
 end
 
 function update(self, dt)
-   -- Add update code here
-   -- Remove this function if not needed
+    -- Add update code here
+    -- Remove this function if not needed
 end
 
 function on_message(self, message_id, message, sender)
-   -- Add message-handling code here
-   -- Remove this function if not needed
+    -- Add message-handling code here
+    -- Remove this function if not needed
 end
 
 function on_input(self, action_id, action)
-  -- Add input-handling code here
-  -- Remove this function if not needed
-  if action_id == hash("click") and action.pressed then
-    client.push:register()
-  end
+    -- Add input-handling code here
+    -- Remove this function if not needed
+    if action_id == hash("click") and action.pressed then
+        client.push:register()
+    end
 end
 
 function on_reload(self)
-   -- Add reload-handling code here
-   -- Remove this function if not needed
+    -- Add reload-handling code here
+    -- Remove this function if not needed
 end

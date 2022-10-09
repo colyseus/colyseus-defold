@@ -11,7 +11,7 @@ local decode = require('colyseus.serialization.schema.schema')
 local JSON = require('colyseus.serialization.json')
 local msgpack = require('colyseus.messagepack.MessagePack')
 
----@class Client:EventEmitterObject
+---@class Client
 local client = {}
 client.__index = client
 
