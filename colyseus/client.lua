@@ -11,9 +11,12 @@ local decode = require('colyseus.serialization.schema.schema')
 local JSON = require('colyseus.serialization.json')
 local msgpack = require('colyseus.messagepack.MessagePack')
 
+---@class Client
 local client = {}
 client.__index = client
 
+---@param endpoint string
+---@return Client
 function client.new (endpoint)
   local instance = EventEmitter:new()
   setmetatable(instance, client)
@@ -21,6 +24,7 @@ function client.new (endpoint)
   return instance
 end
 
+---@private
 function client:init(endpoint)
   self.hostname = endpoint
 
@@ -35,32 +39,51 @@ function client:init(endpoint)
   self.rooms = {}
 end
 
+---@param room_name string
+---@param callback fun(err:table, rooms:table)
+---@return Client
 function client:get_available_rooms(room_name, callback)
   local url = "http" .. self.hostname:sub(3) .. "matchmake/" .. room_name
   local headers = { ['Accept'] = 'application/json' }
   self:_request(url, 'GET', headers, nil, callback)
 end
 
+---@param room_name string
+---@param options nil|table
+---@param callback fun(err:table, room:Room)
 function client:join_or_create(room_name, options, callback)
   return self:create_matchmake_request('joinOrCreate', room_name, options or {}, callback)
 end
 
+---@param room_name string
+---@param options nil|table
+---@param callback fun(err:table, room:Room)
 function client:create(room_name, options, callback)
   return self:create_matchmake_request('create', room_name, options or {}, callback)
 end
 
+---@param room_name string
+---@param options nil|table
+---@param callback fun(err:table, room:Room)
 function client:join(room_name, options, callback)
   return self:create_matchmake_request('join', room_name, options or {}, callback)
 end
 
+---@param room_id string
+---@param options nil|table
+---@param callback fun(err:table, room:Room)
 function client:join_by_id(room_id, options, callback)
   return self:create_matchmake_request('joinById', room_id, options or {}, callback)
 end
 
+---@param room_id string
+---@param session_id string
+---@param callback fun(err:table, room:Room)
 function client:reconnect(room_id, session_id, callback)
   return self:create_matchmake_request('joinById', room_id, { sessionId = session_id }, callback)
 end
 
+---@private
 function client:create_matchmake_request(method, room_name, options, callback)
   if type(options) == "function" then
     callback = options
@@ -84,6 +107,8 @@ function client:create_matchmake_request(method, room_name, options, callback)
   end)
 end
 
+---@param response table
+---@param callback fun(err:table, room:Room)
 function client:consume_seat_reservation(response, callback)
   local room = Room.new(response.room.name)
   room.id = response.room.roomId
@@ -109,6 +134,7 @@ function client:consume_seat_reservation(response, callback)
   room:connect(self:_build_endpoint(response.room.processId .. "/" .. room.id, {sessionId = room.sessionId}))
 end
 
+---@private
 function client:_build_endpoint(path, options)
   path = path or ""
   options = options or {}
@@ -121,6 +147,7 @@ function client:_build_endpoint(path, options)
   return self.hostname .. path .. "?" .. table.concat(params, "&")
 end
 
+---@private
 function client:_request(url, method, headers, body, callback)
   http.request(url, method, function(self, id, response)
 		local data = response.response ~= '' and json.decode(response.response)
