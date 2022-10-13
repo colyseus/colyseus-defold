@@ -10,9 +10,12 @@ local decode = require('colyseus.serialization.schema.schema')
 local JSON = require('colyseus.serialization.json')
 local msgpack = require('colyseus.messagepack.MessagePack')
 
+---@class Client
 local client = {}
 client.__index = client
 
+---@param endpoint string
+---@return Client
 function client.new (endpoint)
   local instance = EventEmitter:new()
   setmetatable(instance, client)
@@ -20,6 +23,7 @@ function client.new (endpoint)
   return instance
 end
 
+---@private
 function client:init(endpoint_or_settings)
   if type(endpoint_or_settings) == "string" then
     local parsed_url = URL.parse(endpoint_or_settings)
@@ -38,28 +42,45 @@ function client:init(endpoint_or_settings)
   end
 end
 
+---@param room_name string
+---@param callback fun(err:table, rooms:table)
 function client:get_available_rooms(room_name, callback)
   local url = self:_build_http_endpoint("/matchmake/" .. room_name)
   local headers = { ['Accept'] = 'application/json' }
   self:_request(url, 'GET', headers, nil, callback)
 end
 
+---@param room_name string
+---@param options nil|table
+---@param callback fun(err:table, room:Room)
 function client:join_or_create(room_name, options, callback)
   return self:create_matchmake_request('joinOrCreate', room_name, options or {}, callback)
 end
 
+---@param room_name string
+---@param options nil|table
+---@param callback fun(err:table, room:Room)
 function client:create(room_name, options, callback)
   return self:create_matchmake_request('create', room_name, options or {}, callback)
 end
 
+---@param room_name string
+---@param options nil|table
+---@param callback fun(err:table, room:Room)
 function client:join(room_name, options, callback)
   return self:create_matchmake_request('join', room_name, options or {}, callback)
 end
 
+---@param room_id string
+---@param options nil|table
+---@param callback fun(err:table, room:Room)
 function client:join_by_id(room_id, options, callback)
   return self:create_matchmake_request('joinById', room_id, options or {}, callback)
 end
 
+---@param room_id string
+---@param session_id string
+---@param callback fun(err:table, room:Room)
 function client:reconnect(reconnection_token, callback)
   if type(reconnection_token) == "string" and type(callback) == "string" then
     error("DEPRECATED: :reconnect() now only accepts 'reconnection_token' as argument.\nYou can get this token from previously connected `room.reconnection_token`")
@@ -70,6 +91,7 @@ function client:reconnect(reconnection_token, callback)
   }, callback)
 end
 
+---@private
 function client:create_matchmake_request(method, room_name, options, callback)
   if type(options) == "function" then
     callback = options
@@ -95,6 +117,9 @@ function client:create_matchmake_request(method, room_name, options, callback)
   end)
 end
 
+---@param response table
+---@param callback fun(err:table, room:Room)
+---@param previous_room Room
 function client:consume_seat_reservation(response, callback, previous_room)
   local room = Room.new(response.room.name)
   room.id = response.room.roomId -- TODO: deprecate .id
@@ -161,6 +186,7 @@ function client:consume_seat_reservation(response, callback, previous_room)
   target_room:once('join', on_join)
 end
 
+---@private
 function client:_build_ws_endpoint(room, options)
   options = options or {}
 
@@ -177,6 +203,7 @@ function client:_build_ws_endpoint(room, options)
   return protocol .. "://" .. public_address .. "/" .. room.processId .. "/" .. room.roomId .. "?" .. table.concat(params, "&")
 end
 
+---@private
 function client:_build_http_endpoint(path, query_params)
   query_params = query_params or {}
 
@@ -194,7 +221,7 @@ function client:_build_http_endpoint(path, query_params)
   return protocol .. "://" .. public_address .. path .. "?" .. table.concat(params, "&")
 end
 
-
+---@private
 function client:_request(url, method, headers, body, callback)
   http.request(url, method, function(self, id, response)
 		local data = response.response ~= '' and json.decode(response.response)
