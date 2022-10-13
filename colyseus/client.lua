@@ -41,7 +41,6 @@ end
 
 ---@param room_name string
 ---@param callback fun(err:table, rooms:table)
----@return Client
 function client:get_available_rooms(room_name, callback)
   local url = "http" .. self.hostname:sub(3) .. "matchmake/" .. room_name
   local headers = { ['Accept'] = 'application/json' }
