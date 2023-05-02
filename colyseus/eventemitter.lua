@@ -2,6 +2,9 @@
 -- Based on https://github.com/wscherphof/lua-events/
 --
 
+---@class EventEmitterObject
+
+---@class EventEmitter
 local EventEmitter = {}
 
 function table_find(tab,el)
@@ -12,6 +15,8 @@ function table_find(tab,el)
   end
 end
 
+---@param object EventEmitterObject|nil
+---@return EventEmitterObject
 function EventEmitter:new(object)
 
   object = object or {}

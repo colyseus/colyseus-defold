@@ -9,6 +9,9 @@ local decode = require('colyseus.serialization.schema.schema').decode
 local encode = require('colyseus.serialization.schema.encode')
 local serialization = require('colyseus.serialization')
 
+---@class Room:EventEmitterObject
+---@field state table
+---@field sessionId string
 Room = {}
 Room.__index = function (self, key)
   if key == "state" then
@@ -19,6 +22,9 @@ Room.__index = function (self, key)
   end
 end
 
+---@private
+---@param name string
+---@return Room
 function Room.new(name)
   local room = EventEmitter:new({
     serializer_id = nil,
@@ -30,6 +36,8 @@ function Room.new(name)
   return room
 end
 
+---@private
+---@param name string
 function Room:init(name)
   self.id = nil
   self.name = name
@@ -46,6 +54,8 @@ function Room:init(name)
   end)
 end
 
+---@private
+---@param endpoint string
 function Room:connect (endpoint, room, dev_mode_close_callback)
   if room == nil then room = self end
   room.connection = Connection.new()
@@ -70,6 +80,7 @@ function Room:connect (endpoint, room, dev_mode_close_callback)
 end
 
 -- fossil-delta serializer only
+---@private
 function Room:listen (segments, callback, immediate)
   if self.serializer_id ~= "fossil-delta" then
     error(tostring(self.serializer_id) .. " serializer doesn't support .listen() method.")
@@ -82,10 +93,13 @@ function Room:listen (segments, callback, immediate)
 end
 
 -- fossil-delta serializer only
+---@private
 function Room:remove_listener (listener)
   return self.serializer.state:remove_listener(listener)
 end
 
+---@param type string
+---@param handler fun(message:table)
 function Room:on_message(type, handler)
   local _self = self
 
@@ -97,6 +111,7 @@ function Room:on_message(type, handler)
   end
 end
 
+---@private
 function Room:_on_batch_message(binary_string)
   local total_bytes = #binary_string
   local cursor = { offset = 1 }
@@ -107,6 +122,7 @@ function Room:_on_batch_message(binary_string)
   end
 end
 
+---@private
 function Room:_on_message (binary_string, it)
   -- local it = { offset = 1 }
   local message = utils.string_to_byte_array(binary_string)
@@ -207,16 +223,19 @@ function Room:_on_message (binary_string, it)
   -- cursor.offset = cursor.offset + it.offset - 1
 end
 
+---@private
 function Room:set_state (encoded_state, it)
   self.serializer:set_state(encoded_state, it)
   self:emit("statechange", self.serializer:get_state())
 end
 
+---@private
 function Room:patch (binary_patch, it)
   self.serializer:patch(binary_patch, it)
   self:emit("statechange", self.serializer:get_state())
 end
 
+---@param consented boolean
 function Room:leave(consented)
   if self.connection.state == "OPEN" then
     if consented or consented == nil then
@@ -229,6 +248,8 @@ function Room:leave(consented)
   end
 end
 
+---@param message_type string
+---@param message table
 function Room:send (message_type, message)
   local initial_bytes = { protocol.ROOM_DATA }
   local mtype = type(message_type)
@@ -253,6 +274,8 @@ function Room:send (message_type, message)
   self.connection:send(utils.byte_array_to_string(initial_bytes) .. encoded);
 end
 
+---@param message_type string
+---@param bytes table
 function Room:send_bytes (message_type, bytes)
   local initial_bytes = { protocol.ROOM_DATA }
   local mtype = type(message_type)
@@ -269,6 +292,7 @@ function Room:send_bytes (message_type, bytes)
   self.connection:send(utils.byte_array_to_string(initial_bytes) .. utils.byte_array_to_string(bytes));
 end
 
+---@private
 function Room:_dispatch_message (message_type, message)
   local type_key = self:get_message_handler_key(message_type);
 
@@ -283,6 +307,7 @@ function Room:_dispatch_message (message_type, message)
   end
 end
 
+---@private
 function Room:get_message_handler_key(message_type)
   local t = type(message_type)
 
