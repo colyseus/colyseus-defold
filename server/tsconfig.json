@@ -8,8 +8,15 @@
     "strictNullChecks": false,
     "esModuleInterop": true,
     "experimentalDecorators": true,
+    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
+    // other settings...
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  },
+
   "include": [
     "src"
   ]
