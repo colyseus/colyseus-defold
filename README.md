@@ -18,41 +18,6 @@
   </h3>
 </div>
 
-## Versioning / How to import on `game.project`
-
-It is recommended to use the **branch** corresponding to the version number
-you're interested in using, to ensure your project is going to receive the
-updates without breaking changes.
-
-**NOT RECOMMENDED**, using the `master` branch is not recommended. whenever a
-new major version of Colyseus is released, your project will break unless you
-upgrade the server as well.
-
-```
-https://github.com/colyseus/colyseus-defold/archive/master.zip
-```
-
-**RECOMMENDED**: it is recommended to use either the fixed version number (e.g. `0.x.x`)
-
-> See [Releases](https://github.com/colyseus/colyseus-defold/releases) for the
-> full versions list.
-
-```
-https://github.com/colyseus/colyseus-defold/archive/0.14.0.zip
-```
-
-We also provide a branch with the major version number, if you'd like to keep
-receiving updates for a particular version:
-
-```
-https://github.com/colyseus/colyseus-defold/archive/0.14.zip
-```
-
-
-| Description | Status |
-| ------| -------|
-| Master Branch Build Status | [![Build Status](https://travis-ci.org/colyseus/colyseus-defold.svg?branch=master)](https://travis-ci.org/colyseus/colyseus-defold) |
-
 ## Test suite
 
 This project uses [deftest](https://github.com/britzl/deftest) for testing, the
