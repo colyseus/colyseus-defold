@@ -9,7 +9,7 @@ map_schema.__index = map_schema
 function map_schema:new(obj)
   obj = obj or {
     items = {},
-    keys = {},
+    dynamic_indexes = {},
     indexes = {},
     props = {},
   }
@@ -47,7 +47,7 @@ function map_schema:set_by_index(index, dynamic_index, value)
 
   -- insert key
   if self.items[dynamic_index] == nil then
-      table.insert(self.keys, dynamic_index)
+      table.insert(self.dynamic_indexes, dynamic_index)
   end
 
   -- insert value
@@ -66,9 +66,9 @@ function map_schema:delete_by_index(index)
   local dynamic_index = self.indexes[index]
 
   -- delete key
-  for i, k in pairs(self.keys) do
+  for i, k in pairs(self.dynamic_indexes) do
     if k == dynamic_index then
-      table.remove(self.keys, i)
+      table.remove(self.dynamic_indexes, i)
       break
     end
   end
@@ -88,19 +88,19 @@ function map_schema:length()
 end
 
 function map_schema:keys()
-    return self.keys
+    return self.dynamic_indexes
 end
 
 function map_schema:values()
     local values = {}
-    for _, key in ipairs(self.keys) do
+    for _, key in ipairs(self.dynamic_indexes) do
         table.insert(values, self.items[key])
     end
     return values
 end
 
 function map_schema:each(cb)
-    for _, key in ipairs(self.keys) do
+    for _, key in ipairs(self.dynamic_indexes) do
         cb(self.items[key], key)
     end
 end
@@ -125,7 +125,7 @@ function map_schema:clone()
   return map_schema:new({
     items = table.clone(self.items),
     indexes = table.clone(self.indexes),
-    keys = table.clone(self.keys),
+    dynamic_indexes = table.clone(self.dynamic_indexes),
     props = self.props,
   })
 
