@@ -512,11 +512,16 @@ function Schema:on_remove()
   return callback_helpers.add_callback(self.__callbacks, OPERATION.DELETE, callback);
 end
 
-function Schema:listen(field_name, callback)
+function Schema:listen(field_name, callback, immediate)
   if self.__callbacks == nil then self.__callbacks = {} end
   if self.__callbacks[field_name] == nil then self.__callbacks[field_name] = {} end
 
   table.insert(self.__callbacks[field_name], callback)
+
+  if immediate == nil then immediate = true end -- "immediate" is true by default
+  if immediate and self[field_name] ~= nil then
+    callback(self[field_name])
+  end
 
   -- return un-register callback.
   return function()

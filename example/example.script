@@ -39,6 +39,10 @@ function init(self)
       print("successfully joined '" .. room.name .. "'")
       print("============================================")
 
+      room.state:listen("turn", function(current, previous)
+        print("turn changed, current: ", current, ", previous: ", previous)
+      end)
+
       room.state.messages:on_add(function(msg, i)
         print("message arrived", msg.message)
       end)
