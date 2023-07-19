@@ -29,9 +29,10 @@ function client:init(endpoint_or_settings)
     local parsed_url = URL.parse(endpoint_or_settings)
     self.settings = {}
     self.settings.hostname = parsed_url.host
-    self.settings.port = parsed_url.port
-    self.settings.use_ssl = (parsed_url.scheme == "wss")
-
+    self.settings.port = parsed_url.port 
+      or ((parsed_url.scheme == "wss" or parsed_url.scheme == "https") and 443)
+      or ((parsed_url.scheme == "ws" or parsed_url.scheme == "http") and 80)
+    self.settings.use_ssl = (parsed_url.scheme == "wss" or parsed_url.scheme == "https")
   else
     self.settings = endpoint_or_settings
   end
@@ -224,7 +225,7 @@ end
 ---@private
 function client:_request(url, method, headers, body, callback)
   http.request(url, method, function(self, id, response)
-		local data = response.response ~= '' and json.decode(response.response)
+    local data = response.response ~= '' and json.decode(response.response)
     local has_error = (response.status >= 400)
     local err = nil
 
@@ -237,7 +238,7 @@ function client:_request(url, method, headers, body, callback)
     end
 
     callback(err, data)
-	end, headers, body or "", { timeout = Connection.config.connect_timeout })
+  end, headers, body or "", { timeout = Connection.config.connect_timeout })
 end
 
 return client

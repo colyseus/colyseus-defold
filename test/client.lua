@@ -2,17 +2,60 @@ local Client = require('colyseus.client')
 
 return function()
     describe("colyseus.client", function()
-        it("join_or_create", function()
-            async();
+        it("init protocol with port", function()
+            local client = Client.new("http://localhost:2567")
+            assert_equal(client.settings.hostname, "localhost");
+            assert_equal(client.settings.port, 2567);
 
-            local client = Client.new("")
+            local client = Client.new("ws://localhost:2567")
+            assert_equal(client.settings.hostname, "localhost");
+            assert_equal(client.settings.port, 2567);
+        end)
 
-            client:join_or_create("dummy", {}, function(err, room)
-                print("ERROR!", err)
-                assert_equal(err, true)
-                done()
-            end)
+        it("init protocol without port", function()
+            local client = Client.new("http://localhost")
+            assert_equal(client.settings.hostname, "localhost");
+            assert_equal(client.settings.port, 80);
 
+            local client = Client.new("ws://localhost")
+            assert_equal(client.settings.hostname, "localhost");
+            assert_equal(client.settings.port, 80);
+        end)
+
+        it("init secure protocol with port", function()
+            local client = Client.new("https://localhost:2567")
+            assert_equal(client.settings.hostname, "localhost");
+            assert_equal(client.settings.port, 2567);
+
+            local client = Client.new("wss://localhost:2567")
+            assert_equal(client.settings.hostname, "localhost");
+            assert_equal(client.settings.port, 2567);
+        end)
+
+        it("init secure protocol without port", function()
+            local client = Client.new("https://localhost")
+            assert_equal(client.settings.hostname, "localhost");
+            assert_equal(client.settings.port, 443);
+
+            local client = Client.new("wss://localhost")
+            assert_equal(client.settings.hostname, "localhost");
+            assert_equal(client.settings.port, 443);
+        end)
+
+        it("init with settings", function()
+            local client = Client.new({
+                hostname = "localhost",
+                port = 443
+            })
+            assert_equal(client.settings.hostname, "localhost");
+            assert_equal(client.settings.port, 443);
+
+            local client = Client.new({
+                hostname = "192.168.1.10",
+                port = 80
+            })
+            assert_equal(client.settings.hostname, "192.168.1.10");
+            assert_equal(client.settings.port, 80);
         end)
     end)
 end

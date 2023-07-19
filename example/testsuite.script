@@ -8,7 +8,7 @@ function init(self)
   deftest.add(schema_serializer)
   -- deftest.add(fossil_delta)
   -- deftest.add(delta_container)
-  -- deftest.add(client)
+  deftest.add(client)
   deftest.run({ coverage = { enabled = true } })
 end
 

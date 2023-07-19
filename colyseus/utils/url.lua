@@ -66,7 +66,9 @@ M.services = {
 	jms      = 5673,
 	rsync    = 873,
 	prospero = 191,
-	videotex = 516
+	videotex = 516,
+	ws       = 80,
+	wss      = 443
 }
 
 local function decode(str)
