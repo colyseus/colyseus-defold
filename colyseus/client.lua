@@ -1,14 +1,13 @@
 local Connection = require('colyseus.connection')
 local Room = require('colyseus.room')
-local protocol = require('colyseus.protocol')
-local EventEmitter = require('colyseus.eventemitter')
-local storage = require('colyseus.storage')
+local Auth = require('colyseus.auth')
+local HTTP = require('colyseus.http')
 
-local utils = require('colyseus.utils.utils')
+local EventEmitter = require('colyseus.eventemitter')
 local URL = require('colyseus.utils.url')
-local decode = require('colyseus.serialization.schema.schema')
 local JSON = require('colyseus.serialization.json')
-local msgpack = require('colyseus.messagepack.MessagePack')
+
+local info = sys.get_sys_info()
 
 ---@class Client
 local client = {}
@@ -29,10 +28,16 @@ function client:init(endpoint_or_settings)
     local parsed_url = URL.parse(endpoint_or_settings)
     self.settings = {}
     self.settings.hostname = parsed_url.host
-    self.settings.port = parsed_url.port 
+    self.settings.port = parsed_url.port
       or ((parsed_url.scheme == "wss" or parsed_url.scheme == "https") and 443)
       or ((parsed_url.scheme == "ws" or parsed_url.scheme == "http") and 80)
     self.settings.use_ssl = (parsed_url.scheme == "wss" or parsed_url.scheme == "https")
+
+    -- force SSL on HTML5 if running on HTTPS protocol
+    if info.system_name == "HTML5" then
+      self.settings.use_ssl = html5.run("window['location']['protocol']") == "https:"
+    end
+
   else
     self.settings = endpoint_or_settings
   end
@@ -41,14 +46,15 @@ function client:init(endpoint_or_settings)
   if string.sub(self.settings.hostname, -1) == "/" then
     self.settings.hostname = self.settings.hostname:sub(0, -2)
   end
+
+  self.auth = Auth.new(self)
+  self.http = HTTP.new(self)
 end
 
 ---@param room_name string
 ---@param callback fun(err:table, rooms:table)
 function client:get_available_rooms(room_name, callback)
-  local url = self:_build_http_endpoint("/matchmake/" .. room_name)
-  local headers = { ['Accept'] = 'application/json' }
-  self:_request(url, 'GET', headers, nil, callback)
+  self.http:request('GET', "matchmake/" .. room_name, callback)
 end
 
 ---@param room_name string
@@ -99,14 +105,7 @@ function client:create_matchmake_request(method, room_name, options, callback)
     options = {}
   end
 
-  local headers = {
-    ['Accept'] = 'application/json',
-    ['Content-Type'] = 'application/json'
-  }
-
-  local url = self:_build_http_endpoint("/matchmake/" .. method .. "/" .. room_name)
-
-  self:_request(url, 'POST', headers, JSON.encode(options), function(err, response)
+  self.http:request('POST', "matchmake/" .. method + "/" .. room_name, { body = JSON.encode(options), }, function(err, response)
     if (err) then return callback(err) end
 
     -- forward reconnection token during "reconnect" methods.
@@ -141,7 +140,7 @@ function client:consume_seat_reservation(response, callback, previous_room)
   end
 
   local _self = self
-  room:connect(self:_build_ws_endpoint(response.room, options), target_room, response.devMode and function()
+  room:connect(self.http:_get_ws_endpoint(response.room, options), target_room, response.devMode and function()
     print("[Colyseus devMode]: Re-establishing connection with room id '" .. room.room_id .. "'...")
 
     local retry_count = 0
@@ -184,61 +183,6 @@ function client:consume_seat_reservation(response, callback, previous_room)
 
   target_room:once('error', on_error)
   target_room:once('join', on_join)
-end
-
----@private
-function client:_build_ws_endpoint(room, options)
-  options = options or {}
-
-  local params = {}
-  for k, v in pairs(options) do
-    table.insert(params, k .. "=" .. tostring(v))
-  end
-
-  -- build request endpoint
-  local protocol = (self.settings.use_ssl and "wss") or "ws"
-  local port = ((self.settings.port ~= 80 and self.settings.port ~= 443) and ":" .. self.settings.port) or ""
-  local public_address = (room.publicAddress) or self.settings.hostname .. port
-
-  return protocol .. "://" .. public_address .. "/" .. room.processId .. "/" .. room.roomId .. "?" .. table.concat(params, "&")
-end
-
----@private
-function client:_build_http_endpoint(path, query_params)
-  query_params = query_params or {}
-
-  local params = {}
-  for k, v in pairs(query_params) do
-    table.insert(params, k .. "=" .. tostring(v))
-  end
-
-  -- build request endpoint
-  local protocol = (self.settings.use_ssl and "https") or "http"
-  local port = ((self.settings.port ~= 80 and self.settings.port ~= 443) and ":" .. self.settings.port) or ""
-  local public_address = self.settings.hostname .. port
-  -- local public_address = (room.publicAddress) or self.settings.hostname .. port
-
-  return protocol .. "://" .. public_address .. path .. "?" .. table.concat(params, "&")
-end
-
-
----@private
-function client:_request(url, method, headers, body, callback)
-  http.request(url, method, function(self, id, response)
-    local data = response.response ~= '' and json.decode(response.response)
-    local has_error = (response.status >= 400)
-    local err = nil
-
-    if not data and response.status == 0 then
-      return callback("offline")
-    end
-
-    if has_error or data.error then
-      err = (not data or next(data) == nil) and response.response or data.error
-    end
-
-    callback(err, data)
-  end, headers, body or "", { timeout = Connection.config.connect_timeout })
 end
 
 return client

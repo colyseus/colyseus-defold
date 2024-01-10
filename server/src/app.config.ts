@@ -10,6 +10,7 @@ import { RedisPresence } from "@colyseus/redis-presence";
  * Import your Room files
  */
 import { MyRoom } from "./rooms/MyRoom";
+import "./config/auth";
 
 export default config({
     getId: () => "Your Colyseus App",
