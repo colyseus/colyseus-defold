@@ -10,6 +10,7 @@ import { RedisPresence } from "@colyseus/redis-presence";
  * Import your Room files
  */
 import { MyRoom } from "./rooms/MyRoom";
+import { auth } from "@colyseus/auth";
 import "./config/auth";
 
 export default config({
@@ -45,6 +46,8 @@ export default config({
          * Read more: https://docs.colyseus.io/tools/monitor/
          */
         app.use("/colyseus", monitor());
+
+        app.use(auth.prefix, auth.routes());
     },
 
 

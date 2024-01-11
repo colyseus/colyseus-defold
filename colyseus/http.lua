@@ -3,6 +3,7 @@ local Connection = require('colyseus.connection')
 local utils = require('colyseus.utils.utils')
 
 ---@class HTTP
+---@field auth_token string
 local HTTP = {}
 HTTP.__index = HTTP
 
@@ -91,6 +92,11 @@ function HTTP:_get_http_endpoint(segments, query_params)
   local port = ((self.client.settings.port ~= 80 and self.client.settings.port ~= 443) and ":" .. self.client.settings.port) or ""
   local public_address = self.client.settings.hostname .. port
 
+  -- make sure segments start with "/"
+  if string.sub(segments, 1, 1) ~= "/" then
+    segments = "/" .. segments
+  end
+
   return protocol .. "://" .. public_address .. segments .. "?" .. table.concat(params, "&")
 end
 
@@ -112,21 +118,34 @@ function HTTP:request(method, segments, options, callback)
 		headers[k] = v
 	end
 
-  HTTP.request(self:_get_http_endpoint(segments), method, function(self, id, response)
-    local data = response.response ~= '' and json.decode(response.response)
+  local body = options.body and JSON.encode(options.body) or ""
+
+  print("REQUEST!")
+  print(method .. " => " .. self:_get_http_endpoint(segments))
+
+  http.request(self:_get_http_endpoint(segments), method, function(self, id, response)
+    local data = response.response ~= '' and response.response
     local has_error = (response.status >= 400)
     local err = nil
+
+    -- parse JSON response
+    if string.find(response.headers['content-type'], 'application/json') then
+      data = json.decode(data)
+    end
 
     if not data and response.status == 0 then
       return callback("offline")
     end
 
     if has_error or data.error then
-      err = (not data or next(data) == nil) and response.response or data.error
+      err = {
+        status = response.status,
+        message = (data and data.error) or response.error or response.response
+      }
     end
 
     callback(err, data)
-  end, headers, options.body or "", { timeout = Connection.config.connect_timeout })
+  end, headers, body, { timeout = Connection.config.connect_timeout })
 end
 
 return HTTP
