@@ -142,9 +142,6 @@ function Client:consume_seat_reservation(response, callback, reuse_room_instance
 
   local target_room = (response.devMode and reuse_room_instance) or room
 
-  print("IS DEV MODE?? => " .. tostring(response.devMode))
-  print("TARGET ROOM IS PREVIOUS INSTANCE? => " .. tostring(target_room == reuse_room_instance))
-
   local _self = self
   room:connect(self.http:_get_ws_endpoint(response.room, options), response.devMode and function()
     print("[Colyseus devMode]: Re-establishing connection with room id '" .. room.room_id .. "'...")
