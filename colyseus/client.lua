@@ -9,7 +9,7 @@ local JSON = require('colyseus.serialization.json')
 
 local info = sys.get_sys_info()
 
----@class Client
+---@class Client : EventEmitterInstance
 ---@field auth Auth
 ---@field http HTTP
 local Client = {}
@@ -60,35 +60,34 @@ function Client:get_available_rooms(room_name, callback)
 end
 
 ---@param room_name string
----@param options_or_callback nil|table
----@param callback fun(err:table, room:Room)
+---@param options_or_callback nil|table|fun(err:table, room:Room)
+---@param callback nil|fun(err:table, room:Room)
 function Client:join_or_create(room_name, options_or_callback, callback)
   return self:create_matchmake_request('joinOrCreate', room_name, options_or_callback or {}, callback)
 end
 
 ---@param room_name string
----@param options_or_callback nil|table
----@param callback fun(err:table, room:Room)
+---@param options_or_callback nil|table|fun(err:table, room:Room)
+---@param callback nil|fun(err:table, room:Room)
 function Client:create(room_name, options_or_callback, callback)
   return self:create_matchmake_request('create', room_name, options_or_callback or {}, callback)
 end
 
 ---@param room_name string
----@param options_or_callback nil|table
----@param callback fun(err:table, room:Room)
+---@param options_or_callback nil|table|fun(err:table, room:Room)
+---@param callback nil|fun(err:table, room:Room)
 function Client:join(room_name, options_or_callback, callback)
   return self:create_matchmake_request('join', room_name, options_or_callback or {}, callback)
 end
 
 ---@param room_id string
----@param options_or_callback nil|table
----@param callback fun(err:table, room:Room)
+---@param options_or_callback nil|table|fun(err:table, room:Room)
+---@param callback nil|fun(err:table, room:Room)
 function Client:join_by_id(room_id, options_or_callback, callback)
   return self:create_matchmake_request('joinById', room_id, options_or_callback or {}, callback)
 end
 
----@param room_id string
----@param session_id string
+---@param reconnection_token table
 ---@param callback fun(err:table, room:Room)
 function Client:reconnect(reconnection_token, callback)
   if type(reconnection_token) == "string" and type(callback) == "string" then
@@ -125,7 +124,8 @@ end
 
 ---@param response table
 ---@param callback fun(err:table, room:Room)
-function Client:consume_seat_reservation(response, callback, previous_room)
+---@param reuse_room_instance nil|Room
+function Client:consume_seat_reservation(response, callback, reuse_room_instance)
   local room = Room.new(response.room.name)
   room.id = response.room.roomId -- TODO: deprecate .id
   room.room_id = response.room.roomId
@@ -140,13 +140,13 @@ function Client:consume_seat_reservation(response, callback, previous_room)
     options.reconnectionToken = response.reconnectionToken
   end
 
-  local target_room = room
-  if previous_room ~= nil and response.devMode then
-    target_room = previous_room
-  end
+  local target_room = (response.devMode and reuse_room_instance) or room
+
+  print("IS DEV MODE?? => " .. tostring(response.devMode))
+  print("TARGET ROOM IS PREVIOUS INSTANCE? => " .. tostring(target_room == reuse_room_instance))
 
   local _self = self
-  room:connect(self.http:_get_ws_endpoint(response.room, options), target_room, response.devMode and function()
+  room:connect(self.http:_get_ws_endpoint(response.room, options), response.devMode and function()
     print("[Colyseus devMode]: Re-establishing connection with room id '" .. room.room_id .. "'...")
 
     local retry_count = 0
@@ -172,7 +172,7 @@ function Client:consume_seat_reservation(response, callback, previous_room)
 
     -- devMode: try to reconnect after 2 seconds.
     timer.delay(2, false, retry_connection)
-  end or nil)
+  end or nil, target_room)
 
   local on_join = nil
   local on_error = nil

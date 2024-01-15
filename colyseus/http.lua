@@ -21,6 +21,9 @@ function HTTP:init(client)
 	self.client = client
 end
 
+---@param segments string
+---@param options_or_callback table|fun(err:table, data:table)
+---@param callback nil|fun(err:table, data:table)
 function HTTP:get(segments, options_or_callback, callback)
   if type(options_or_callback) == "function" then
 		callback = options_or_callback
@@ -31,6 +34,9 @@ function HTTP:get(segments, options_or_callback, callback)
 	self:request("GET", segments, options_or_callback, callback)
 end
 
+---@param segments string
+---@param options_or_callback table|fun(err:table, data:table)
+---@param callback nil|fun(err:table, data:table)
 function HTTP:post(segments, options_or_callback, callback)
   if type(options_or_callback) == "function" then
 		callback = options_or_callback
@@ -41,6 +47,9 @@ function HTTP:post(segments, options_or_callback, callback)
 	self:request("POST", segments, options_or_callback, callback)
 end
 
+---@param segments string
+---@param options_or_callback table|fun(err:table, data:table)
+---@param callback nil|fun(err:table, data:table)
 function HTTP:put(segments, options_or_callback, callback)
   if type(options_or_callback) == "function" then
 		callback = options_or_callback
@@ -51,6 +60,9 @@ function HTTP:put(segments, options_or_callback, callback)
 	self:request("PUT", segments, options_or_callback, callback)
 end
 
+---@param segments string
+---@param options_or_callback table|fun(err:table, data:table)
+---@param callback nil|fun(err:table, data:table)
 function HTTP:delete(segments, options_or_callback, callback)
   if type(options_or_callback) == "function" then
 		callback = options_or_callback
@@ -100,6 +112,10 @@ function HTTP:_get_http_endpoint(segments, query_params)
   return protocol .. "://" .. public_address .. segments .. "?" .. table.concat(params, "&")
 end
 
+---@param method string
+---@param segments string
+---@param options table|fun(err:table, data:table)
+---@param callback nil|fun(err:table, data:table)
 function HTTP:request(method, segments, options, callback)
   if type(options) == "function" then
 		callback = options

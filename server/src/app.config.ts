@@ -5,6 +5,7 @@ import { monitor } from "@colyseus/monitor";
 
 import { RedisDriver } from "@colyseus/redis-driver";
 import { RedisPresence } from "@colyseus/redis-presence";
+import { playground } from "@colyseus/playground";
 
 /**
  * Import your Room files
@@ -14,8 +15,6 @@ import { auth } from "@colyseus/auth";
 import "./config/auth";
 
 export default config({
-    getId: () => "Your Colyseus App",
-
     options: {
         devMode: true,
         driver: new RedisDriver(),
@@ -48,8 +47,9 @@ export default config({
         app.use("/colyseus", monitor());
 
         app.use(auth.prefix, auth.routes());
-    },
 
+        app.use("/playground", playground);
+    },
 
     beforeListen: () => {
         /**

@@ -2,8 +2,6 @@
 -- Based on https://github.com/wscherphof/lua-events/
 --
 
----@class EventEmitterObject
-
 ---@class EventEmitter
 local EventEmitter = {}
 
@@ -15,25 +13,38 @@ function table_find(tab,el)
   end
 end
 
----@param object EventEmitterObject|nil
----@return EventEmitterObject
+---@param object EventEmitterInstance|nil
+---@return EventEmitterInstance
 function EventEmitter:new(object)
 
+  ---@class EventEmitterInstance
   object = object or {}
   object._on = {}
   object._once = {}
 
+
+  ---@function on
+  ---@param event string
+  ---@param listener function
+  ---@return function
   function object:on (event, listener)
     self._on[event] = self._on[event] or {}
     table.insert(self._on[event], listener)
     return listener
   end
 
+  ---@function once
+  ---@param event string
+  ---@param listener function
+  ---@return function
   function object:once (event, listener)
     self._once[event] = listener
     return self:on(event, listener)
   end
 
+  ---@function off
+  ---@param event nil|string
+  ---@param listener nil|function
   function object:off (event, listener)
     if event then
       -- clear from "once"
@@ -44,12 +55,14 @@ function EventEmitter:new(object)
         table.remove(self._on[event], table_find(self._on[event], listener))
       end
     else
-      for event, listener in ipairs(self._on) do
+      for event, listener in pairs(self._on) do
         self:off(event)
       end
     end
   end
 
+  ---@function listeners
+  ---@param event string
   function object:listeners (event)
     return self._on[event] or {}
   end

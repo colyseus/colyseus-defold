@@ -11,17 +11,17 @@ function init(self)
     -- Remove this function if not needed
     client = Colyseus.new("ws://localhost:2567")
 
-    -- get all available rooms at every 3 seconds (example)
-    timer.delay(3, true, function()
-      client:get_available_rooms("", function(err, rooms)
-        if err then
-          print("get_available_rooms error =>")
-          pprint(err)
-        end
-        print("available rooms =>")
-        pprint(rooms)
-      end)
-    end)
+    -- -- get all available rooms at every 3 seconds (example)
+    -- timer.delay(3, true, function()
+    --   client:get_available_rooms("", function(err, rooms)
+    --     if err then
+    --       print("get_available_rooms error =>")
+    --       pprint(err)
+    --     end
+    --     print("available rooms =>")
+    --     pprint(rooms)
+    --   end)
+    -- end)
 
     -- join "demo" room
     client:join_or_create("my_room", function(err, room)
@@ -43,12 +43,8 @@ function init(self)
         print("turn changed, current: ", current, ", previous: ", previous)
       end)
 
-      room.state.messages:on_add(function(msg, i)
-        print("message arrived", msg.message)
-      end)
-
       room.state.players:on_add(function(player, i)
-        print("NEW PLAYER!! i =>", i, "player =>", player)
+        print("ADD PLAYER!! i =>", i, "player =>", player)
 
         player:listen("x", function(value, prevous_value)
           print("player.x has changed! value =>", value, "prevous_value =>", prevous_value)
@@ -58,6 +54,10 @@ function init(self)
         --   print("player changed")
         --   pprint(changes)
         -- end)
+      end)
+
+      room.state.messages:on_add(function(msg, i)
+        print("message arrived", msg.message)
       end)
 
       room:on_message("broadcast", function(message)
