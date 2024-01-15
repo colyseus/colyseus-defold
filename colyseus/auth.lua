@@ -105,16 +105,19 @@ function Auth:sign_in_with_email_and_password(email, password, callback)
 end
 
 function Auth:sign_in_anonymously(options_or_callback, callback)
-  local options = {}
+  local options = { body = { options = {} }, }
 
   if type(options_or_callback) == "table" then
     -- append headers
     for k, v in pairs(options_or_callback) do
-      options[k] = v
+      options.body.options[k] = v
     end
   else
     callback = options_or_callback
   end
+
+  print("sign_in_anonymously =>")
+  pprint(options)
 
   local _self = self
   self.http:post(self.settings.path .. "/anonymous", options, function(err, data)

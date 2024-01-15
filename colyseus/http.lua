@@ -120,16 +120,13 @@ function HTTP:request(method, segments, options, callback)
 
   local body = options.body and JSON.encode(options.body) or ""
 
-  print("REQUEST!")
-  print(method .. " => " .. self:_get_http_endpoint(segments))
-
   http.request(self:_get_http_endpoint(segments), method, function(self, id, response)
     local data = response.response ~= '' and response.response
     local has_error = (response.status >= 400)
     local err = nil
 
     -- parse JSON response
-    if string.find(response.headers['content-type'], 'application/json') then
+    if response.headers['content-type'] and string.find(response.headers['content-type'], 'application/json') then
       data = json.decode(data)
     end
 

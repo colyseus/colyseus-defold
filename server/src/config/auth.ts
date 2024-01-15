@@ -1,4 +1,4 @@
-import { auth } from "@colyseus/auth";
+import { auth, Hash } from "@colyseus/auth";
 
 const fakeDb: any[] = [];
 

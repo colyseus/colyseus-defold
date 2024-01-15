@@ -60,31 +60,31 @@ function Client:get_available_rooms(room_name, callback)
 end
 
 ---@param room_name string
----@param options nil|table
+---@param options_or_callback nil|table
 ---@param callback fun(err:table, room:Room)
-function Client:join_or_create(room_name, options, callback)
-  return self:create_matchmake_request('joinOrCreate', room_name, options or {}, callback)
+function Client:join_or_create(room_name, options_or_callback, callback)
+  return self:create_matchmake_request('joinOrCreate', room_name, options_or_callback or {}, callback)
 end
 
 ---@param room_name string
----@param options nil|table
+---@param options_or_callback nil|table
 ---@param callback fun(err:table, room:Room)
-function Client:create(room_name, options, callback)
-  return self:create_matchmake_request('create', room_name, options or {}, callback)
+function Client:create(room_name, options_or_callback, callback)
+  return self:create_matchmake_request('create', room_name, options_or_callback or {}, callback)
 end
 
 ---@param room_name string
----@param options nil|table
+---@param options_or_callback nil|table
 ---@param callback fun(err:table, room:Room)
-function Client:join(room_name, options, callback)
-  return self:create_matchmake_request('join', room_name, options or {}, callback)
+function Client:join(room_name, options_or_callback, callback)
+  return self:create_matchmake_request('join', room_name, options_or_callback or {}, callback)
 end
 
 ---@param room_id string
----@param options nil|table
+---@param options_or_callback nil|table
 ---@param callback fun(err:table, room:Room)
-function Client:join_by_id(room_id, options, callback)
-  return self:create_matchmake_request('joinById', room_id, options or {}, callback)
+function Client:join_by_id(room_id, options_or_callback, callback)
+  return self:create_matchmake_request('joinById', room_id, options_or_callback or {}, callback)
 end
 
 ---@param room_id string
@@ -101,18 +101,22 @@ function Client:reconnect(reconnection_token, callback)
 end
 
 ---@private
-function Client:create_matchmake_request(method, room_name, options, callback)
-  if type(options) == "function" then
-    callback = options
+function Client:create_matchmake_request(method, room_name, options_or_callback, callback)
+  local options = nil
+
+  if type(options_or_callback) == "function" then
+    callback = options_or_callback
     options = {}
+  else
+    options = options_or_callback
   end
 
-  self.http:request('POST', "matchmake/" .. method + "/" .. room_name, { body = JSON.encode(options), }, function(err, response)
+  self.http:request('POST', "matchmake/" .. method .. "/" .. room_name, { body = JSON.encode(options), }, function(err, response)
     if (err) then return callback(err) end
 
     -- forward reconnection token during "reconnect" methods.
     if method == "reconnect" then
-      response.reconnectionToken = options.reconnectionToken
+      response.reconnectionToken = options_or_callback.reconnectionToken
     end
 
     self:consume_seat_reservation(response, callback)

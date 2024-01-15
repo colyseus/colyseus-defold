@@ -7,10 +7,12 @@ local auth = require "test.auth"
 local http = require "test.http"
 
 function init(self)
+
   deftest.add(schema_serializer)
   deftest.add(client)
   deftest.add(auth)
   deftest.add(http)
+
   -- deftest.add(fossil_delta)
   -- deftest.add(delta_container)
   deftest.run({ coverage = { enabled = true } })
