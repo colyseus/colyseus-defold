@@ -116,9 +116,6 @@ function Auth:sign_in_anonymously(options_or_callback, callback)
     callback = options_or_callback
   end
 
-  print("sign_in_anonymously =>")
-  pprint(options)
-
   local _self = self
   self.http:post(self.settings.path .. "/anonymous", options, function(err, data)
     if err == nil then _self:emit_change(data) end
