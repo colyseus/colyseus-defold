@@ -129,7 +129,6 @@ end
 
 ---@private
 function Room:_on_message (binary_string, it)
-  print("_on_message!", binary_string)
   local message = utils.string_to_byte_array(binary_string)
 
   local code = message[it.offset]

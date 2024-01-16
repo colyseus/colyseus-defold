@@ -1,7 +1,6 @@
 local schema = require 'colyseus.serialization.schema.schema'
 local schema_serializer = require 'colyseus.serialization.schema'
 local reference_tracker = require 'colyseus.serialization.schema.reference_tracker'
-local JSON = require('colyseus.serialization.json')
 
 return function()
   local PrimitiveTypes = require 'test.schema.PrimitiveTypes.PrimitiveTypes'

@@ -110,7 +110,7 @@ function Client:create_matchmake_request(method, room_name, options_or_callback,
     options = options_or_callback
   end
 
-  self.http:request('POST', "matchmake/" .. method .. "/" .. room_name, { body = JSON.encode(options), }, function(err, response)
+  self.http:request('POST', "matchmake/" .. method .. "/" .. room_name, { body = options, }, function(err, response)
     if (err) then return callback(err) end
 
     -- forward reconnection token during "reconnect" methods.
