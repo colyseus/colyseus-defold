@@ -1,26 +1,34 @@
 local EventEmitter = require('colyseus.eventemitter')
 
-local connection = {}
-connection.config = { connect_timeout = 10 }
-connection.__index = connection
+---@class Connection : EventEmitterInstance
+local Connection = {}
+Connection.config = { connect_timeout = 10 }
+Connection.__index = Connection
 
-function connection.new (endpoint)
+---@return Connection
+function Connection.new ()
   local instance = EventEmitter:new()
-  setmetatable(instance, connection)
-  instance:init(endpoint)
+  setmetatable(instance, Connection)
+  instance:init()
   return instance
 end
 
-function connection:init()
+function Connection:init()
   self.state = "CONNECTING"
   self.is_html5 = sys.get_sys_info().system_name == "HTML5"
 end
 
-function connection:send(data)
+function Connection:send(data)
+  if self.state ~= "OPEN" then
+    print("[Colyseus] connection hasn't been established. You shouldn't be sending messages yet.")
+    return
+  end
   websocket.send(self.ws, data)
 end
 
-function connection:open(endpoint)
+---@function
+---@param endpoint string
+function Connection:open(endpoint)
   -- skip if connection is already open
   if self.state == 'OPEN' then return end
 
@@ -51,10 +59,10 @@ function connection:open(endpoint)
   end)
 end
 
-function connection:close()
+function Connection:close()
   self.state = "CLOSED"
   websocket.disconnect(self.ws)
   self.ws = nil
 end
 
-return connection
+return Connection

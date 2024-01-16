@@ -50,9 +50,6 @@ export class MyRoom extends Room<MyRoomState> {
     this.state.players.set(client.sessionId, new Player().assign({ x: 0, y: 0 }));
 
     client.send("data", { hello: "world!" });
-
-    const message = new Message("Schema-based message!");
-    client.send(message);
   }
 
   onLeave (client: Client, consented: boolean) {

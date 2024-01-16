@@ -9,9 +9,11 @@ local decode = require('colyseus.serialization.schema.schema').decode
 local encode = require('colyseus.serialization.schema.encode')
 local serialization = require('colyseus.serialization')
 
----@class Room:EventEmitterObject
+---@class Room : EventEmitterInstance
 ---@field state table
----@field sessionId string
+---@field session_id string
+---@field room_id string
+---@field connection Connection
 Room = {}
 Room.__index = function (self, key)
   if key == "state" then
@@ -56,8 +58,11 @@ end
 
 ---@private
 ---@param endpoint string
-function Room:connect (endpoint, room, dev_mode_close_callback)
+---@param dev_mode_close_callback nil|function
+---@param room nil|Room
+function Room:connect (endpoint, dev_mode_close_callback, room)
   if room == nil then room = self end
+
   room.connection = Connection.new()
 
   room.connection:on("message", function(message)
@@ -124,7 +129,7 @@ end
 
 ---@private
 function Room:_on_message (binary_string, it)
-  -- local it = { offset = 1 }
+  print("_on_message!", binary_string)
   local message = utils.string_to_byte_array(binary_string)
 
   local code = message[it.offset]
@@ -235,7 +240,7 @@ function Room:patch (binary_patch, it)
   self:emit("statechange", self.serializer:get_state())
 end
 
----@param consented boolean
+---@param consented nil|boolean
 function Room:leave(consented)
   if self.connection.state == "OPEN" then
     if consented or consented == nil then
@@ -248,8 +253,8 @@ function Room:leave(consented)
   end
 end
 
----@param message_type string
----@param message table
+---@param message_type number|string
+---@param message table|boolean|number|string
 function Room:send (message_type, message)
   local initial_bytes = { protocol.ROOM_DATA }
   local mtype = type(message_type)
