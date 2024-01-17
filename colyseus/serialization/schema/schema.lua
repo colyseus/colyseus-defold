@@ -794,8 +794,6 @@ function Schema:_trigger_changes(changes, refs)
 
   for _, change in pairs(changes) do
     repeat
-      print("TRIGGER CHANGE!")
-      pprint(change)
       local ref_id = change.__refid
       local ref = refs:get(ref_id)
       local is_schema = (ref['_schema'] ~= nil)
