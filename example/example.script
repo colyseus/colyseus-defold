@@ -10,6 +10,7 @@ function init(self)
     -- Add initialization code here
     -- Remove this function if not needed
     client = Colyseus.new("ws://localhost:2567")
+    client.auth.token = "123"
 
     -- -- get all available rooms at every 3 seconds (example)
     -- timer.delay(3, true, function()

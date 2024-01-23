@@ -44,6 +44,11 @@ export class MyRoom extends Room<MyRoomState> {
     console.log("ChatRoom created!", options);
   }
 
+  static onAuth(token, req) {
+    console.log("onAuth => ", {token});
+    return { userdata: 123 };
+  }
+
   onJoin (client: Client, options: any) {
     console.log("client joined!", client.sessionId);
 

@@ -134,6 +134,10 @@ function HTTP:request(method, segments, options, callback)
 		headers[k] = v
 	end
 
+	if self.auth_token ~= nil and self.auth_token ~= "" then
+		headers['Authorization'] = "Bearer " .. self.auth_token
+	end
+
   local body = options.body and JSON.encode(options.body) or ""
 
   http.request(self:_get_http_endpoint(segments), method, function(self, id, response)

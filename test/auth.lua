@@ -28,8 +28,19 @@ end
 return function()
 	math.randomseed(os.time())
 	local endpoint = "http://localhost:2567"
+	local client = Client.new(endpoint)
 
 	describe("colyseus.auth", function()
+		it("setting token manually", function()
+			client.auth.token = "123"
+			assert_equal(client.auth.token, "123")
+			assert_equal(client.http.auth_token, "123")
+			
+			client.auth.token = nil
+			local new_client = Client.new(endpoint)
+			assert_equal(new_client.auth.token, "")
+		end)
+		
 		it("register_with_email_and_password", function()
 			local client = Client.new(endpoint)
 			local rand = math.floor(math.random(1, 999999))
@@ -37,6 +48,11 @@ return function()
 
 			local auth_data = async(function(done)
 				client.auth:register_with_email_and_password(email, "123456", function(err, response)
+					print("register_with_email_and_password")
+					print("err =>")
+					pprint(err)
+					print("response =>")
+					pprint(response)
 					done(response)
 				end)
 			end)
