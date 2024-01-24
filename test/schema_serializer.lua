@@ -62,6 +62,7 @@ return function()
        assert_equal(state.str, "Hello world");
        assert_equal(state.boolean, true);
 
+       state:to_raw() -- to_raw() should not throw any errors
      end)
 
      it("ChildSchema", function()
@@ -75,6 +76,8 @@ return function()
 
        assert_equal(state.secondChild.x, 200);
        assert_equal(state.secondChild.y, 300);
+
+       state:to_raw() -- to_raw() should not throw any errors
      end)
 
     it("ArraySchemaTypes", function()
@@ -122,6 +125,8 @@ return function()
       assert_equal(#state.arrayOfNumbers.items, 1);
       assert_equal(#state.arrayOfStrings.items, 1);
       assert_equal(#state.arrayOfInt32.items, 1);
+
+      state:to_raw() -- to_raw() should not throw any errors
     end)
 
     it("MapSchemaTypes", function()
@@ -175,6 +180,8 @@ return function()
       assert_equal(state.mapOfNumbers:length(), 1);
       assert_equal(state.mapOfStrings:length(), 1);
       assert_equal(state.mapOfInt32:length(), 1);
+
+      state:to_raw() -- to_raw() should not throw any errors
     end)
 
     it("MapSchemaInt8", function()
@@ -231,6 +238,7 @@ return function()
       assert_equal(state.bot.power, 200);
 
       -- Assert.IsInstanceOf(typeof(SchemaTest.InheritedTypes.Bot), state.any);
+      state:to_raw() -- to_raw() should not throw any errors
     end)
 
     it("BackwardsForwardsTest", function()
@@ -297,6 +305,7 @@ return function()
       client:decode({ 255, 9, 10 }, nil, refs);
       assert_equal(0, client.arrayOfPlayers:length());
       assert_equal(3, refs:count());
+
     end)
 
   end)

@@ -127,4 +127,18 @@ function array_schema:clone()
   })
 end
 
+function array_schema:to_raw()
+  local map = {}
+
+  self:each(function(value, key)
+    if type(value) == "table" and type(value['to_raw']) == "function" then
+      map[key] = value:to_raw()
+    else
+      map[key] = value
+    end
+  end)
+
+  return map
+end
+
 return array_schema

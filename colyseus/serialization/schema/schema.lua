@@ -916,6 +916,21 @@ function Schema:create_instance_type(bytes, it, typeref)
         return typeref:new()
     end
 end
+
+function Schema:to_raw()
+  local raw = {}
+
+  for field, _ in pairs(self._schema) do
+    if type(self[field]) == "table" and type(self[field]['to_raw']) == "function" then
+      raw[field] = self[field]:to_raw()
+    else
+      raw[field] = self[field]
+    end
+  end
+
+  return raw
+end
+
 -- END SCHEMA CLASS --
 
 local global_context = Context:new()
