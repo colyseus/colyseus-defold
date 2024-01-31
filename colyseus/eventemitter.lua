@@ -68,7 +68,14 @@ function EventEmitter:new(object)
   end
 
   function object:emit (event, ...)
-    for _, listener in ipairs(self:listeners(event)) do
+    -- copy list before iterating over it
+    -- (make sure all previously registered callbacks are called, even if some are removed in-between)
+    local listeners = {}
+    for i, listener in ipairs(self:listeners(event)) do
+      listeners[i] = listener
+    end
+    
+    for i, listener in ipairs(listeners) do
       if "function" == type(listener) then
         listener(...)
 
