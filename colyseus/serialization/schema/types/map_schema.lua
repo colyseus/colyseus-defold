@@ -65,15 +65,18 @@ end
 function map_schema:delete_by_index(index)
   local dynamic_index = self.indexes[index]
 
-  -- delete key
-  for i, k in pairs(self.dynamic_indexes) do
-    if k == dynamic_index then
-      table.remove(self.dynamic_indexes, i)
-      break
+  if dynamic_index ~= nil then
+    -- delete key
+    for i, k in pairs(self.dynamic_indexes) do
+      if k == dynamic_index then
+        table.remove(self.dynamic_indexes, i)
+        break
+      end
     end
+
+    self.items[dynamic_index] = nil
   end
 
-  self.items[dynamic_index] = nil
   self.indexes[index] = nil
 end
 

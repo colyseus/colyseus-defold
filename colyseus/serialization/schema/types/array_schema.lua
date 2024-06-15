@@ -88,7 +88,7 @@ function array_schema:delete_by_index(index)
 
     self.items[dynamic_index] = nil
   end
-  
+
   self.indexes[index] = nil
 end
 
