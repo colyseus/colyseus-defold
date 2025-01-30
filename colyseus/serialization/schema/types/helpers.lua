@@ -53,4 +53,26 @@ function M.remove_child_refs(collection, changes, refs)
   end)
 end
 
+
+-- --
+-- -- ordered_array
+-- -- the ordered array is used to keep track of "all_changes", and ordered ref_id per change, as they are identified.
+-- --
+-- local ordered_array = {}
+-- function ordered_array:new(obj)
+    -- obj = {
+        -- items = {},
+        -- keys = {},
+    -- }
+    -- setmetatable(obj, ordered_array)
+    -- return obj
+-- end
+-- function ordered_array:__index(key)
+    -- return (type(key)=="number") and self.items[key] or rawget(self, key)
+-- end
+-- function ordered_array:__newindex(key, value)
+    -- self.items[key] = value
+    -- table.insert(self.keys, key)
+-- end
+
 return M

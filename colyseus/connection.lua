@@ -6,7 +6,7 @@ Connection.config = { connect_timeout = 10 }
 Connection.__index = Connection
 
 ---@return Connection
-function Connection.new ()
+function Connection.new()
   local instance = EventEmitter:new()
   setmetatable(instance, Connection)
   instance:init()

@@ -5,8 +5,8 @@ local protocol = require('colyseus.protocol')
 
 local EventEmitter = require('colyseus.eventemitter')
 local utils = require('colyseus.utils.utils')
-local decode = require('colyseus.serialization.schema.schema').decode
-local encode = require('colyseus.serialization.schema.encode')
+local decode = require('colyseus.serialization.schema.encoding.decode')
+local encode = require('colyseus.serialization.schema.encoding.encode')
 local serialization = require('colyseus.serialization')
 
 ---@class Room : EventEmitterInstance
@@ -41,7 +41,6 @@ end
 ---@private
 ---@param name string
 function Room:init(name)
-  self.id = nil
   self.name = name
   self.serializer = nil
   self.on_message_handlers = {}
@@ -84,25 +83,6 @@ function Room:connect (endpoint, dev_mode_close_callback, room)
   room.connection:open(endpoint)
 end
 
--- fossil-delta serializer only
----@private
-function Room:listen (segments, callback, immediate)
-  if self.serializer_id ~= "fossil-delta" then
-    error(tostring(self.serializer_id) .. " serializer doesn't support .listen() method.")
-    return
-  end
-  if self.serializer_id == nil then
-    print("DEPRECATION WARNING: room:listen() should be called after join has been successful")
-  end
-  return self.serializer.state:listen(segments, callback, immediate)
-end
-
--- fossil-delta serializer only
----@private
-function Room:remove_listener (listener)
-  return self.serializer.state:remove_listener(listener)
-end
-
 ---@param type string
 ---@param handler fun(message:table)
 function Room:on_message(type, handler)
@@ -120,9 +100,7 @@ end
 function Room:_on_batch_message(binary_string)
   local total_bytes = #binary_string
   local cursor = { offset = 1 }
-  -- print("Room:_on_batch_message, total_bytes =>", total_bytes)
   while cursor.offset <= total_bytes do
-    -- print("Room:_on_message (total_bytes:",total_bytes,"), offset =>", cursor.offset, ", byte on offset =>", string.byte(binary_string, cursor.offset))
     self:_on_message(binary_string, cursor)
   end
 end
@@ -171,18 +149,6 @@ function Room:_on_message (binary_string, it)
   elseif code == protocol.ROOM_STATE_PATCH then
     self:patch(message, it)
 
-  elseif code == protocol.ROOM_DATA_SCHEMA then
-    local typeid = decode.number(message, it)
-
-    local context = self.serializer:get_state()._context
-    local message_type = context:get(typeid)
-    local schema_message = message_type:new()
-
-    it.offset = it.offset + 1
-    schema_message:decode(message, it)
-
-    self:_dispatch_message(message_type, schema_message)
-
   elseif code == protocol.ROOM_DATA then
     local message_type
 
@@ -223,8 +189,6 @@ function Room:_on_message (binary_string, it)
 
     self:_dispatch_message(message_type, byte_array)
   end
-
-  -- cursor.offset = cursor.offset + it.offset - 1
 end
 
 ---@private
@@ -315,10 +279,8 @@ end
 function Room:get_message_handler_key(message_type)
   local t = type(message_type)
 
-  if t == "table" then
-    return "s" .. tostring(message_type._typeid)
-  elseif t == "string" then
-    return message_type
+  if t == "string" then
+    return "s" .. message_type
   elseif t == "number" then
     return "i" .. tostring(message_type)
   else

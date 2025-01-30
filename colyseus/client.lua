@@ -1,11 +1,9 @@
-local Connection = require('colyseus.connection')
 local Room = require('colyseus.room')
 local Auth = require('colyseus.auth')
 local HTTP = require('colyseus.http')
 
 local EventEmitter = require('colyseus.eventemitter')
 local URL = require('colyseus.utils.url')
-local JSON = require('colyseus.serialization.json')
 
 local info = sys.get_sys_info()
 
@@ -127,10 +125,8 @@ end
 ---@param reuse_room_instance nil|Room
 function Client:consume_seat_reservation(response, callback, reuse_room_instance)
   local room = Room.new(response.room.name)
-  room.id = response.room.roomId -- TODO: deprecate .id
-  room.room_id = response.room.roomId
 
-  room.sessionId = response.sessionId -- TODO: deprecate .sessionId
+  room.room_id = response.room.roomId
   room.session_id = response.sessionId
 
   local options = { sessionId = room.session_id }

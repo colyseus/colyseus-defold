@@ -13,15 +13,14 @@ function table_find(tab,el)
   end
 end
 
----@param object EventEmitterInstance|nil
----@return EventEmitterInstance
+---@param object table|nil
+---@return EventEmitterInstance|table
 function EventEmitter:new(object)
 
   ---@class EventEmitterInstance
   object = object or {}
   object._on = {}
   object._once = {}
-
 
   ---@function on
   ---@param event string
@@ -74,7 +73,7 @@ function EventEmitter:new(object)
     for i, listener in ipairs(self:listeners(event)) do
       listeners[i] = listener
     end
-    
+
     for i, listener in ipairs(listeners) do
       if "function" == type(listener) then
         listener(...)

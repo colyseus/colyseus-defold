@@ -1,5 +1,8 @@
+---@class reference_tracker
+---@field refs table
+---@field ref_counts table
+---@field deleted_refs table
 local reference_tracker = {}
-reference_tracker.__index = reference_tracker
 
 function reference_tracker:new()
     local instance = {
@@ -7,7 +10,8 @@ function reference_tracker:new()
       ref_counts = {},
       deleted_refs = {},
     }
-    setmetatable(instance, reference_tracker)
+    setmetatable(instance, self)
+    self.__index = self
     return instance
 end
 
