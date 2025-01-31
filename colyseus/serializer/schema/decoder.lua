@@ -1,10 +1,10 @@
-local bit = require 'colyseus.serialization.bit'
-local map_schema = require 'colyseus.serialization.schema.types.map_schema'
-local decode = require 'colyseus.serialization.schema.encoding.decode'
-local constants = require 'colyseus.serialization.schema.constants'
-local reference_tracker = require 'colyseus.serialization.schema.reference_tracker'
-local type_context = require 'colyseus.serialization.schema.type_context'
-local types = require 'colyseus.serialization.schema.types'
+local bit = require 'colyseus.serializer.bit'
+local map_schema = require 'colyseus.serializer.schema.types.map_schema'
+local decode = require 'colyseus.serializer.schema.encoding.decode'
+local constants = require 'colyseus.serializer.schema.constants'
+local reference_tracker = require 'colyseus.serializer.schema.reference_tracker'
+local type_context = require 'colyseus.serializer.schema.type_context'
+local types = require 'colyseus.serializer.schema.types'
 
 local SPEC = constants.SPEC;
 local OPERATION = constants.OPERATION;
@@ -27,27 +27,27 @@ local function instance_of(subject, super)
 end
 
 ---@class Decoder
----@field state table
+---@field state Schema
 ---@field refs reference_tracker
 ---@field context type_context
 ---@field _trigger_changes function
-Decoder = {}
+local Decoder = {}
 
----@param state table
+---@param state Schema
+---@param context type_context|nil
 ---@return Decoder
 function Decoder:new(state, context)
   local instance = setmetatable({
-    context = context or type_context:new(),
     state = state,
+    context = context or type_context:new(),
 		refs = reference_tracker:new(),
-    _trigger_changes = function(changes) print("schema callbacks are not set up! got " .. #changes .. " changes.") end
+    _trigger_changes = function() end
 	}, self)
-  Decoder.__index = self
+  self.__index = self
 	return instance
 end
 
 function Decoder:decode(bytes, it)
-    -- default iterator
     if it == nil then it = { offset = 1 } end
 
     local ref_id = 1
@@ -305,6 +305,5 @@ function Decoder:create_instance_type(bytes, it, typeref)
         return typeref:new()
     end
 end
-
 
 return Decoder

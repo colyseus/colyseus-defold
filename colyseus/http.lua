@@ -1,4 +1,4 @@
-local JSON = require('colyseus.serialization.json')
+local JSON = require('colyseus.serializer.json')
 local Connection = require('colyseus.connection')
 local utils = require('colyseus.utils.utils')
 

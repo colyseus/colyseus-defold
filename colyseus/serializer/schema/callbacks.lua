@@ -1,18 +1,40 @@
-local bit = require 'colyseus.serialization.bit'
-local callback_helpers = require 'colyseus.serialization.schema.types.helpers'
-local constants = require 'colyseus.serialization.schema.constants'
+local bit = require 'colyseus.serializer.bit'
+local callback_helpers = require 'colyseus.serializer.schema.types.helpers'
+local constants = require 'colyseus.serializer.schema.constants'
 local OPERATION = constants.OPERATION;
 
 Callbacks = {}
 
-function Callbacks.new()
-	local self = setmetatable({}, { __index = Callbacks })
-	return self
+---@param room_or_decoder Room|Decoder
+---@return Callbacks
+local function get_callbacks (room_or_decoder)
+  if room_or_decoder.room_id ~= nil then
+    return Callbacks:new(room_or_decoder.serializer.decoder)
+
+  elseif room_or_decoder._trigger_changes ~= nil then
+    return Callbacks:new(room_or_decoder)
+  end
+end
+
+---@class Callbacks
+---@private __callbacks table<string, table<string, function>>
+function Callbacks:new(decoder)
+	local instance = setmetatable({
+    __callbacks = {},
+    decoder = decoder
+  }, self)
+  instance.__index = self
+	return instance
 end
 
 function Callbacks:on_change(callback)
   if self.__callbacks == nil then self.__callbacks = {} end
   return callback_helpers.add_callback(self.__callbacks, OPERATION.REPLACE, callback);
+end
+
+function Callbacks:on_add(callback)
+  if self.__callbacks == nil then self.__callbacks = {} end
+  return callback_helpers.add_callback(self.__callbacks, OPERATION.ADD, callback);
 end
 
 function Callbacks:on_remove(callback)
@@ -147,4 +169,4 @@ function Callbacks:_trigger_changes(changes, refs)
   end
 end
 
-return Callbacks
+return get_callbacks

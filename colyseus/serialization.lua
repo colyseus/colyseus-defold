@@ -1,7 +1,7 @@
 local serializers = {
-    ['none'] = require('colyseus.serialization.none'),
-    ['fossil-delta'] = require('colyseus.serialization.fossil_delta'),
-    ['schema'] = require('colyseus.serialization.schema_serializer'),
+    ['none'] = require('colyseus.serializer.none'),
+    ['fossil-delta'] = require('colyseus.serializer.fossil_delta'),
+    ['schema'] = require('colyseus.serializer.schema_serializer'),
 }
 
 local exports = {}

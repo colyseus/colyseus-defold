@@ -2,7 +2,7 @@
 -- schema callback helpers
 --
 
-local constants = require 'colyseus.serialization.schema.constants'
+local constants = require 'colyseus.serializer.schema.constants'
 local OPERATION = constants.OPERATION;
 
 local M = {}

@@ -1,6 +1,6 @@
-local types = require 'colyseus.serialization.schema.types'
+local types = require 'colyseus.serializer.schema.types'
 
-local constants = require 'colyseus.serialization.schema.constants'
+local constants = require 'colyseus.serializer.schema.constants'
 local SPEC = constants.SPEC;
 
 function table.clone(orig)
@@ -30,27 +30,11 @@ end
 ---@field _fields_by_index table
 local Schema = {}
 
-function Schema:new(obj)
-    obj = obj or {}
-    setmetatable(obj, self)
+function Schema:new(instance)
+    instance = instance or {}
+    setmetatable(instance, self)
     self.__index = self
-
-    --
-    -- TODO: remove this
-    --
-
-    -- initialize child schema structures
-    if self._schema ~= nil then
-      for field, field_type in pairs(self._schema) do
-          if type(field_type) ~= "string" then
-              obj[field] = (field_type['new'] ~= nil)
-                  and field_type:new()
-                  or types.get_type(next(field_type)):new()
-          end
-      end
-    end
-
-    return obj
+    return instance
 end
 
 function Schema:set_by_index(field_index, dynamic_index, value)
@@ -79,13 +63,12 @@ function Schema:to_raw()
   return raw
 end
 
--- END SCHEMA CLASS --
-
 ---@param fields table
 ---@param extends Schema|nil
 local define = function(fields, extends)
     local schemaClass = Schema:new()
     schemaClass._schema = {}
+    schemaClass.__index = extends or Schema
 
     local fields_by_index = {}
 
@@ -94,7 +77,6 @@ local define = function(fields, extends)
           fields[field] = extends._schema[field]
           table.insert(fields_by_index, field)
       end
-      schemaClass.__index = extends
     end
 
     if fields._fields_by_index ~= nil then

@@ -1,7 +1,7 @@
-local schema = require 'colyseus.serialization.schema.schema'
-local type_context = require 'colyseus.serialization.schema.type_context'
-local types = require 'colyseus.serialization.schema.types'
-local Decoder = require 'colyseus.serialization.schema.decoder'
+local schema = require 'colyseus.serializer.schema.schema'
+local type_context = require 'colyseus.serializer.schema.type_context'
+local types = require 'colyseus.serializer.schema.types'
+local Decoder = require 'colyseus.serializer.schema.decoder'
 
 local function reverse_table(t)
   local reversed = {}

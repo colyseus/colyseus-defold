@@ -1,4 +1,4 @@
-local fossil_delta = require 'colyseus.serialization.fossil_delta.fossil_delta'
+local fossil_delta = require 'colyseus.serializer.fossil_delta.fossil_delta'
 
 return function()
   function read_file(file)

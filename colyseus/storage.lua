@@ -1,14 +1,14 @@
-local Storage = {}
+local storage = {}
 local data = {}
 
 local storage_file_path = sys.get_save_file("colyseus", "storage")
 
-function Storage.get_item (key)
+function storage.get_item (key)
   data = sys.load(storage_file_path)
   return data[key] or ""
 end
 
-function Storage.set_item (key, value)
+function storage.set_item (key, value)
   data[key] = value
 
   if not sys.save(storage_file_path, data) then
@@ -16,4 +16,4 @@ function Storage.set_item (key, value)
   end
 end
 
-return Storage
+return storage

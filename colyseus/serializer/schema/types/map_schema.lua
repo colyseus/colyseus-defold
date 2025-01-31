@@ -1,26 +1,34 @@
-local callback_helpers = require 'colyseus.serialization.schema.types.helpers'
+local callback_helpers = require 'colyseus.serializer.schema.types.helpers'
 
-local constants = require 'colyseus.serialization.schema.constants'
-local OPERATION = constants.OPERATION;
+--
+-- Lua Language Server doesn't support generics like this yet.
+-- https://github.com/LuaLS/lua-language-server/issues/2945
+-- ---@class map_schema<T>: {[string]: T}
+--
 
-local map_schema = {}
-map_schema.__index = map_schema
+---@class MapSchema
+---@field private items table
+---@field private dynamic_indexes table
+---@field private inexes table
+---@field private props table
+local MapSchema = {}
+MapSchema.__index = MapSchema
 
-function map_schema:new(obj)
+function MapSchema:new(obj)
   obj = obj or {
     items = {},
     dynamic_indexes = {},
     indexes = {},
     props = {},
   }
-  setmetatable(obj, map_schema)
+  setmetatable(obj, MapSchema)
   return obj
 end
 
 -- getter
-function map_schema:__index(key)
-  if map_schema[key] ~= nil then
-    return map_schema[key]
+function MapSchema:__index(key)
+  if MapSchema[key] ~= nil then
+    return MapSchema[key]
   else
     return self.props[key] ~= nil
       and self.props[key]
@@ -29,7 +37,7 @@ function map_schema:__index(key)
 end
 
 -- setter
-function map_schema:__newindex(key, value)
+function MapSchema:__newindex(key, value)
   -- if type(key) == "number" then
   --   self.items[key] = value
   -- else
@@ -38,11 +46,11 @@ function map_schema:__newindex(key, value)
   self.props[key] = value
 end
 
-function map_schema:set_index(index, dynamic_index)
+function MapSchema:set_index(index, dynamic_index)
   self.indexes[index] = dynamic_index
 end
 
-function map_schema:set_by_index(index, dynamic_index, value)
+function MapSchema:set_by_index(index, dynamic_index, value)
   self.indexes[index] = dynamic_index
 
   -- insert key
@@ -54,15 +62,15 @@ function map_schema:set_by_index(index, dynamic_index, value)
   self.items[dynamic_index] = value
 end
 
-function map_schema:get_index(index)
+function MapSchema:get_index(index)
   return self.indexes[index]
 end
 
-function map_schema:get_by_index(index)
+function MapSchema:get_by_index(index)
   return self.items[self.indexes[index]]
 end
 
-function map_schema:delete_by_index(index)
+function MapSchema:delete_by_index(index)
   local dynamic_index = self.indexes[index]
 
   if dynamic_index ~= nil then
@@ -80,21 +88,24 @@ function map_schema:delete_by_index(index)
   self.indexes[index] = nil
 end
 
-function map_schema:clear(changes, refs)
+function MapSchema:clear(changes, refs)
   callback_helpers.remove_child_refs(self, changes, refs)
   self.indexes = {}
   self.items = {}
 end
 
-function map_schema:length()
+---@return number
+function MapSchema:length()
     return #self.indexes
 end
 
-function map_schema:keys()
+---@return table<string>
+function MapSchema:keys()
     return self.dynamic_indexes
 end
 
-function map_schema:values()
+---@return table
+function MapSchema:values()
     local values = {}
     for _, key in ipairs(self.dynamic_indexes) do
         table.insert(values, self.items[key])
@@ -102,48 +113,23 @@ function map_schema:values()
     return values
 end
 
-function map_schema:each(cb)
+---@param cb fun(value: any, key: string)
+function MapSchema:each(cb)
     for _, key in ipairs(self.dynamic_indexes) do
         cb(self.items[key], key)
     end
 end
 
-function map_schema:on_add(callback, trigger_all)
-  if trigger_all == nil then trigger_all = true end -- use trigger_all by default.
-  if self.__callbacks == nil then self.__callbacks = {} end
-  return callback_helpers.add_callback(self.__callbacks, OPERATION.ADD, callback, (trigger_all and self) or nil)
-end
-
-function map_schema:on_remove(callback)
-  if self.__callbacks == nil then self.__callbacks = {} end
-  return callback_helpers.add_callback(self.__callbacks, OPERATION.DELETE, callback)
-end
-
-function map_schema:on_change(callback)
-  if self.__callbacks == nil then self.__callbacks = {} end
-  return callback_helpers.add_callback(self.__callbacks, OPERATION.REPLACE, callback)
-end
-
-function map_schema:clone()
-  return map_schema:new({
+function MapSchema:clone()
+  return MapSchema:new({
     items = table.clone(self.items),
     indexes = table.clone(self.indexes),
     dynamic_indexes = table.clone(self.dynamic_indexes),
     props = self.props,
   })
-
-  -- for _, key in ipairs(self.keys) do
-  --   cloned:set(key, self.items[key])
-  -- end
-
-  -- cloned['on_add'] = self['on_add']
-  -- cloned['on_remove'] = self['on_remove']
-  -- cloned['on_change'] = self['on_change']
-
-  -- return cloned
 end
 
-function map_schema:to_raw()
+function MapSchema:to_raw()
   local map = {}
 
   self:each(function(value, key)
@@ -157,4 +143,4 @@ function map_schema:to_raw()
   return map
 end
 
-return map_schema
+return MapSchema

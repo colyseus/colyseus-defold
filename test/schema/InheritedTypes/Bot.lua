@@ -5,7 +5,7 @@
 -- GENERATED USING @colyseus/schema 3.0.0-alpha.42
 --
 
-local schema = require 'colyseus.serialization.schema.schema'
+local schema = require 'colyseus.serializer.schema.schema'
 local Player = require 'test.schema.InheritedTypes.Player'
 local Entity = require 'test.schema.InheritedTypes.Entity'
 

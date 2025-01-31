@@ -13,12 +13,12 @@ local info = sys.get_sys_info()
 local Client = {}
 Client.__index = Client
 
----@param endpoint string
+---@param endpoint_or_settings string|{hostname:string, port:number, use_ssl:boolean}
 ---@return Client
-function Client.new (endpoint)
+function Client.new (endpoint_or_settings)
   local instance = EventEmitter:new()
   setmetatable(instance, Client)
-  instance:init(endpoint)
+  instance:init(endpoint_or_settings)
   return instance
 end
 

@@ -5,8 +5,8 @@ local protocol = require('colyseus.protocol')
 
 local EventEmitter = require('colyseus.eventemitter')
 local utils = require('colyseus.utils.utils')
-local decode = require('colyseus.serialization.schema.encoding.decode')
-local encode = require('colyseus.serialization.schema.encoding.encode')
+local decode = require('colyseus.serializer.schema.encoding.decode')
+local encode = require('colyseus.serializer.schema.encoding.encode')
 local serialization = require('colyseus.serialization')
 
 ---@class Room : EventEmitterInstance

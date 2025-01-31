@@ -1,7 +1,7 @@
-local schema = require 'colyseus.serialization.schema.schema'
-local Decoder = require 'colyseus.serialization.schema.decoder'
-local schema_serializer = require 'colyseus.serialization.schema_serializer'
-local reference_tracker = require 'colyseus.serialization.schema.reference_tracker'
+local schema = require 'colyseus.serializer.schema.schema'
+local Decoder = require 'colyseus.serializer.schema.decoder'
+local schema_serializer = require 'colyseus.serializer.schema_serializer'
+local callbacks = require 'colyseus.serializer.schema.callbacks'
 
 return function()
   local PrimitiveTypes = require 'test.schema.PrimitiveTypes.PrimitiveTypes'
@@ -11,7 +11,6 @@ return function()
   local MapSchemaInt8 = require 'test.schema.MapSchemaInt8.MapSchemaInt8'
   local StateV1 = require 'test.schema.BackwardsForwards.StateV1'
   local StateV2 = require 'test.schema.BackwardsForwards.StateV2'
-  local FilteredTypesState = require 'test.schema.FilteredTypes.State'
   local InstanceSharingTypes = require 'test.schema.InstanceSharingTypes.State'
 
   describe("schema serializer", function()
@@ -25,10 +24,9 @@ return function()
       it("should decode complex UTF-8 characters", function()
         local bytes = { 128, 190, 240, 159, 154, 128, 224, 165, 144, 230, 188, 162, 229, 173, 151, 226, 153, 164, 226, 153, 167, 226, 153, 165, 226, 153, 162, 194, 174, 226, 154, 148 }
 
-        local decoder = Decoder:new(State:new())
+        local state = State:new()
+        local decoder = Decoder:new(state)
         decoder:decode(bytes);
-
-        local state = decoder.state
 
         assert_equal(state.fieldString, "🚀ॐ漢字♤♧♥♢®⚔")
       end)
@@ -37,8 +35,8 @@ return function()
     it("PrimitiveTypes", function()
       local bytes = { 128, 128, 129, 255, 130, 0, 128, 131, 255, 255, 132, 0, 0, 0, 128, 133, 255, 255, 255, 255, 134, 0, 0, 0, 0, 0, 0, 0, 128, 135, 255, 255, 255, 255, 255, 255, 31, 0, 136, 204, 204, 204, 253, 137, 255, 255, 255, 255, 255, 255, 239, 127, 138, 208, 128, 139, 204, 255, 140, 209, 0, 128, 141, 205, 255, 255, 142, 210, 0, 0, 0, 128, 143, 203, 0, 0, 224, 255, 255, 255, 239, 65, 144, 203, 0, 0, 0, 0, 0, 0, 224, 195, 145, 203, 255, 255, 255, 255, 255, 255, 63, 67, 146, 203, 61, 255, 145, 224, 255, 255, 239, 199, 147, 203, 153, 153, 153, 153, 153, 153, 185, 127, 148, 171, 72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 149, 1 }
 
-      local decoder = Decoder:new(PrimitiveTypes:new())
-      local state = decoder.state
+      local state = PrimitiveTypes:new()
+      local decoder = Decoder:new(state)
       decoder:decode(bytes)
 
       assert_equal(state.int8, -128);
@@ -72,8 +70,8 @@ return function()
     it("ChildSchema", function()
       local bytes = { 128, 1, 129, 2, 255, 1, 128, 205, 244, 1, 129, 205, 32, 3, 255, 2, 128, 204, 200, 129, 205, 44, 1 }
 
-      local decoder = Decoder:new(ChildSchemaTypes:new())
-      local state = decoder.state
+      local state = ChildSchemaTypes:new()
+      local decoder = Decoder:new(state)
       decoder:decode(bytes)
 
       assert_equal(state.child.x, 500);
@@ -88,8 +86,8 @@ return function()
     it("ArraySchemaTypes", function()
       local bytes = { 128, 1, 129, 2, 130, 3, 131, 4, 255, 1, 128, 0, 5, 128, 1, 6, 255, 2, 128, 0, 0, 128, 1, 10, 128, 2, 20, 128, 3, 205, 192, 13, 255, 3, 128, 0, 163, 111, 110, 101, 128, 1, 163, 116, 119, 111, 128, 2, 165, 116, 104, 114, 101, 101, 255, 4, 128, 0, 232, 3, 0, 0, 128, 1, 192, 13, 0, 0, 128, 2, 72, 244, 255, 255, 255, 5, 128, 100, 129, 208, 156, 255, 6, 128, 100, 129, 208, 156 }
 
-      local decoder = Decoder:new(ArraySchemaTypes:new())
-      local state = decoder.state
+      local state = ArraySchemaTypes:new()
+      local decoder = Decoder:new(state)
       -- state.arrayOfSchemas.OnAdd += (value, key) => Debug.Log("onAdd, arrayOfSchemas => " + key);
       -- state.arrayOfNumbers.OnAdd += (value, key) => Debug.Log("onAdd, arrayOfNumbers => " + key);
       -- state.arrayOfStrings.OnAdd += (value, key) => Debug.Log("onAdd, arrayOfStrings => " + key);
@@ -137,21 +135,26 @@ return function()
     it("MapSchemaTypes", function()
       local bytes = { 128, 1, 129, 2, 130, 3, 131, 4, 255, 1, 128, 0, 163, 111, 110, 101, 5, 128, 1, 163, 116, 119, 111, 6, 128, 2, 165, 116, 104, 114, 101, 101, 7, 255, 2, 128, 0, 163, 111, 110, 101, 1, 128, 1, 163, 116, 119, 111, 2, 128, 2, 165, 116, 104, 114, 101, 101, 205, 192, 13, 255, 3, 128, 0, 163, 111, 110, 101, 163, 79, 110, 101, 128, 1, 163, 116, 119, 111, 163, 84, 119, 111, 128, 2, 165, 116, 104, 114, 101, 101, 165, 84, 104, 114, 101, 101, 255, 4, 128, 0, 163, 111, 110, 101, 192, 13, 0, 0, 128, 1, 163, 116, 119, 111, 24, 252, 255, 255, 128, 2, 165, 116, 104, 114, 101, 101, 208, 7, 0, 0, 255, 5, 128, 100, 129, 204, 200, 255, 6, 128, 205, 44, 1, 129, 205, 144, 1, 255, 7, 128, 205, 244, 1, 129, 205, 88, 2 }
 
-      local decoder = Decoder:new(MapSchemaTypes:new())
-      local state = decoder.state
+      local state = MapSchemaTypes:new()
+      local decoder = Decoder:new(state)
 
-      --
-      -- TODO: schema-codegen should auto-initialize MapSchema on constructor
-      --
-      state.mapOfSchemas['on_add'] = function(value, key) print("OnAdd, mapOfSchemas => " .. key, value) end;
-      state.mapOfNumbers['on_add'] = function(value, key) print("OnAdd, mapOfNumbers => " .. key, value) end;
-      state.mapOfStrings['on_add'] = function(value, key) print("OnAdd, mapOfStrings => " .. key, value) end;
-      state.mapOfInt32['on_add'] = function(value, key) print("OnAdd, mapOfInt32 => " .. key, value) end;
+      local listen = callbacks(decoder)
+      -- listen:on_add(function(value, key) print("OnAdd, mapOfSchemas => " .. key, value) end)
+      -- _:on_add()
 
-      state.mapOfSchemas['on_remove'] = function(value, key) print("OnRemove, mapOfSchemas => " .. key, value) end;
-      state.mapOfNumbers['on_remove'] = function(value, key) print("OnRemove, mapOfNumbers => " .. key, value) end;
-      state.mapOfStrings['on_remove'] = function(value, key) print("OnRemove, mapOfStrings => " .. key, value) end;
-      state.mapOfInt32['on_remove'] = function(value, key) print("OnRemove, mapOfInt32 => " .. key, value) end;
+      -- --
+      -- -- TODO: schema-codegen should auto-initialize MapSchema on constructor
+      -- --
+      -- state.mapOfSchemas['on_add'] = function(value, key) print("OnAdd, mapOfSchemas => " .. key, value) end;
+      -- state.mapOfNumbers['on_add'] = function(value, key) print("OnAdd, mapOfNumbers => " .. key, value) end;
+      -- state.mapOfStrings['on_add'] = function(value, key) print("OnAdd, mapOfStrings => " .. key, value) end;
+      -- state.mapOfInt32['on_add'] = function(value, key) print("OnAdd, mapOfInt32 => " .. key, value) end;
+
+      -- state.mapOfSchemas['on_remove'] = function(value, key) print("OnRemove, mapOfSchemas => " .. key, value) end;
+      -- state.mapOfNumbers['on_remove'] = function(value, key) print("OnRemove, mapOfNumbers => " .. key, value) end;
+      -- state.mapOfStrings['on_remove'] = function(value, key) print("OnRemove, mapOfStrings => " .. key, value) end;
+      -- state.mapOfInt32['on_remove'] = function(value, key) print("OnRemove, mapOfInt32 => " .. key, value) end;
+
 
       decoder:decode(bytes)
 
@@ -192,8 +195,8 @@ return function()
     it("MapSchemaInt8", function()
       local bytes = { 128, 171, 72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 129, 1, 255, 1, 128, 0, 163, 98, 98, 98, 1, 128, 1, 163, 97, 97, 97, 1, 128, 2, 163, 50, 50, 49, 1, 128, 3, 163, 48, 50, 49, 1, 128, 4, 162, 49, 53, 1, 128, 5, 162, 49, 48, 1 }
 
-      local decoder = Decoder:new(MapSchemaInt8:new())
-      local state = decoder.state
+      local state = MapSchemaInt8:new()
+      local decoder = Decoder:new(state)
 
       decoder:decode(bytes)
 
@@ -268,20 +271,20 @@ return function()
       local statev1bytes = { 129, 1, 128, 171, 72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 255, 1, 128, 0, 163, 111, 110, 101, 2, 255, 2, 128, 203, 232, 229, 22, 37, 231, 231, 209, 63, 129, 203, 240, 138, 15, 5, 219, 40, 223, 63 }
       local statev2bytes = { 128, 171, 72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 130, 10 }
 
-      local decoderv2 = Decoder:new(StateV2:new())
-      local statev2 = decoderv2.state
+      local statev2 = StateV2:new()
+      local decoderv2 = Decoder:new(statev2)
       decoderv2:decode(statev1bytes)
       assert_equal(statev2.str, "Hello world")
 
-      local decoderv1 = Decoder:new(StateV1:new())
-      local statev1 = decoderv1.state
+      local statev1 = StateV1:new()
+      local decoderv1 = Decoder:new(statev1)
       decoderv1:decode(statev2bytes);
       assert_equal(statev1.str, "Hello world");
     end)
 
     it("InstanceSharingTypes", function()
-      local decoder = Decoder:new(InstanceSharingTypes:new())
-      local state = decoder.state
+      local state = InstanceSharingTypes:new()
+      local decoder = Decoder:new(state)
 
       decoder:decode({ 130, 1, 131, 2, 128, 3, 129, 3, 255, 1, 255, 2, 255, 3, 128, 4, 255, 3, 128, 4, 255, 4, 128, 10, 129, 10, 255, 4, 128, 10, 129, 10 });
       assert_equal(state.player1, state.player2);

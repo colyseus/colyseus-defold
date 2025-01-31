@@ -1,6 +1,6 @@
-local reflection = require('colyseus.serialization.schema.reflection')
-local reference_tracker = require('colyseus.serialization.schema.reference_tracker')
-local Decoder = require('colyseus.serialization.schema.decoder')
+local reflection = require('colyseus.serializer.schema.reflection')
+local reference_tracker = require('colyseus.serializer.schema.reference_tracker')
+local Decoder = require('colyseus.serializer.schema.decoder')
 
 ---@class schema_serializer
 ---@field decoder Decoder
