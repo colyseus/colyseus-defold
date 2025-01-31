@@ -1,4 +1,4 @@
-local callback_helpers = require 'colyseus.serializer.schema.types.helpers'
+local utils = require("colyseus.serializer.schema.utils")
 
 --
 -- Lua Language Server doesn't support generics like this yet.
@@ -14,6 +14,7 @@ local callback_helpers = require 'colyseus.serializer.schema.types.helpers'
 local MapSchema = {}
 MapSchema.__index = MapSchema
 
+---@return MapSchema
 function MapSchema:new(obj)
   obj = obj or {
     items = {},
@@ -89,7 +90,7 @@ function MapSchema:delete_by_index(index)
 end
 
 function MapSchema:clear(changes, refs)
-  callback_helpers.remove_child_refs(self, changes, refs)
+  utils.remove_child_refs(self, changes, refs)
   self.indexes = {}
   self.items = {}
 end

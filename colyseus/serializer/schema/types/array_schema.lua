@@ -1,7 +1,4 @@
-local callback_helpers = require 'colyseus.serializer.schema.types.helpers'
-
-local constants = require 'colyseus.serializer.schema.constants'
-local OPERATION = constants.OPERATION;
+local utils = require("colyseus.serializer.schema.utils")
 
 --
 -- Lua Language Server doesn't support generics like this yet.
@@ -105,26 +102,10 @@ function ArraySchema:delete_by_index(index)
 end
 
 function ArraySchema:clear(changes, refs)
-  callback_helpers.remove_child_refs(self, changes, refs)
+  utils.remove_child_refs(self, changes, refs)
   self.indexes = {}
   self.items = {}
   self.dynamic_indexes = {}
-end
-
-function ArraySchema:on_add(callback, trigger_all)
-  if trigger_all == nil then trigger_all = true end -- use trigger_all by default.
-  if self.__callbacks == nil then self.__callbacks = {} end
-  return callback_helpers.add_callback(self.__callbacks, OPERATION.ADD, callback, (trigger_all and self) or nil)
-end
-
-function ArraySchema:on_remove(callback)
-  if self.__callbacks == nil then self.__callbacks = {} end
-  return callback_helpers.add_callback(self.__callbacks, OPERATION.DELETE, callback)
-end
-
-function ArraySchema:on_change(callback)
-  if self.__callbacks == nil then self.__callbacks = {} end
-  return callback_helpers.add_callback(self.__callbacks, OPERATION.REPLACE, callback)
 end
 
 function ArraySchema:each(cb)

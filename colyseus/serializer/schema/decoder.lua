@@ -32,25 +32,27 @@ end
 ---@field context type_context
 ---@field _trigger_changes function
 local Decoder = {}
+Decoder.__index = Decoder
 
 ---@param state Schema
 ---@param context type_context|nil
 ---@return Decoder
 function Decoder:new(state, context)
-  local instance = setmetatable({
+  state.__refid = 0
+  local instance = {
     state = state,
     context = context or type_context:new(),
 		refs = reference_tracker:new(),
     _trigger_changes = function() end
-	}, self)
-  self.__index = self
+	}
+  setmetatable(instance, Decoder)
 	return instance
 end
 
 function Decoder:decode(bytes, it)
     if it == nil then it = { offset = 1 } end
 
-    local ref_id = 1
+    local ref_id = 0
     local ref = self.state
     self.refs:set(ref_id, ref)
 

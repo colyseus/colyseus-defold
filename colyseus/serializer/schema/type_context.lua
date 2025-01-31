@@ -3,11 +3,11 @@
 ---@field types table
 ---@field schemas table
 local type_context = {}
+type_context.__index = type_context
 
 function type_context:new(obj)
     obj = obj or {}
-    setmetatable(obj, self)
-    self.__index = self
+    setmetatable(obj, type_context)
     obj.schemas = {}
     obj.types = {}
     return obj

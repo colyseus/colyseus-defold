@@ -1,69 +1,73 @@
 local bit = require 'colyseus.serializer.bit'
-local callback_helpers = require 'colyseus.serializer.schema.types.helpers'
 local constants = require 'colyseus.serializer.schema.constants'
 local OPERATION = constants.OPERATION;
 
-Callbacks = {}
-
----@param room_or_decoder Room|Decoder
----@return Callbacks
-local function get_callbacks (room_or_decoder)
-  if room_or_decoder.room_id ~= nil then
-    return Callbacks:new(room_or_decoder.serializer.decoder)
-
-  elseif room_or_decoder._trigger_changes ~= nil then
-    return Callbacks:new(room_or_decoder)
-  end
-end
-
 ---@class Callbacks
----@private __callbacks table<string, table<string, function>>
+---@field private decoder Decoder
+Callbacks = {}
+Callbacks.__index = Callbacks
+
+---@package
+---@return Callbacks
 function Callbacks:new(decoder)
-	local instance = setmetatable({
-    __callbacks = {},
+	local instance = {
     decoder = decoder
-  }, self)
-  instance.__index = self
+  }
+  setmetatable(instance, Callbacks)
+  -- assign decoder's _trigger_changes to this instance.
+  decoder._trigger_changes = instance._trigger_changes
 	return instance
 end
 
-function Callbacks:on_change(callback)
-  if self.__callbacks == nil then self.__callbacks = {} end
+---@param instance Schema
+---@param callback fun() callback to be called when any property of provided instance changes.
+---@return fun() un-register callback
+function Callbacks:on_change(instance, callback)
   return callback_helpers.add_callback(self.__callbacks, OPERATION.REPLACE, callback);
 end
 
-function Callbacks:on_add(callback)
-  if self.__callbacks == nil then self.__callbacks = {} end
-  return callback_helpers.add_callback(self.__callbacks, OPERATION.ADD, callback);
+---@param instance_or_field Schema|string
+---@param callback_or_field string|fun(value: any, key: any)
+---@param callback nil|fun(value: any, key: any)
+function Callbacks:on_add(instance_or_field, callback_or_field, callback)
+  local instance = self.decoder.state
+  local field = instance_or_field
+
+  if type(instance_or_field) ~= "string" then
+    instance = instance_or_field
+    field = callback_or_field
+
+  else
+    callback = callback_or_field
+  end
+
+  return self:add_callback(instance.__refid, field, callback)
 end
 
 function Callbacks:on_remove(callback)
-  if self.__callbacks == nil then self.__callbacks = {} end
   return callback_helpers.add_callback(self.__callbacks, OPERATION.DELETE, callback);
 end
 
-function Callbacks:listen(field_name, callback, immediate)
-  if self.__callbacks == nil then self.__callbacks = {} end
-  if self.__callbacks[field_name] == nil then self.__callbacks[field_name] = {} end
+---@param instance_or_field Schema|string
+---@param callback_or_field string|fun(value: any, previous_value: any)
+---@param callback nil|fun(value: any, previous_value: any)
+---@param immediate boolean|nil
+function Callbacks:listen(instance_or_field, callback_or_field, callback, immediate)
+  local instance = self.decoder.state
+  local field = instance_or_field
 
-  table.insert(self.__callbacks[field_name], callback)
+  if type(instance_or_field) ~= "string" then
+    instance = instance_or_field
+    field = callback_or_field
 
-  if immediate == nil then immediate = true end -- "immediate" is true by default
-  if immediate and self[field_name] ~= nil then
-    callback(self[field_name])
+  else
+    callback = callback_or_field
   end
 
-  -- return un-register callback.
-  return function()
-    for index, value in pairs(self.__callbacks[field_name]) do
-      if value == callback then
-        table.remove(self.__callbacks[field_name], index)
-        break
-      end
-    end
-  end
+  return self:add_callback(instance.__refid, field, callback)
 end
 
+---@package
 function Callbacks:_trigger_changes(changes, refs)
   local unique_ref_ids = {}
 
@@ -169,4 +173,61 @@ function Callbacks:_trigger_changes(changes, refs)
   end
 end
 
-return get_callbacks
+---@package
+function Callbacks:add_callback_or_wait_collection_available(instance, field_name, operation, callback)
+  local _self = self
+
+  local remove_handler = function() end
+  local remove_on_add = function() remove_handler() end
+
+  if instance[field_name] == nil then
+    remove_handler = _self:listen(instance, field_name, function(collection, _)
+      remove_handler = _self:add_callback(collection.__refid, operation, callback)
+    end)
+    return remove_on_add
+  else
+    return _self:add_callback(instance[field_name].__refid, operation, callback)
+  end
+end
+
+---@param __refid number
+---@param operation_or_field string
+---@param callback fun(value: any, key: any)
+---@package
+function Callbacks:add_callback(__refid, operation_or_field, callback)
+  print("ADD CALLBACK, __refid:", __refid, "operation_or_field:", operation_or_field)
+
+  local handlers = self.decoder.refs.callbacks[__refid]
+
+  if handlers == nil then
+    handlers = {}
+    self.decoder.refs.callbacks[__refid] = handlers
+  end
+
+  if handlers[operation_or_field] == nil then
+    handlers[operation_or_field] = {}
+  end
+
+  table.insert(handlers[operation_or_field], callback)
+
+  -- return a callback that removes the callback when called
+  return function()
+    for index, value in pairs(handlers[operation_or_field]) do
+      if value == callback then
+        table.remove(handlers[operation_or_field], index)
+        break
+      end
+    end
+  end
+end
+
+---@param room_or_decoder Room|Decoder
+---@return Callbacks
+return function(room_or_decoder)
+  if room_or_decoder.room_id ~= nil then
+    return Callbacks:new(room_or_decoder.serializer.decoder)
+
+  elseif room_or_decoder._trigger_changes ~= nil then
+    return Callbacks:new(room_or_decoder)
+  end
+end

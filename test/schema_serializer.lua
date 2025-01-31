@@ -1,7 +1,7 @@
 local schema = require 'colyseus.serializer.schema.schema'
 local Decoder = require 'colyseus.serializer.schema.decoder'
 local schema_serializer = require 'colyseus.serializer.schema_serializer'
-local callbacks = require 'colyseus.serializer.schema.callbacks'
+local get_callbacks = require 'colyseus.serializer.schema.callbacks'
 
 return function()
   local PrimitiveTypes = require 'test.schema.PrimitiveTypes.PrimitiveTypes'
@@ -138,7 +138,14 @@ return function()
       local state = MapSchemaTypes:new()
       local decoder = Decoder:new(state)
 
-      local listen = callbacks(decoder)
+      local callbacks = get_callbacks(decoder)
+
+      callbacks:on_add("mapOfSchemas", function (value, key)
+        print("on_add, mapOfSchemas -> ")
+        print(key)
+        pprint(value)
+      end)
+
       -- listen:on_add(function(value, key) print("OnAdd, mapOfSchemas => " .. key, value) end)
       -- _:on_add()
 

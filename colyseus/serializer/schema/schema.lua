@@ -1,33 +1,8 @@
-local types = require 'colyseus.serializer.schema.types'
-
-local constants = require 'colyseus.serializer.schema.constants'
-local SPEC = constants.SPEC;
-
-function table.clone(orig)
-    local orig_type = type(orig)
-    local copy
-    if orig_type == 'table' then
-        copy = {}
-        for orig_key, orig_value in pairs(orig) do
-            copy[orig_key] = orig_value
-        end
-    else -- number, string, boolean, etc
-        copy = orig
-    end
-    return copy
-end
-
-function table.keys(orig)
-    local keyset = {}
-    for k,v in pairs(orig) do
-      keyset[#keyset + 1] = k
-    end
-    return keyset
-end
 
 ---@class Schema
----@field _schema table
----@field _fields_by_index table
+---@field __refid number
+---@field private _schema table
+---@field private _fields_by_index table
 local Schema = {}
 
 function Schema:new(instance)
