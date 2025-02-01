@@ -23,7 +23,7 @@ end
 ---@param callback fun() callback to be called when any property of provided instance changes.
 ---@return fun() un-register callback
 function Callbacks:on_change(instance, callback)
-  return callback_helpers.add_callback(self.__callbacks, OPERATION.REPLACE, callback);
+  return self:add_callback(instance.__refid, OPERATION.REPLACE, callback)
 end
 
 ---@param instance_or_field Schema|string
@@ -31,21 +31,29 @@ end
 ---@param callback nil|fun(value: any, key: any)
 function Callbacks:on_add(instance_or_field, callback_or_field, callback)
   local instance = self.decoder.state
-  local field = instance_or_field
-
+  local field_name = instance_or_field
   if type(instance_or_field) ~= "string" then
     instance = instance_or_field
-    field = callback_or_field
-
+    field_name = callback_or_field
   else
     callback = callback_or_field
   end
-
-  return self:add_callback(instance.__refid, field, callback)
+  return self:add_callback_or_wait_collection_available(instance, field_name, OPERATION.ADD, callback)
 end
 
-function Callbacks:on_remove(callback)
-  return callback_helpers.add_callback(self.__callbacks, OPERATION.DELETE, callback);
+---@param instance_or_field Schema|string
+---@param callback_or_field string|fun(value: any, key: any)
+---@param callback nil|fun(value: any, key: any)
+function Callbacks:on_remove(instance_or_field, callback_or_field, callback)
+  local instance = self.decoder.state
+  local field_name = instance_or_field
+  if type(instance_or_field) ~= "string" then
+    instance = instance_or_field
+    field_name = callback_or_field
+  else
+    callback = callback_or_field
+  end
+  return self:add_callback_or_wait_collection_available(instance, field_name, OPERATION.DELETE, callback)
 end
 
 ---@param instance_or_field Schema|string
@@ -54,20 +62,22 @@ end
 ---@param immediate boolean|nil
 function Callbacks:listen(instance_or_field, callback_or_field, callback, immediate)
   local instance = self.decoder.state
-  local field = instance_or_field
+  local field_name = instance_or_field
 
   if type(instance_or_field) ~= "string" then
     instance = instance_or_field
-    field = callback_or_field
+    field_name = callback_or_field
 
   else
     callback = callback_or_field
   end
 
-  return self:add_callback(instance.__refid, field, callback)
+  return self:add_callback(instance.__refid, field_name, callback)
 end
 
 ---@package
+---@param changes table
+---@param refs reference_tracker
 function Callbacks:_trigger_changes(changes, refs)
   local unique_ref_ids = {}
 
@@ -76,7 +86,10 @@ function Callbacks:_trigger_changes(changes, refs)
       local ref_id = change.__refid
       local ref = refs:get(ref_id)
       local is_schema = (ref['_schema'] ~= nil)
-      local callbacks = ref.__callbacks
+      local callbacks = refs.callbacks[ref_id]
+
+      -- "continue" if no callbacks are set
+      if callbacks == nil then break end -- "continue"
 
       --
       -- trigger on_remove() on child structure.
@@ -86,16 +99,14 @@ function Callbacks:_trigger_changes(changes, refs)
         type(change.previous_value) == "table" and
         change.previous_value['_schema'] ~= nil
       ) then
-        local delete_callbacks = (change.previous_value.__callbacks and change.previous_value.__callbacks[OPERATION.DELETE])
-        if delete_callbacks then
-          for _, callback in pairs(delete_callbacks) do
+        local previous_value_callbacks = refs.callbacks[change.previous_value.__refid]
+
+        if previous_value_callbacks ~= nil and previous_value_callbacks[OPERATION.DELETE] ~= nil then
+          for _, callback in pairs(previous_value_callbacks[OPERATION.DELETE]) do
             callback()
           end
         end
       end
-
-      -- "continue" if no callbacks are set
-      if callbacks == nil then break end
 
       if is_schema then
         -- is schema
@@ -120,42 +131,37 @@ function Callbacks:_trigger_changes(changes, refs)
       else
         -- is a collection/custom type
 
-        if change.op == OPERATION.ADD and change.previous_value == nil then
-          local add_callbacks = callbacks[OPERATION.ADD]
-          if add_callbacks ~= nil then
-            for _, callback in pairs(add_callbacks) do
-              callback(change.value, change.dynamic_index)
-            end
-          end
-
-        elseif change.op == OPERATION.DELETE then
-          --
-          -- FIXME: `previous_value` should always be available.
-          -- ADD + DELETE operations are still encoding DELETE operation.
-          --
+        if bit.band(change.op, OPERATION.DELETE) == OPERATION.DELETE then
           local delete_callbacks = callbacks[OPERATION.DELETE]
           if change.previous_value ~= nil and delete_callbacks ~= nil then
+            -- triger "on_remove"
             for _, callback in pairs(delete_callbacks) do
               callback(change.previous_value, change.dynamic_index or change.field)
             end
           end
 
-        elseif change.op == OPERATION.DELETE_AND_ADD then
-          local delete_callbacks = callbacks[OPERATION.DELETE]
-          if change.previous_value ~= nil and delete_callbacks ~= nil then
-            for _, callback in pairs(delete_callbacks) do
-              callback(change.previous_value, change.dynamic_index)
+          if bit.band(change.op, OPERATION.ADD) == OPERATION.ADD then
+            -- Handle DELETE_AND_ADD operations
+            local add_callbacks = callbacks[OPERATION.ADD]
+            if add_callbacks ~= nil then
+              for _, callback in pairs(add_callbacks) do
+                callback(change.value, change.dynamic_index or change.field)
+              end
             end
           end
 
+        elseif bit.band(change.op, OPERATION.ADD) == OPERATION.ADD and change.previous_value == nil then
+          -- trigger "on_add"
           local add_callbacks = callbacks[OPERATION.ADD]
           if add_callbacks ~= nil then
             for _, callback in pairs(add_callbacks) do
               callback(change.value, change.dynamic_index)
             end
           end
+
         end
 
+        -- trigger "on_change"
         if change.value ~= change.previous_value then
           local replace_callbacks = callbacks[OPERATION.REPLACE]
           if replace_callbacks ~= nil then
@@ -164,6 +170,7 @@ function Callbacks:_trigger_changes(changes, refs)
             end
           end
         end
+
       end
 
       unique_ref_ids[ref_id] = true
@@ -176,27 +183,23 @@ end
 ---@package
 function Callbacks:add_callback_or_wait_collection_available(instance, field_name, operation, callback)
   local _self = self
-
   local remove_handler = function() end
-  local remove_on_add = function() remove_handler() end
-
+  local remove_callback = function() remove_handler() end
   if instance[field_name] == nil then
     remove_handler = _self:listen(instance, field_name, function(collection, _)
       remove_handler = _self:add_callback(collection.__refid, operation, callback)
     end)
-    return remove_on_add
+    return remove_callback
   else
     return _self:add_callback(instance[field_name].__refid, operation, callback)
   end
 end
 
 ---@param __refid number
----@param operation_or_field string
+---@param operation_or_field string|number
 ---@param callback fun(value: any, key: any)
 ---@package
 function Callbacks:add_callback(__refid, operation_or_field, callback)
-  print("ADD CALLBACK, __refid:", __refid, "operation_or_field:", operation_or_field)
-
   local handlers = self.decoder.refs.callbacks[__refid]
 
   if handlers == nil then

@@ -140,28 +140,23 @@ return function()
 
       local callbacks = get_callbacks(decoder)
 
-      callbacks:on_add("mapOfSchemas", function (value, key)
-        print("on_add, mapOfSchemas -> ")
-        print(key)
-        pprint(value)
-      end)
+      local mapOfSchemasOnAddCount = 0
+      local mapOfNumbersOnAddCount = 0
+      local mapOfStringsOnAddCount = 0
+      local mapOfInt32OnAddCount = 0
+      callbacks:on_add("mapOfSchemas", function (value, key) mapOfSchemasOnAddCount = mapOfSchemasOnAddCount + 1 end)
+      callbacks:on_add("mapOfNumbers", function (value, key) mapOfNumbersOnAddCount = mapOfNumbersOnAddCount + 1 end)
+      callbacks:on_add("mapOfStrings", function (value, key) mapOfStringsOnAddCount = mapOfStringsOnAddCount + 1 end)
+      callbacks:on_add("mapOfInt32", function (value, key) mapOfInt32OnAddCount = mapOfInt32OnAddCount + 1 end)
 
-      -- listen:on_add(function(value, key) print("OnAdd, mapOfSchemas => " .. key, value) end)
-      -- _:on_add()
-
-      -- --
-      -- -- TODO: schema-codegen should auto-initialize MapSchema on constructor
-      -- --
-      -- state.mapOfSchemas['on_add'] = function(value, key) print("OnAdd, mapOfSchemas => " .. key, value) end;
-      -- state.mapOfNumbers['on_add'] = function(value, key) print("OnAdd, mapOfNumbers => " .. key, value) end;
-      -- state.mapOfStrings['on_add'] = function(value, key) print("OnAdd, mapOfStrings => " .. key, value) end;
-      -- state.mapOfInt32['on_add'] = function(value, key) print("OnAdd, mapOfInt32 => " .. key, value) end;
-
-      -- state.mapOfSchemas['on_remove'] = function(value, key) print("OnRemove, mapOfSchemas => " .. key, value) end;
-      -- state.mapOfNumbers['on_remove'] = function(value, key) print("OnRemove, mapOfNumbers => " .. key, value) end;
-      -- state.mapOfStrings['on_remove'] = function(value, key) print("OnRemove, mapOfStrings => " .. key, value) end;
-      -- state.mapOfInt32['on_remove'] = function(value, key) print("OnRemove, mapOfInt32 => " .. key, value) end;
-
+      local mapOfSchemasOnRemoveCount = 0
+      local mapOfNumbersOnRemoveCount = 0
+      local mapOfStringsOnRemoveCount = 0
+      local mapOfInt32OnRemoveCount = 0
+      callbacks:on_remove("mapOfSchemas", function (value, key) mapOfSchemasOnRemoveCount = mapOfSchemasOnRemoveCount + 1 end)
+      callbacks:on_remove("mapOfNumbers", function (value, key) mapOfNumbersOnRemoveCount = mapOfNumbersOnRemoveCount + 1 end)
+      callbacks:on_remove("mapOfStrings", function (value, key) mapOfStringsOnRemoveCount = mapOfStringsOnRemoveCount + 1 end)
+      callbacks:on_remove("mapOfInt32", function (value, key) mapOfInt32OnRemoveCount = mapOfInt32OnRemoveCount + 1 end)
 
       decoder:decode(bytes)
 
@@ -188,6 +183,11 @@ return function()
       assert_equal(state.mapOfInt32["two"], -1000);
       assert_equal(state.mapOfInt32["three"], 2000);
 
+      assert_equal(mapOfSchemasOnAddCount, 3);
+      assert_equal(mapOfNumbersOnAddCount, 3);
+      assert_equal(mapOfStringsOnAddCount, 3);
+      assert_equal(mapOfInt32OnAddCount, 3);
+
       local delete_bytes = { 255, 2, 64, 1, 64, 2, 255, 1, 64, 1, 64, 2, 255, 3, 64, 1, 64, 2, 255, 4, 64, 1, 64, 2 }
       decoder:decode(delete_bytes)
 
@@ -195,6 +195,11 @@ return function()
       assert_equal(state.mapOfNumbers:length(), 1);
       assert_equal(state.mapOfStrings:length(), 1);
       assert_equal(state.mapOfInt32:length(), 1);
+
+      assert_equal(mapOfSchemasOnRemoveCount, 2);
+      assert_equal(mapOfNumbersOnRemoveCount, 2);
+      assert_equal(mapOfStringsOnRemoveCount, 2);
+      assert_equal(mapOfInt32OnRemoveCount, 2);
 
       state:to_raw() -- to_raw() should not throw any errors
     end)

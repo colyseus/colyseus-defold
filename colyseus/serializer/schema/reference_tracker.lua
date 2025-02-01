@@ -88,6 +88,7 @@ function reference_tracker:garbage_collection()
 
       self.refs[ref_id] = nil
       self.ref_counts[ref_id] = nil
+      self.callbacks[ref_id] = nil
     end
   end
 
@@ -98,6 +99,7 @@ end
 function reference_tracker:clear()
   self.refs = {};
   self.ref_counts = {};
+  self.callbacks = {};
   self.deleted_refs = {};
 end
 

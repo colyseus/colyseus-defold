@@ -10,7 +10,8 @@ exports.remove_child_refs = function(collection, changes, refs)
       table.insert(changes, {
           __refid = collection.__refid,
           op = OPERATION.DELETE,
-          field = key,
+          dynamic_index = key,
+          -- field = key,
           value = nil,
           previous_value = item
       })
