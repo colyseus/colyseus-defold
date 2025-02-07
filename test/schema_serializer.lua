@@ -37,6 +37,7 @@ return function()
 
       local state = PrimitiveTypes:new()
       local decoder = Decoder:new(state)
+      local callbacks = get_callbacks(decoder)
       decoder:decode(bytes)
 
       assert_equal(state.int8, -128);
@@ -64,6 +65,12 @@ return function()
       assert_equal(state.str, "Hello world");
       assert_equal(state.boolean, true);
 
+      local immediate_listen_count = 0
+      callbacks:listen("int8", function(value)
+        immediate_listen_count = immediate_listen_count + 1
+      end)
+      assert_equal(1, immediate_listen_count);
+
       state:to_raw()  -- to_raw() should not throw any errors
     end)
 
@@ -88,12 +95,33 @@ return function()
 
       local state = ArraySchemaTypes:new()
       local decoder = Decoder:new(state)
-      -- state.arrayOfSchemas.OnAdd += (value, key) => Debug.Log("onAdd, arrayOfSchemas => " + key);
-      -- state.arrayOfNumbers.OnAdd += (value, key) => Debug.Log("onAdd, arrayOfNumbers => " + key);
-      -- state.arrayOfStrings.OnAdd += (value, key) => Debug.Log("onAdd, arrayOfStrings => " + key);
-      -- state.arrayOfInt32.OnAdd += (value, key) => Debug.Log("onAdd, arrayOfInt32 => " + key);
+
+      local callbacks = get_callbacks(decoder)
+
+      local arrayOfSchemasOnAdd = 0
+      local arrayOfNumbersOnAdd = 0
+      local arrayOfStringsOnAdd = 0
+      local arrayOfInt32OnAdd = 0
+      callbacks:on_add("arrayOfSchemas", function(value, key) arrayOfSchemasOnAdd = arrayOfSchemasOnAdd + 1 end)
+      callbacks:on_add("arrayOfNumbers", function(value, key) arrayOfNumbersOnAdd = arrayOfNumbersOnAdd + 1 end)
+      callbacks:on_add("arrayOfStrings", function(value, key) arrayOfStringsOnAdd = arrayOfStringsOnAdd + 1 end)
+      callbacks:on_add("arrayOfInt32", function(value, key) arrayOfInt32OnAdd = arrayOfInt32OnAdd + 1 end)
+
+      local arrayOfSchemasOnRemove = 0
+      local arrayOfNumbersOnRemove = 0
+      local arrayOfStringsOnRemove = 0
+      local arrayOfInt32OnRemove = 0
+      callbacks:on_remove("arrayOfSchemas", function(value, key) arrayOfSchemasOnRemove = arrayOfSchemasOnRemove + 1 end)
+      callbacks:on_remove("arrayOfNumbers", function(value, key) arrayOfNumbersOnRemove = arrayOfNumbersOnRemove + 1 end)
+      callbacks:on_remove("arrayOfStrings", function(value, key) arrayOfStringsOnRemove = arrayOfStringsOnRemove + 1 end)
+      callbacks:on_remove("arrayOfInt32", function(value, key) arrayOfInt32OnRemove = arrayOfInt32OnRemove + 1 end)
 
       decoder:decode(bytes)
+
+      assert_equal(arrayOfSchemasOnAdd, 2);
+      assert_equal(arrayOfNumbersOnAdd, 4);
+      assert_equal(arrayOfStringsOnAdd, 3);
+      assert_equal(arrayOfInt32OnAdd, 3);
 
       assert_equal(#state.arrayOfSchemas.items, 2);
       assert_equal(state.arrayOfSchemas[1].x, 100);
@@ -117,10 +145,6 @@ return function()
       assert_equal(state.arrayOfInt32[2], 3520);
       assert_equal(state.arrayOfInt32[3], -3000);
 
-      -- -- state.arrayOfSchemas.OnRemove += (value, key) => Debug.Log("onRemove, arrayOfSchemas => " + key);
-      -- -- state.arrayOfNumbers.OnRemove += (value, key) => Debug.Log("onRemove, arrayOfNumbers => " + key);
-      -- -- state.arrayOfStrings.OnRemove += (value, key) => Debug.Log("onRemove, arrayOfStrings => " + key);
-      -- -- state.arrayOfInt32.OnRemove += (value, key) => Debug.Log("onRemove, arrayOfInt32 => " + key);
       local pop_bytes = { 255, 1, 64, 1, 255, 2, 64, 3, 64, 2, 64, 1, 255, 4, 64, 2, 64, 1, 255, 3, 64, 2, 64, 1 }
       decoder:decode(pop_bytes)
 
@@ -128,6 +152,11 @@ return function()
       assert_equal(#state.arrayOfNumbers.items, 1);
       assert_equal(#state.arrayOfStrings.items, 1);
       assert_equal(#state.arrayOfInt32.items, 1);
+
+      assert_equal(arrayOfSchemasOnRemove, 1);
+      assert_equal(arrayOfNumbersOnRemove, 3);
+      assert_equal(arrayOfStringsOnRemove, 2);
+      assert_equal(arrayOfInt32OnRemove, 2);
 
       state:to_raw() -- to_raw() should not throw any errors
     end)

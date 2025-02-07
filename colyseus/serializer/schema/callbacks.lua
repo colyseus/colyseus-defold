@@ -60,7 +60,7 @@ end
 ---@param callback_or_field string|fun(value: any, previous_value: any)
 ---@param callback nil|fun(value: any, previous_value: any)
 ---@param immediate boolean|nil
-function Callbacks:listen(instance_or_field, callback_or_field, callback, immediate)
+function Callbacks:listen(instance_or_field, callback_or_field, callback)
   local instance = self.decoder.state
   local field_name = instance_or_field
 
@@ -70,6 +70,11 @@ function Callbacks:listen(instance_or_field, callback_or_field, callback, immedi
 
   else
     callback = callback_or_field
+  end
+
+  -- immediately trigger callback if field is already set
+  if instance[field_name] ~= nil then
+    callback(instance[field_name], nil)
   end
 
   return self:add_callback(instance.__refid, field_name, callback)
@@ -191,6 +196,10 @@ function Callbacks:add_callback_or_wait_collection_available(instance, field_nam
     end)
     return remove_callback
   else
+    -- immediately trigger callback for each item in the collection
+    instance[field_name]:each(function(value, key)
+      callback(value, key)
+    end)
     return _self:add_callback(instance[field_name].__refid, operation, callback)
   end
 end
