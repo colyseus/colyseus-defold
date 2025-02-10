@@ -12,6 +12,7 @@ return function()
   local StateV1 = require 'test.schema.BackwardsForwards.StateV1'
   local StateV2 = require 'test.schema.BackwardsForwards.StateV2'
   local InstanceSharingTypes = require 'test.schema.InstanceSharingTypes.State'
+  local CallbacksState = require 'test.schema.Callbacks.CallbacksState'
 
   describe("schema serializer", function()
 
@@ -359,6 +360,65 @@ return function()
       decoder:decode({ 255, 9, 10 });
       assert_equal(0, state.arrayOfPlayers:length());
       assert_equal(3, decoder.refs:count());
+    end)
+
+    it("Callbacks", function()
+      local state = CallbacksState:new()
+      local decoder = Decoder:new(state)
+      local callbacks = get_callbacks(decoder)
+
+      local on_listen_container = 0
+      local on_player_add = 0
+      local on_player_remove = 0
+      local on_item_add = 0
+      local on_item_remove = 0
+
+      callbacks:listen("container", function (container)
+        on_listen_container = on_listen_container + 1
+
+        callbacks:on_add(container, "playersMap", function(player, session_id)
+          on_player_add = on_player_add + 1
+
+          callbacks:on_add(player, "items", function (item, key)
+            on_item_add = on_item_add + 1
+          end)
+
+          callbacks:on_remove(player, "items", function (item, key)
+            on_item_remove = on_item_remove + 1
+          end)
+        end)
+
+        callbacks:on_remove(container, "playersMap", function (player, sessionId)
+          on_player_remove = on_player_remove + 1
+        end)
+      end)
+
+      -- (initial)
+      decoder:decode({ 128, 1, 255, 1, 128, 2, 255, 2 })
+
+      -- (1st decode)
+      print(".......... (1st decode)")
+      decoder:decode({ 255, 1, 255, 2, 128, 0, 163, 111, 110, 101, 3, 128, 1, 163, 116, 119, 111, 9, 255, 2, 255, 3, 128, 4, 129, 5, 255, 4, 128, 1, 129, 2, 130, 3, 255, 5, 128, 0, 166, 105, 116, 101, 109, 45, 49, 6, 128, 1, 166, 105, 116, 101, 109, 45, 50, 7, 128, 2, 166, 105, 116, 101, 109, 45, 51, 8, 255, 6, 128, 166, 73, 116, 101, 109, 32, 49, 129, 1, 255, 7, 128, 166, 73, 116, 101, 109, 32, 50, 129, 2, 255, 8, 128, 166, 73, 116, 101, 109, 32, 51, 129, 3, 255, 9, 128, 10, 129, 11, 255, 10, 128, 1, 129, 2, 130, 3, 255, 11, 128, 0, 166, 105, 116, 101, 109, 45, 49, 12, 128, 1, 166, 105, 116, 101, 109, 45, 50, 13, 128, 2, 166, 105, 116, 101, 109, 45, 51, 14, 255, 12, 128, 166, 73, 116, 101, 109, 32, 49, 129, 1, 255, 13, 128, 166, 73, 116, 101, 109, 32, 50, 129, 2, 255, 14, 128, 166, 73, 116, 101, 109, 32, 51, 129, 3 })
+
+      assert_equal(1, on_listen_container);
+      assert_equal(2, on_player_add);
+      assert_equal(6, on_item_add);
+
+
+      -- (2nd decode)
+      print(".......... (2nd decode)")
+      decoder:decode({ 255, 1, 255, 2, 64, 1, 128, 2, 165, 116, 104, 114, 101, 101, 16, 255, 2, 255, 3, 255, 4, 255, 5, 64, 0, 64, 1, 128, 3, 166, 105, 116, 101, 109, 45, 52, 15, 255, 8, 255, 5, 255, 5, 255, 15, 128, 166, 73, 116, 101, 109, 32, 52, 129, 4, 255, 2, 255, 16, 128, 17, 129, 18, 255, 17, 128, 1, 129, 2, 130, 3, 255, 18, 128, 0, 166, 105, 116, 101, 109, 45, 49, 19, 128, 1, 166, 105, 116, 101, 109, 45, 50, 20, 128, 2, 166, 105, 116, 101, 109, 45, 51, 21, 255, 19, 128, 166, 73, 116, 101, 109, 32, 49, 129, 1, 255, 20, 128, 166, 73, 116, 101, 109, 32, 50, 129, 2, 255, 21, 128, 166, 73, 116, 101, 109, 32, 51, 129, 3 })
+
+      -- (new container)
+      print(".......... (new container)")
+      decoder:decode({ 128, 22, 255, 2, 255, 5, 255, 5, 255, 2, 255, 0, 255, 22, 128, 23, 255, 23, 128, 0, 164, 108, 97, 115, 116, 24, 255, 24, 128, 25, 129, 26, 255, 25, 128, 10, 129, 10, 130, 10, 255, 26, 128, 0, 163, 111, 110, 101, 27, 255, 27, 128, 166, 73, 116, 101, 109, 32, 49, 129, 1 })
+
+      assert_equal(2, on_listen_container);
+      assert_equal(11, on_item_add);
+      assert_equal(2, on_item_remove);
+      assert_equal(4, on_player_add);
+      assert_equal(1, on_player_remove);
+
     end)
 
   end)

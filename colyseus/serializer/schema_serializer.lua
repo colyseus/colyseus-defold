@@ -5,11 +5,12 @@ local Decoder = require('colyseus.serializer.schema.decoder')
 ---@class schema_serializer
 ---@field decoder Decoder
 local schema_serializer = {}
+schema_serializer.__index = schema_serializer
 
+---@return schema_serializer
 function schema_serializer:new ()
   local instance = { decoder = nil, }
-  setmetatable(instance, self)
-  self.__index = self
+  setmetatable(instance, schema_serializer)
   return instance
 end
 

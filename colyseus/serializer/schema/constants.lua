@@ -21,6 +21,11 @@ M.OPERATION = {
 
   -- Collection Operations
   CLEAR = 10,
+
+  -- ArraySchema operations
+  REVERSE = 15,
+  DELETE_BY_REFID = 33,
+  ADD_BY_REFID = 129,
 }
 -- END SPEC + OPERATION --
 

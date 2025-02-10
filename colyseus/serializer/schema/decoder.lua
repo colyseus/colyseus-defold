@@ -38,7 +38,6 @@ Decoder.__index = Decoder
 ---@param context type_context|nil
 ---@return Decoder
 function Decoder:new(state, context)
-  state.__refid = 0
   local instance = {
     state = state,
     context = context or type_context:new(),
@@ -46,15 +45,19 @@ function Decoder:new(state, context)
     _trigger_changes = function() end
 	}
   setmetatable(instance, Decoder)
+
+  -- set root state refid
+  state.__refid = 1
+  instance.refs:set(state.__refid, state)
+
 	return instance
 end
 
 function Decoder:decode(bytes, it)
     if it == nil then it = { offset = 1 } end
 
-    local ref_id = 0
+    local ref_id = 1
     local ref = self.state
-    self.refs:set(ref_id, ref)
 
     local all_changes = {}
 

@@ -4,6 +4,7 @@ local OPERATION = constants.OPERATION;
 
 ---@class Callbacks
 ---@field private decoder Decoder
+---@field private is_triggering boolean
 Callbacks = {}
 Callbacks.__index = Callbacks
 
@@ -11,12 +12,16 @@ Callbacks.__index = Callbacks
 ---@return Callbacks
 function Callbacks:new(decoder)
 	local instance = {
-    decoder = decoder
+    decoder = decoder,
+    is_triggering = false,
   }
   setmetatable(instance, Callbacks)
   -- assign decoder's _trigger_changes to this instance.
-  decoder._trigger_changes = instance._trigger_changes
-	return instance
+  -- this is required to preserve "self" context when calling Callbacks:_trigger_changes.
+  decoder._trigger_changes = function (self, changes, refs)
+    instance:_trigger_changes(changes, refs)
+  end
+  return instance
 end
 
 ---@param instance Schema
@@ -29,16 +34,19 @@ end
 ---@param instance_or_field Schema|string
 ---@param callback_or_field string|fun(value: any, key: any)
 ---@param callback nil|fun(value: any, key: any)
-function Callbacks:on_add(instance_or_field, callback_or_field, callback)
+function Callbacks:on_add(instance_or_field, callback_or_field, immediate_or_callback, immediate)
   local instance = self.decoder.state
   local field_name = instance_or_field
+  local callback = callback_or_field
   if type(instance_or_field) ~= "string" then
     instance = instance_or_field
     field_name = callback_or_field
+    callback = immediate_or_callback
   else
-    callback = callback_or_field
+    immediate = immediate_or_callback
   end
-  return self:add_callback_or_wait_collection_available(instance, field_name, OPERATION.ADD, callback)
+  immediate = ((immediate == nil and true) or immediate)
+  return self:add_callback_or_wait_collection_available(instance, field_name, OPERATION.ADD, callback, immediate)
 end
 
 ---@param instance_or_field Schema|string
@@ -58,22 +66,25 @@ end
 
 ---@param instance_or_field Schema|string
 ---@param callback_or_field string|fun(value: any, previous_value: any)
----@param callback nil|fun(value: any, previous_value: any)
+---@param immediate_or_callback nil|fun(value: any, previous_value: any)
 ---@param immediate boolean|nil
-function Callbacks:listen(instance_or_field, callback_or_field, callback)
+function Callbacks:listen(instance_or_field, callback_or_field, immediate_or_callback, immediate)
   local instance = self.decoder.state
   local field_name = instance_or_field
+  local callback = callback_or_field
 
+  -- instance provided as first argument...
   if type(instance_or_field) ~= "string" then
     instance = instance_or_field
     field_name = callback_or_field
-
+    callback = immediate_or_callback
   else
-    callback = callback_or_field
+    immediate = immediate_or_callback
   end
 
   -- immediately trigger callback if field is already set
-  if instance[field_name] ~= nil then
+  immediate = ((immediate == nil and true) or immediate) and self.is_triggering == false
+  if immediate == true and instance[field_name] ~= nil then
     callback(instance[field_name], nil)
   end
 
@@ -126,11 +137,14 @@ function Callbacks:_trigger_changes(changes, refs)
           end
         end
 
+        -- trigger :listen() callbacks
         local field_callbacks = callbacks[change.field]
         if field_callbacks ~= nil then
+          self.is_triggering = true
           for _, callback in pairs(field_callbacks) do
             callback(change.value, change.previous_value)
           end
+          self.is_triggering = false
         end
 
       else
@@ -149,9 +163,11 @@ function Callbacks:_trigger_changes(changes, refs)
             -- Handle DELETE_AND_ADD operations
             local add_callbacks = callbacks[OPERATION.ADD]
             if add_callbacks ~= nil then
+              self.is_triggering = true
               for _, callback in pairs(add_callbacks) do
                 callback(change.value, change.dynamic_index or change.field)
               end
+              self.is_triggering = false
             end
           end
 
@@ -159,9 +175,11 @@ function Callbacks:_trigger_changes(changes, refs)
           -- trigger "on_add"
           local add_callbacks = callbacks[OPERATION.ADD]
           if add_callbacks ~= nil then
+            self.is_triggering = true
             for _, callback in pairs(add_callbacks) do
               callback(change.value, change.dynamic_index)
             end
+            self.is_triggering = false
           end
 
         end
@@ -186,7 +204,7 @@ function Callbacks:_trigger_changes(changes, refs)
 end
 
 ---@package
-function Callbacks:add_callback_or_wait_collection_available(instance, field_name, operation, callback)
+function Callbacks:add_callback_or_wait_collection_available(instance, field_name, operation, callback, immediate)
   local _self = self
   local remove_handler = function() end
   local remove_callback = function() remove_handler() end
@@ -197,9 +215,11 @@ function Callbacks:add_callback_or_wait_collection_available(instance, field_nam
     return remove_callback
   else
     -- immediately trigger callback for each item in the collection
-    instance[field_name]:each(function(value, key)
-      callback(value, key)
-    end)
+    if operation == OPERATION.ADD and immediate and self.is_triggering == false then
+      instance[field_name]:each(function(value, key)
+        callback(value, key)
+      end)
+    end
     return _self:add_callback(instance[field_name].__refid, operation, callback)
   end
 end
