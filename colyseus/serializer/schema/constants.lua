@@ -6,6 +6,8 @@ M.SPEC = {
     TYPE_ID = 213,
 }
 
+M.SCHEMA_MISMATCH = -1;
+
 M.OPERATION = {
   -- ADD new structure/primitive
   ADD = 128,

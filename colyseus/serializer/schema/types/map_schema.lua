@@ -7,6 +7,7 @@ local utils = require("colyseus.serializer.schema.utils")
 --
 
 ---@class MapSchema
+---@field __refid integer
 ---@field private items table
 ---@field private dynamic_indexes table
 ---@field private inexes table

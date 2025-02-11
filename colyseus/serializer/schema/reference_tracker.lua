@@ -32,6 +32,10 @@ function reference_tracker:set(ref_id, ref, increment_count)
   if increment_count == nil or increment_count == true then
     self.ref_counts[ref_id] = (self.ref_counts[ref_id] or 0) + 1
   end
+
+  if self.deleted_refs[ref_id] ~= nil then
+    self.deleted_refs[ref_id] = nil
+  end
 end
 
 function reference_tracker:remove(ref_id)
