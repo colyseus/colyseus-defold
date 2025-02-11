@@ -20,6 +20,7 @@ M.OPERATION = {
 
   -- DELETE field, followed by an ADD
   DELETE_AND_ADD = 192,
+  DELETE_AND_MOVE = 96, -- ArraySchema
 
   -- Collection Operations
   CLEAR = 10,
