@@ -302,25 +302,31 @@ function Decoder:decode_value(decoder, operation, ref, field_index, field_type, 
     local __refid = decode.number(bytes, it) + 1
     value = decoder.refs:get(__refid)
 
-    if operation ~= OPERATION.REPLACE then
-      local concrete_child_type = decoder:get_schema_type(bytes, it, field_type);
+    if previous_value ~= nil then
+      local previous_refid = previous_value.__refid
+      if (
+        previous_refid > 0 and
+        previous_refid ~= __refid and
+        -- FIXME: we may need to check for REPLACE operation as well
+        bit.band(operation, OPERATION.DELETE) == OPERATION.DELETE
+      ) then
+        decoder.refs:remove(previous_refid)
+      end
+    end
 
+    if bit.band(operation, OPERATION.ADD) == OPERATION.ADD then
       if value == nil then
+        local concrete_child_type = decoder:get_schema_type(bytes, it, field_type);
         value = concrete_child_type:new()
         value.__refid = __refid
-
-        if previous_value ~= nil then
-          if (
-                previous_value.__refid and
-                previous_value.__refid ~= __refid
-              ) then
-            decoder.refs:remove(previous_value.__refid);
-          end
-        end
       end
 
-      decoder.refs:set(__refid, value, (value ~= previous_value));
+      decoder.refs:set(__refid, value, (
+        value ~= previous_value or
+        (operation == OPERATION.DELETE_AND_ADD and value == previous_value)
+      ));
     end
+
   elseif type(field_type) == "string" then
     --
     -- primitive value!
