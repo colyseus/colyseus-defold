@@ -315,8 +315,8 @@ function Decoder:decode_value(decoder, operation, ref, field_index, field_type, 
     end
 
     if bit.band(operation, OPERATION.ADD) == OPERATION.ADD then
+      local concrete_child_type = decoder:get_schema_type(bytes, it, field_type);
       if value == nil then
-        local concrete_child_type = decoder:get_schema_type(bytes, it, field_type);
         value = concrete_child_type:new()
         value.__refid = __refid
       end
