@@ -9,7 +9,7 @@ local http = require "test.http"
 function init(self)
 
   deftest.add(schema_serializer)
-  -- deftest.add(client)
+  deftest.add(client)
   -- deftest.add(auth)
   -- deftest.add(http)
 

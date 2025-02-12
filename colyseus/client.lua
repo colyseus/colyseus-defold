@@ -13,15 +13,6 @@ local info = sys.get_sys_info()
 local Client = {}
 Client.__index = Client
 
----@param endpoint_or_settings string|{hostname:string, port:number, use_ssl:boolean}
----@return Client
-function Client.new (endpoint_or_settings)
-  local instance = EventEmitter:new()
-  setmetatable(instance, Client)
-  instance:init(endpoint_or_settings)
-  return instance
-end
-
 ---@private
 function Client:init(endpoint_or_settings)
   if type(endpoint_or_settings) == "string" then
@@ -184,4 +175,11 @@ function Client:consume_seat_reservation(response, callback, reuse_room_instance
   target_room:once('join', on_join)
 end
 
-return Client
+---@param endpoint_or_settings string|{hostname:string, port:number, use_ssl:boolean}
+---@return Client
+return function (endpoint_or_settings)
+  local instance = EventEmitter:new()
+  setmetatable(instance, Client)
+  instance:init(endpoint_or_settings)
+  return instance
+end
