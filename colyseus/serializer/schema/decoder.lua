@@ -310,9 +310,6 @@ function Decoder:decode_value(decoder, operation, ref, field_index, field_type, 
         value.__refid = __refid
 
         if previous_value ~= nil then
-          -- copy previous callbacks
-          value.__callbacks = previous_value.__callbacks
-
           if (
                 previous_value.__refid and
                 previous_value.__refid ~= __refid
@@ -344,9 +341,6 @@ function Decoder:decode_value(decoder, operation, ref, field_index, field_type, 
     value._child_type = field_type[collection_type_id]
 
     if previous_value ~= nil then
-      -- copy callbacks
-      value.__callbacks = previous_value.__callbacks
-
       if previous_value.__refid ~= nil and previous_value.__refid ~= __refid then
         decoder.refs:remove(previous_value.__refid)
 
