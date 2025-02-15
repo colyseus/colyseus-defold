@@ -43,12 +43,6 @@ function Client:init(endpoint_or_settings)
 end
 
 ---@param room_name string
----@param callback fun(err:table, rooms:table)
-function Client:get_available_rooms(room_name, callback)
-  self.http:request('GET', "matchmake/" .. room_name, callback)
-end
-
----@param room_name string
 ---@param options_or_callback nil|table|fun(err:table, room:Room)
 ---@param callback nil|fun(err:table, room:Room)
 function Client:join_or_create(room_name, options_or_callback, callback)

@@ -13,18 +13,6 @@ function init(self)
     -- Remove this function if not needed
     client = Colyseus.new("ws://localhost:2567")
 
-    -- get all available rooms at every 3 seconds (example)
-    timer.delay(3, true, function()
-        client:get_available_rooms("", function(err, rooms)
-            if err then
-                print("get_available_rooms error =>")
-                pprint(err)
-            end
-            print("available rooms =>")
-            pprint(rooms)
-        end)
-    end)
-
     -- join "demo" room
     client:join_or_create("my_room", nil, function(err, _room)
         if (err) then

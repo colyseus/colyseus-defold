@@ -2,11 +2,10 @@ import { Room, Client } from "colyseus";
 import { Message, MyRoomState, Player } from "./schema/MyRoomState";
 
 export class MyRoom extends Room<MyRoomState> {
+  state = new MyRoomState();
 
   onCreate (options: any) {
-    this.setState(new MyRoomState());
 
-    // For "get_available_rooms"
     this.setMetadata({
       bool: true,
       str: "string",
@@ -44,7 +43,7 @@ export class MyRoom extends Room<MyRoomState> {
     console.log("ChatRoom created!", options);
   }
 
-  static onAuth(token, req) {
+  static onAuth(token) {
     console.log("onAuth => ", {token});
     return { userdata: 123 };
   }
