@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/discord/525739117951320081.svg?style=for-the-badge&colorB=7581dc&logo=discord&logoColor=white">
   </a>
   <h3>
-     Multiplayer Game Client for <a href="https://www.defold.com/">Defold Engine</a>. <br/><a href="https://docs.colyseus.io/getting-started/defold-client/">View documentation</a>
+     Multiplayer Game Client for <a href="https://www.defold.com/">Defold Engine</a>. <br/><a href="https://docs.colyseus.io/getting-started/defold">View documentation</a>
   </h3>
 </div>
 
