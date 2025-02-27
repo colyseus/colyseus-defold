@@ -196,6 +196,15 @@ return function()
       callbacks:on_remove("mapOfStrings", function (value, key) mapOfStringsOnRemoveCount = mapOfStringsOnRemoveCount + 1 end)
       callbacks:on_remove("mapOfInt32", function (value, key) mapOfInt32OnRemoveCount = mapOfInt32OnRemoveCount + 1 end)
 
+      local mapOfSchemasOnChangeCount = 0
+      local mapOfNumbersOnChangeCount = 0
+      local mapOfStringsOnChangeCount = 0
+      local mapOfInt32OnChangeCount = 0
+      callbacks:on_change("mapOfSchemas", function (value, key) mapOfSchemasOnChangeCount = mapOfSchemasOnChangeCount + 1 end)
+      callbacks:on_change("mapOfNumbers", function (value, key) mapOfNumbersOnChangeCount = mapOfNumbersOnChangeCount + 1 end)
+      callbacks:on_change("mapOfStrings", function (value, key) mapOfStringsOnChangeCount = mapOfStringsOnChangeCount + 1 end)
+      callbacks:on_change("mapOfInt32", function (value, key) mapOfInt32OnChangeCount = mapOfInt32OnChangeCount + 1 end)
+
       decoder:decode(bytes)
 
       assert_equal(state.mapOfSchemas:length(), 3);
@@ -226,6 +235,11 @@ return function()
       assert_equal(mapOfStringsOnAddCount, 3);
       assert_equal(mapOfInt32OnAddCount, 3);
 
+      assert_equal(mapOfSchemasOnChangeCount, 3);
+      assert_equal(mapOfNumbersOnChangeCount, 3);
+      assert_equal(mapOfStringsOnChangeCount, 3);
+      assert_equal(mapOfInt32OnChangeCount, 3);
+
       local delete_bytes = { 255, 2, 64, 1, 64, 2, 255, 1, 64, 1, 64, 2, 255, 3, 64, 1, 64, 2, 255, 4, 64, 1, 64, 2 }
       decoder:decode(delete_bytes)
 
@@ -238,6 +252,11 @@ return function()
       assert_equal(mapOfNumbersOnRemoveCount, 2);
       assert_equal(mapOfStringsOnRemoveCount, 2);
       assert_equal(mapOfInt32OnRemoveCount, 2);
+
+      assert_equal(mapOfSchemasOnChangeCount, 5);
+      assert_equal(mapOfNumbersOnChangeCount, 5);
+      assert_equal(mapOfStringsOnChangeCount, 5);
+      assert_equal(mapOfInt32OnChangeCount, 5);
 
       state:to_raw() -- to_raw() should not throw any errors
     end)
@@ -378,8 +397,10 @@ return function()
       local on_listen_container = 0
       local on_player_add = 0
       local on_player_remove = 0
+      local on_player_change = 0
       local on_item_add = 0
       local on_item_remove = 0
+      local on_item_change = 0
 
       callbacks:listen("container", function (container)
         on_listen_container = on_listen_container + 1
@@ -391,9 +412,17 @@ return function()
             on_item_add = on_item_add + 1
           end)
 
+          callbacks:on_change(player, "items", function (item, key)
+            on_item_change = on_item_change + 1
+          end)
+
           callbacks:on_remove(player, "items", function (item, key)
             on_item_remove = on_item_remove + 1
           end)
+        end)
+
+        callbacks:on_change(container, "playersMap", function (player, sessionId)
+          on_player_change = on_player_change + 1
         end)
 
         callbacks:on_remove(container, "playersMap", function (player, sessionId)
@@ -409,7 +438,9 @@ return function()
 
       assert_equal(1, on_listen_container);
       assert_equal(2, on_player_add);
+      assert_equal(2, on_player_change);
       assert_equal(6, on_item_add);
+      assert_equal(6, on_item_change);
 
 
       -- (2nd decode)
@@ -421,7 +452,10 @@ return function()
       assert_equal(2, on_listen_container);
       assert_equal(11, on_item_add);
       assert_equal(2, on_item_remove);
+      assert_equal(13, on_item_change);
+
       assert_equal(4, on_player_add);
+      assert_equal(5, on_player_change);
       assert_equal(1, on_player_remove);
 
     end)
