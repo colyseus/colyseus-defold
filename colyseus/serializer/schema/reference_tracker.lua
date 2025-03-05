@@ -26,10 +26,10 @@ function reference_tracker:get(ref_id)
   return self.refs[ref_id]
 end
 
-function reference_tracker:set(ref_id, ref, increment_count)
+function reference_tracker:add(ref_id, ref, increment_count)
   self.refs[ref_id] = ref
 
-  if increment_count == nil or increment_count == true then
+  if increment_count == true then
     self.ref_counts[ref_id] = (self.ref_counts[ref_id] or 0) + 1
   end
 
@@ -39,12 +39,27 @@ function reference_tracker:set(ref_id, ref, increment_count)
 end
 
 function reference_tracker:remove(ref_id)
-  self.ref_counts[ref_id] = self.ref_counts[ref_id] - 1;
+  local ref_count = self.ref_counts[ref_id]
 
-  local added_to_deleted_refs = (self.deleted_refs[ref_id] == nil)
-  self.deleted_refs[ref_id] = true
+  -- skip if ref_id is not being tracked
+  if ref_count == nil then
+    print("trying to remove ref_id that doesn't exist: " .. tostring(ref_id))
+    return false
+  end
 
-  return added_to_deleted_refs
+  if ref_count == 0 then
+    print("trying to remove ref_id with 0 ref_count: " .. tostring(ref_id))
+    return false
+  end
+
+  self.ref_counts[ref_id] = ref_count - 1;
+
+  if self.ref_counts[ref_id] <= 0 then
+    self.deleted_refs[ref_id] = true
+    return true
+  end
+
+  return false
 end
 
 function reference_tracker:count()
@@ -72,20 +87,20 @@ function reference_tracker:garbage_collection()
       --
       if ref._schema ~= nil then
         for field, field_type in pairs(ref._schema) do
-          if (
-            type(field_type) ~= "string" and
-            ref[field] ~= nil and
-            ref[field].__refid ~= nil and
-            self:remove(ref[field].__refid)
-          ) then
-            table.insert(deleted_refs, ref[field].__refid)
+          local child_ref_id = type(field_type) ~= "string" and ref[field] ~= nil and ref[field].__refid
+          if (child_ref_id ~= nil and self.deleted_refs[child_ref_id] == nil and self:remove(child_ref_id)) then
+            table.insert(deleted_refs, child_ref_id)
           end
         end
 
       elseif ref._child_type['new'] ~= nil then
         ref:each(function(value)
-          if self:remove(value.__refid) then
-            table.insert(deleted_refs, value.__refid)
+          local child_ref_id = value.__refid
+          if (
+            self.deleted_refs[child_ref_id] == nil and
+            self:remove(child_ref_id)
+          ) then
+            table.insert(deleted_refs, child_ref_id)
           end
         end)
       end

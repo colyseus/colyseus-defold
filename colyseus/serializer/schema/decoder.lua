@@ -203,7 +203,7 @@ function Decoder:new(state, context)
 
   -- set root state refid
   state.__refid = 1
-  instance.refs:set(state.__refid, state)
+  instance.refs:add(state.__refid, state, true)
 
 	return instance
 end
@@ -279,13 +279,13 @@ function Decoder:decode_value(decoder, operation, ref, field_index, field_type, 
   -- DELETE operations
   --
   if bit.band(operation, OPERATION.DELETE) == OPERATION.DELETE then
-    if operation ~= OPERATION.DELETE_AND_ADD then
-      ref:delete_by_index(field_index)
-    end
-
     -- Flag `ref_id` for garbage collection.
     if type(previous_value) == "table" and previous_value.__refid ~= nil then
       decoder.refs:remove(previous_value.__refid)
+    end
+
+    if operation ~= OPERATION.DELETE_AND_ADD then
+      ref:delete_by_index(field_index)
     end
 
     value = nil
@@ -302,18 +302,6 @@ function Decoder:decode_value(decoder, operation, ref, field_index, field_type, 
     local __refid = decode.number(bytes, it) + 1
     value = decoder.refs:get(__refid)
 
-    if previous_value ~= nil then
-      local previous_refid = previous_value.__refid
-      if (
-        previous_refid > 0 and
-        previous_refid ~= __refid and
-        -- FIXME: we may need to check for REPLACE operation as well
-        bit.band(operation, OPERATION.DELETE) == OPERATION.DELETE
-      ) then
-        decoder.refs:remove(previous_refid)
-      end
-    end
-
     if bit.band(operation, OPERATION.ADD) == OPERATION.ADD then
       local concrete_child_type = decoder:get_schema_type(bytes, it, field_type);
       if value == nil then
@@ -321,7 +309,7 @@ function Decoder:decode_value(decoder, operation, ref, field_index, field_type, 
         value.__refid = __refid
       end
 
-      decoder.refs:set(__refid, value, (
+      decoder.refs:add(__refid, value, (
         value ~= previous_value or
         (operation == OPERATION.DELETE_AND_ADD and value == previous_value)
       ));
@@ -348,12 +336,15 @@ function Decoder:decode_value(decoder, operation, ref, field_index, field_type, 
 
     if previous_value ~= nil then
       if previous_value.__refid ~= nil and previous_value.__refid ~= __refid then
-        decoder.refs:remove(previous_value.__refid)
 
         --
         -- Trigger on_remove() if structure has been replaced.
         --
         previous_value:each(function(val, key)
+          if type(val) == "table" and val.__refid ~= nil then
+            decoder.refs:remove(val.__refid)
+          end
+
           table.insert(all_changes, {
             __refid = previous_value.__refid,
             op = OPERATION.DELETE,
@@ -365,7 +356,10 @@ function Decoder:decode_value(decoder, operation, ref, field_index, field_type, 
       end
     end
 
-    decoder.refs:set(__refid, value, (value_ref ~= previous_value))
+    decoder.refs:add(__refid, value, (
+      value_ref ~= previous_value or
+      (operation == OPERATION.DELETE_AND_ADD and value_ref == previous_value)
+    ))
   end
 
   return value, previous_value

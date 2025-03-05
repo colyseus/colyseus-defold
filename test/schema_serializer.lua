@@ -355,18 +355,18 @@ return function()
       local state = InstanceSharingTypes:new()
       local decoder = Decoder:new(state)
 
-      decoder:decode({ 130, 1, 131, 2, 128, 3, 129, 3, 255, 1, 255, 2, 255, 3, 128, 4, 255, 3, 128, 4, 255, 4, 128, 10, 129, 10, 255, 4, 128, 10, 129, 10 });
+      decoder:decode({ 130, 1, 131, 2, 128, 3, 129, 3, 255, 3, 128, 4, 255, 4, 128, 10, 129, 10 });
       assert_equal(state.player1, state.player2);
       assert_equal(state.player1.position, state.player2.position);
       assert_equal(decoder.refs.ref_counts[state.player1.__refid], 2);
       assert_equal(5, decoder.refs:count());
 
-      decoder:decode({ 130, 1, 131, 2, 64, 65 });
+      decoder:decode({ 64, 65, 255, 0, 64, 65 });
       assert_equal(nil, state.player1);
       assert_equal(nil, state.player2);
       assert_equal(3, decoder.refs:count());
 
-      decoder:decode({ 255, 1, 128, 0, 5, 128, 1, 5, 128, 2, 5, 128, 3, 6, 255, 5, 128, 7, 255, 6, 128, 8, 255, 7, 128, 10, 129, 10, 255, 8, 128, 10, 129, 10 });
+      decoder:decode({ 255, 1, 128, 0, 5, 128, 1, 5, 128, 2, 5, 128, 3, 7, 255, 5, 128, 6, 255, 6, 128, 10, 129, 10, 255, 7, 128, 8, 255, 8, 128, 10, 129, 10 });
       assert_equal(state.arrayOfPlayers[1], state.arrayOfPlayers[2]);
       assert_equal(state.arrayOfPlayers[2], state.arrayOfPlayers[3]);
       assert_not_equal(state.arrayOfPlayers[3], state.arrayOfPlayers[4]);
@@ -378,7 +378,7 @@ return function()
       local previous_array_schema__refid = state.arrayOfPlayers.__refid;
 
       -- Replacing ArraySchema
-      decoder:decode({ 130, 9, 255, 9, 128, 0, 10, 255, 10, 128, 11, 255, 11, 128, 10, 129, 20 });
+      decoder:decode({ 194, 9, 255, 9, 128, 0, 10, 255, 10, 128, 11, 255, 11, 128, 10, 129, 20 });
       assert_equal(false, decoder.refs:has(previous_array_schema__refid));
       assert_equal(1, state.arrayOfPlayers:length());
       assert_equal(5, decoder.refs:count());
