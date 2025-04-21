@@ -77,6 +77,10 @@ end
 function HTTP:_get_ws_endpoint(room, query_params)
   query_params = query_params or {}
 
+  if self.auth_token ~= nil and self.auth_token ~= "" then
+    query_params["_authToken"] = self.auth_token
+  end
+
   local params = {}
   for k, v in pairs(query_params) do
     table.insert(params, k .. "=" .. tostring(v))
