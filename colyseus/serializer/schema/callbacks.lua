@@ -179,7 +179,7 @@ function Callbacks:_trigger_changes(changes, refs)
             end
           end
 
-        elseif bit.band(change.op, OPERATION.ADD) == OPERATION.ADD and change.previous_value == nil then
+        elseif bit.band(change.op, OPERATION.ADD) == OPERATION.ADD and change.previous_value ~= change.value then
           -- trigger "on_add"
           local add_callbacks = callbacks[OPERATION.ADD]
           if add_callbacks ~= nil then
