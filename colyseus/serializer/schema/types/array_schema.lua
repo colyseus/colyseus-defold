@@ -133,8 +133,6 @@ end
 ---@package
 function ArraySchema:__on_decode_end()
   local new_items = {}
-  print("ArraySchema:__on_decode_end()")
-  pprint(self.items)
   -- filter out nil values
   for i, v in ipairs(self.items) do
     if v ~= nil then
