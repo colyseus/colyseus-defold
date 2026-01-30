@@ -1,10 +1,10 @@
 import config from "@colyseus/tools";
 
-import { WebSocketTransport } from "@colyseus/ws-transport";
+// import { WebSocketTransport } from "@colyseus/ws-transport";
 import { monitor } from "@colyseus/monitor";
 
-import { RedisDriver } from "@colyseus/redis-driver";
-import { RedisPresence } from "@colyseus/redis-presence";
+// import { RedisDriver } from "@colyseus/redis-driver";
+// import { RedisPresence } from "@colyseus/redis-presence";
 import { playground } from "@colyseus/playground";
 
 /**
@@ -12,16 +12,17 @@ import { playground } from "@colyseus/playground";
  */
 import { MyRoom } from "./rooms/MyRoom";
 import { auth } from "@colyseus/auth";
+
 import "./config/auth";
 
 export default config({
-    options: {
-        devMode: true,
-        driver: new RedisDriver(),
-        presence: new RedisPresence(),
-    },
+    // options: {
+    //     devMode: true,
+    //     driver: new RedisDriver(),
+    //     presence: new RedisPresence(),
+    // },
 
-    initializeTransport: (options) => new WebSocketTransport(options),
+    // initializeTransport: (options) => new WebSocketTransport(options),
 
     initializeGameServer: (gameServer) => {
         /**
@@ -35,8 +36,8 @@ export default config({
         /**
          * Bind your custom express routes here:
          */
-        app.get("/", (req, res) => {
-            res.send(`Instance ID => ${process.env.NODE_APP_INSTANCE ?? "NONE"}`);
+        app.get("/test", (req, res) => {
+            res.send(`Instance ID => ${process.env.NODE_APP_INSTANCE ?? 0}`);
         });
 
         /**
@@ -44,11 +45,17 @@ export default config({
          * It is recommended to protect this route with a password.
          * Read more: https://docs.colyseus.io/tools/monitor/
          */
-        app.use("/colyseus", monitor());
+        app.use("/monitor", monitor());
 
+        /**
+         * Bind @colyseus/auth
+         */
         app.use(auth.prefix, auth.routes());
 
-        app.use("/playground", playground);
+        /**
+         * Bind @colyseus/playground
+         */
+        app.use("/", playground());
     },
 
     beforeListen: () => {
