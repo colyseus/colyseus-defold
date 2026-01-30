@@ -89,9 +89,13 @@ function HTTP:_get_ws_endpoint(room, query_params)
   -- build request endpoint
   local protocol = (self.client.settings.use_ssl and "wss") or "ws"
   local port = ((self.client.settings.port ~= 80 and self.client.settings.port ~= 443) and ":" .. self.client.settings.port) or ""
-  local public_address = (room.publicAddress) or self.client.settings.hostname .. port
+  local public_address = (room ~= nil and room.publicAddress) or self.client.settings.hostname .. port
 
-  return protocol .. "://" .. public_address .. "/" .. room.processId .. "/" .. room.roomId .. "?" .. table.concat(params, "&")
+  if room ~= nil then
+    return protocol .. "://" .. public_address .. "/" .. room.processId .. "/" .. room.roomId .. "?" .. table.concat(params, "&")
+  else
+    return protocol .. "://" .. public_address .. "/" .. "?" .. table.concat(params, "&")
+  end
 end
 
 ---@private

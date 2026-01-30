@@ -15,15 +15,16 @@ return {
 
   ROOM_DATA_SCHEMA = 16,
   ROOM_DATA_BYTES = 17,
+  PING = 18,
 
-  -- Match-making related (20~29)
-  ROOM_LIST = 20,
-
-  -- Generic messages (50~60)
-  BAD_REQUEST = 50,
-
-  WS_CLOSE_CODE = {
+  CLOSE_CODE = {
+    NORMAL_CLOSURE = 1000,
+    GOING_AWAY = 1001,
+    NO_STATUS_RECEIVED = 1005,
+    ABNORMAL_CLOSURE = 1006,
     CONSENTED = 4000,
-    DEVMODE_RESTART = 4010
+    SERVER_SHUTDOWN = 4001,
+    WITH_ERROR = 4002,
+    MAY_TRY_RECONNECT = 4010,
   }
 }

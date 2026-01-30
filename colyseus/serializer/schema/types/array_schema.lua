@@ -102,11 +102,11 @@ function ArraySchema:clone()
   })
 end
 
-function ArraySchema:to_raw()
+function ArraySchema:to_json()
   local map = {}
   self:each(function(value, key)
-    if type(value) == "table" and type(value['to_raw']) == "function" then
-      map[key] = value:to_raw()
+    if type(value) == "table" and type(value['to_json']) == "function" then
+      map[key] = value:to_json()
     else
       map[key] = value
     end
@@ -133,6 +133,8 @@ end
 ---@package
 function ArraySchema:__on_decode_end()
   local new_items = {}
+  print("ArraySchema:__on_decode_end()")
+  pprint(self.items)
   -- filter out nil values
   for i, v in ipairs(self.items) do
     if v ~= nil then

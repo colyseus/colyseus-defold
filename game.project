@@ -1,8 +1,10 @@
 [project]
-title = Colyseus Defold Client
-version = 0.16
-dependencies#0 = https://github.com/britzl/deftest/archive/refs/tags/2.8.0.zip
-dependencies#1 = https://github.com/defold/extension-websocket/archive/refs/tags/4.0.0.zip
+title = Colyseus Defold SDK
+version = 0.17
+dependencies#0 = https://github.com/defold/extension-websocket/archive/refs/tags/4.0.0.zip
+dependencies#1 = https://github.com/britzl/deftest/archive/refs/tags/2.8.0.zip
+dependencies#2 = https://github.com/Insality/druid/archive/refs/tags/1.1.6.zip
+dependencies#3 = https://github.com/Insality/defold-event/archive/refs/tags/12.zip
 
 [bootstrap]
 main_collection = /example/testsuite.collectionc

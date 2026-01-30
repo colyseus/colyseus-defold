@@ -87,20 +87,21 @@ function reference_tracker:garbage_collection()
       --
       if ref._schema ~= nil then
         for field, field_type in pairs(ref._schema) do
-          local child_ref_id = type(field_type) ~= "string" and ref[field] ~= nil and ref[field].__refid
-          if (child_ref_id ~= nil and self.deleted_refs[child_ref_id] == nil and self:remove(child_ref_id)) then
-            table.insert(deleted_refs, child_ref_id)
+          if type(field_type) ~= "string" and ref[field] ~= nil then
+            local child_ref_id = ref[field].__refid
+            if child_ref_id ~= nil and self.deleted_refs[child_ref_id] == nil and self:remove(child_ref_id) then
+              table.insert(deleted_refs, child_ref_id)
+            end
           end
         end
 
       elseif ref._child_type['new'] ~= nil then
         ref:each(function(value)
-          local child_ref_id = value.__refid
-          if (
-            self.deleted_refs[child_ref_id] == nil and
-            self:remove(child_ref_id)
-          ) then
-            table.insert(deleted_refs, child_ref_id)
+          if type(value) == "table" and value.__refid ~= nil then
+            local child_ref_id = value.__refid
+            if self.deleted_refs[child_ref_id] == nil and self:remove(child_ref_id) then
+              table.insert(deleted_refs, child_ref_id)
+            end
           end
         end)
       end

@@ -24,12 +24,19 @@ function Schema:delete_by_index(field_index)
   self[self._fields_by_index[field_index]] = nil
 end
 
+---@deprecated use :to_json() instead
 function Schema:to_raw()
+  return self:to_json()
+end
+
+---Get raw JSON representation of the schema
+---@return table
+function Schema:to_json()
   local raw = {}
 
   for field, _ in pairs(self._schema) do
-    if type(self[field]) == "table" and type(self[field]['to_raw']) == "function" then
-      raw[field] = self[field]:to_raw()
+    if type(self[field]) == "table" and type(self[field]['to_json']) == "function" then
+      raw[field] = self[field]:to_json()
     else
       raw[field] = self[field]
     end

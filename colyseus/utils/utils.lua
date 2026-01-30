@@ -1,5 +1,17 @@
 local m = {}
 
+function m.concat(t, sep)
+    sep = sep or ""
+    local s = ""
+    for i = 1, #t do
+        if i > 1 then
+            s = s .. sep
+        end
+        s = s .. t[i]
+    end
+    return s
+end
+
 function m.table_slice(tbl, first, last, step)
   local sliced = {}
 
@@ -123,7 +135,7 @@ m.pprint = pprint or function(node)
 
     -- This is necessary for working with HUGE tables otherwise we run out of memory using concat on huge strings
     table.insert(output,output_str)
-    output_str = table.concat(output)
+    output_str = m.concat(output)
 
     print(output_str)
 end

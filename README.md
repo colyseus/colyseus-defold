@@ -18,6 +18,17 @@
   </h3>
 </div>
 
+## Contributing
+
+In order to start a test server for this project, do the following:
+
+```
+git clone https://github.com/colyseus/colyseus.git
+cd colyseus
+pnpm install
+pnpm run sdk-test-server
+```
+
 ## Test suite
 
 This project uses [deftest](https://github.com/britzl/deftest) for testing, the
