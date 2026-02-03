@@ -45,6 +45,11 @@ function init(self)
       end)
 
       callbacks:on_add("players", function(player, sessionId)
+        -- callbacks:on_change(player, function() 
+        --   print("player changed!")
+        --   pprint(player)
+        -- end)
+
         callbacks:listen(player, "x", function(value, prevous_value)
           print("player.x has changed! value =>", value, "prevous_value =>", prevous_value)
         end)
@@ -62,11 +67,6 @@ function init(self)
           print("item removed from player " .. sessionId .. " =>")
           pprint(item)
         end)
-
-        -- callbacks:on_change(player, function()
-        --   print("player changed")
-        --   pprint(changes)
-        -- end)
       end)
 
       room:on_message("weather", function(message)
@@ -124,6 +124,9 @@ function on_message(self, message_id, message, sender)
 
     elseif message_id == hash("remove_item") then
       room:send("remove_item")
+
+    elseif message_id == hash("move") then
+      room:send("move", { x = math.random(100), y = math.random(100) })
 
     elseif message_id == hash("drop_connection") then
       room.connection:close(Colyseus.protocol.CLOSE_CODE.MAY_TRY_RECONNECT)

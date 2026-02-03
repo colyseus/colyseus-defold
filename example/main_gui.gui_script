@@ -32,6 +32,9 @@ function init(self)
 		msg.post("/logo#example", "remove_item")
 	end)
 
+	self.druid:new_button("send_move", function()
+		msg.post("/logo#example", "move")
+	end)
 
 	self.druid:new_button("drop_connection_item", function()
 		msg.post("/logo#example", "drop_connection")

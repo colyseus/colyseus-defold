@@ -5,8 +5,8 @@ fonts {
 }
 nodes {
   position {
-    x: 529.0
-    y: 231.0
+    x: 430.0
+    y: 230.0
   }
   size {
     x: 200.0
@@ -36,8 +36,8 @@ nodes {
 }
 nodes {
   position {
-    x: 529.0
-    y: 150.0
+    x: 430.0
+    y: 149.0
   }
   size {
     x: 200.0
@@ -67,8 +67,8 @@ nodes {
 }
 nodes {
   position {
-    x: 750.0
-    y: 231.0
+    x: 651.0
+    y: 230.0
   }
   size {
     x: 200.0
@@ -98,8 +98,8 @@ nodes {
 }
 nodes {
   position {
-    x: 750.0
-    y: 150.0
+    x: 651.0
+    y: 149.0
   }
   size {
     x: 200.0
@@ -145,7 +145,7 @@ nodes {
 nodes {
   position {
     x: 1080.0
-    y: 199.0
+    y: 150.0
   }
   size {
     x: 200.0
@@ -172,6 +172,37 @@ nodes {
   font: "system_font"
   id: "text_drop_connection"
   parent: "drop_connection_item"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 861.0
+    y: 230.0
+  }
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  type: TYPE_BOX
+  id: "send_move"
+  inherit_alpha: true
+  size_mode: SIZE_MODE_AUTO
+}
+nodes {
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  color {
+    x: 0.0
+    y: 0.0
+    z: 0.0
+  }
+  type: TYPE_TEXT
+  text: "Move"
+  font: "system_font"
+  id: "text_send_move"
+  parent: "send_move"
   inherit_alpha: true
 }
 material: "/builtins/materials/gui.material"

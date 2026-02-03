@@ -42,19 +42,10 @@ function Callbacks:on_add(instance_or_field, callback_or_field, immediate_or_cal
   return self:add_callback_or_wait_collection_available(instance, field_name, OPERATION.ADD, callback, immediate)
 end
 
----@param instance_or_field Schema|string
----@param callback_or_field string|fun(value: any, key: any)
----@param callback nil|fun(value: any, key: any)
-function Callbacks:on_change(instance_or_field, callback_or_field, callback)
-  local instance = self.decoder.state
-  local field_name = instance_or_field
-  if type(instance_or_field) ~= "string" then
-    instance = instance_or_field
-    field_name = callback_or_field
-  else
-    callback = callback_or_field
-  end
-  return self:add_callback_or_wait_collection_available(instance, field_name, OPERATION.REPLACE, callback)
+---@param instance Schema
+---@param callback fun()
+function Callbacks:on_change(instance, callback)
+  return self:add_callback(instance.__refid, OPERATION.REPLACE, callback)
 end
 
 ---@param instance_or_field Schema|string
