@@ -1,14 +1,195 @@
 local Colyseus = require "colyseus.sdk"
 
 local client
-local room
+
+local my_room
+local lobby_room
+local queue_room
+
+--
+-- Join "my_room" with state synchronization and callbacks
+--
+local function join_my_room()
+    client:join_or_create("my_room", function(err, room)
+        if err then
+            print("[MyRoom] error:")
+            pprint(err)
+            return
+        end
+
+        my_room = room
+
+        -- allow the client to reconnect immediately
+        room.reconnection.min_uptime = 0
+
+        print("[MyRoom] room_id: " .. room.room_id)
+
+        local callbacks = Colyseus.callbacks(room)
+
+        callbacks:listen("currentTurn", function(current, previous)
+            print("[MyRoom] currentTurn changed, current: ", current, ", previous: ", previous)
+        end)
+
+        callbacks:on_add("players", function(player, sessionId)
+            print("[MyRoom] player added at: " .. sessionId)
+
+            callbacks:on_change(player, function()
+                print("[MyRoom] player changed!")
+            end)
+
+            callbacks:listen(player, "x", function(value, previous_value)
+                print("[MyRoom] player.x changed: " .. tostring(value) .. " => " .. tostring(previous_value))
+            end)
+
+            callbacks:listen(player, "y", function(value, previous_value)
+                print("[MyRoom] player.y changed: " .. tostring(value) .. " => " .. tostring(previous_value))
+            end)
+
+            callbacks:listen(player, "disconnected", function(value, previous_value)
+                print("[MyRoom] player.disconnected: " .. tostring(value))
+            end)
+
+            callbacks:on_add(player, "items", function(item, key)
+                print("[MyRoom] item added at: " .. tostring(key) .. " => " .. tostring(item))
+            end)
+
+            callbacks:on_remove(player, "items", function(item, key)
+                print("[MyRoom] item removed at: " .. tostring(key) .. " => " .. tostring(item))
+            end)
+        end)
+
+        callbacks:on_remove("players", function(player, sessionId)
+            print("[MyRoom] player removed at: " .. sessionId)
+        end)
+
+        room:on("statechange", function(state)
+            -- print("[MyRoom] state change")
+        end)
+
+        room:on_message("weather", function(message)
+            print("[MyRoom] weather => " .. tostring(message.weather))
+        end)
+
+        room:on("error", function(code, message)
+            print("[MyRoom] error: " .. tostring(code) .. " => " .. tostring(message))
+        end)
+
+        room:on("drop", function()
+            print("[MyRoom] connection dropped!")
+        end)
+
+        room:on("reconnection", function()
+            print("[MyRoom] reconnection successful!")
+        end)
+
+        room:on("leave", function(code)
+            print("[MyRoom] leave, code: " .. tostring(code))
+        end)
+
+        room:send("add_item", { name = "helmet" })
+    end)
+end
+
+--
+-- Join "lobby" room for room listing
+--
+local function join_lobby_room()
+    client:join_or_create("lobby", function(err, lobby)
+        if err then
+            print("[Lobby] error:")
+            pprint(err)
+            return
+        end
+
+        print("[Lobby] room_id: " .. lobby.room_id)
+
+        lobby_room = lobby
+
+        lobby:on_message("rooms", function(rooms)
+            print("[Lobby] rooms:")
+            pprint(rooms)
+        end)
+
+        lobby:on_message("+", function(message)
+            print("MESSAGE (+) =>")
+            pprint(message)
+            -- print("[Lobby] room added: " .. tostring(message[1]) .. " =>")
+            -- pprint(message[2])
+        end)
+
+        lobby:on_message("-", function(room_id)
+            print("MESSAGE (-) =>")
+            pprint(room_id)
+            -- print("[Lobby] room removed: " .. tostring(room_id))
+        end)
+
+        lobby:on("leave", function(code)
+            print("[Lobby] leave, code: " .. tostring(code))
+        end)
+    end)
+end
+
+--
+-- Join "queue" room for matchmaking
+--
+local function join_queue_room()
+    client:join_or_create("queue", function(err, queue)
+        if err then
+            print("[Queue] error:")
+            pprint(err)
+            return
+        end
+
+        print("[Queue] room_id: " .. queue.room_id)
+
+        queue_room = queue
+
+        queue:on_message("clients", function(clients)
+            print("[Queue] clients: " .. tostring(clients))
+        end)
+
+        queue:on_message("seat", function(seat)
+            print("[Queue] seat:")
+            pprint(seat)
+
+            -- confirm the seat consumption, so the server can close the queue room
+            queue:send("confirm")
+
+            client:consume_seat_reservation(seat, function(err, new_room)
+                if err then
+                    print("[Queue consumeSeatReservation] error:")
+                    pprint(err)
+                    return
+                end
+
+                print("[Queue consumeSeatReservation] seat consumed: " .. new_room.room_id)
+
+                new_room:on("leave", function(code)
+                    print("[Queue consumeSeatReservation] newRoom leave, code: " .. tostring(code))
+                end)
+
+                -- for demonstration, we leave() here, but in a real application you would use the new_room for the next steps
+                new_room:leave()
+            end)
+        end)
+
+        queue:on("leave", function(code)
+            print("[Queue] leave, code: " .. tostring(code))
+        end)
+    end)
+end
 
 function init(self)
     msg.post(".", "acquire_input_focus")
 
-    -- Add initialization code here
-    -- Remove this function if not needed
     client = Colyseus.Client("ws://localhost:2567")
+
+    -- Join 3 room types
+    join_my_room()
+    join_lobby_room()
+    join_queue_room()
+
+    -- Example of making an HTTP request to the server
     client.auth.token = "123"
 
     client.http:get("/test", function(err, response)
@@ -19,81 +200,6 @@ function init(self)
       print("RESPONSE to GET /test =>")
       pprint(response)
     end)
-
-    -- join "demo" room
-    client:join_or_create("my_room", function(err, _room)
-      print("\n\nclient:join_or_create(), callback =>\n\n")
-      if (err) then
-        print("JOIN ERROR:")
-        pprint(err)
-        return
-      end
-
-      room = _room
-
-      -- allow the client to reconnect immediately
-      room.reconnection.min_uptime = 0;
-
-      local callbacks = Colyseus.callbacks(room)
-
-      print("============================================")
-      print("successfully joined '" .. room.name .. "'")
-      print("============================================")
-
-      callbacks:listen("currentTurn", function(current, previous)
-        print("turn changed, current: ", current, ", previous: ", previous)
-      end)
-
-      callbacks:on_add("players", function(player, sessionId)
-        -- callbacks:on_change(player, function() 
-        --   print("player changed!")
-        --   pprint(player)
-        -- end)
-
-        callbacks:listen(player, "x", function(value, prevous_value)
-          print("player.x has changed! value =>", value, "prevous_value =>", prevous_value)
-        end)
-
-        callbacks:listen(player, "y", function(value, prevous_value)
-          print("player.y has changed! value =>", value, "prevous_value =>", prevous_value)
-        end)
-
-        callbacks:on_add(player, "items", function(item, i)
-          print("item added to player " .. sessionId .. " =>")
-          pprint(item)
-        end)
-
-        callbacks:on_remove(player, "items", function(item, i)
-          print("item removed from player " .. sessionId .. " =>")
-          pprint(item)
-        end)
-      end)
-
-      room:on_message("weather", function(message)
-        -- print("colyseus-defold: 'weather' message received =>")
-        -- pprint(message)
-      end)
-
-      room:on("statechange", function(state)
-        -- print("STATE CHANGE")
-        -- pprint(state:to_json())
-      end)
-
-      room:on("drop", function()
-        print("connection dropped! '" .. room.name .. "'")
-      end)
-
-      room:on("reconnection", function()
-        print("reconnection successful! '" .. room.name .. "'")
-      end)
-
-      room:on("leave", function()
-        print("left '" .. room.name .. "'")
-      end)
-
-      room:send("add_item", { name = "helmet" })
-    end)
-
 end
 
 function final(self)
@@ -108,28 +214,28 @@ function update(self, dt)
 end
 
 function on_message(self, message_id, message, sender)
-    if not room then
+    if not my_room then
       return
     end
 
     if message_id == hash("add_bot") then
-      room:send("add_bot")
+      my_room:send("add_bot")
 
     elseif message_id == hash("remove_bot") then
-      room:send("remove_bot")
+      my_room:send("remove_bot")
 
     elseif message_id == hash("add_item") then
       local item_names = { "helmet", "armor", "sword", "shield" }
-      room:send("add_item", { name = item_names[math.random(1, #item_names)] })
+      my_room:send("add_item", { name = item_names[math.random(1, #item_names)] })
 
     elseif message_id == hash("remove_item") then
-      room:send("remove_item")
+      my_room:send("remove_item")
 
     elseif message_id == hash("move") then
-      room:send("move", { x = math.random(100), y = math.random(100) })
+      my_room:send("move", { x = math.random(100), y = math.random(100) })
 
     elseif message_id == hash("drop_connection") then
-      room.connection:close(Colyseus.protocol.CLOSE_CODE.MAY_TRY_RECONNECT)
+      my_room.connection:close(Colyseus.protocol.CLOSE_CODE.MAY_TRY_RECONNECT)
     end
 end
 
