@@ -206,20 +206,20 @@ function Room:_on_message (binary_string, it)
       message_type = decode.number(message, it)
     end
 
-    local message = nil
+    local payload = nil
 
-    if #binary_string > it.offset then
+    if #binary_string >= it.offset then
       local msgpack_cursor = {
           s = binary_string,
           i = it.offset,
           j = #binary_string,
           underflow = function() error "missing bytes" end,
       }
-      message = msgpack.unpack_cursor(msgpack_cursor)
+      payload = msgpack.unpack_cursor(msgpack_cursor)
       it.offset = msgpack_cursor.i
     end
 
-    self:_dispatch_message(message_type, message)
+    self:_dispatch_message(message_type, payload)
 
   elseif code == protocol.ROOM_DATA_BYTES then
     local message_type
@@ -230,12 +230,12 @@ function Room:_on_message (binary_string, it)
       message_type = decode.number(message, it)
     end
 
-    local byte_array = {}
+    local payload = {}
     for i = it.offset, #binary_string, 1 do
-      byte_array[#byte_array+1] = message[i]
+      payload[#payload+1] = message[i]
     end
 
-    self:_dispatch_message(message_type, byte_array)
+    self:_dispatch_message(message_type, payload)
 
   elseif code == protocol.PING then
     if self.ping_callback then
