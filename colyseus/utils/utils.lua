@@ -1,3 +1,63 @@
+local messagepack = require('colyseus.messagepack.MessagePack')
+
+--
+-- MessagePack Extensions:
+-- * undefined
+-- * timestamp
+--
+messagepack.UNDEFINED = setmetatable({}, { __tostring = function() return "undefined" end })
+function messagepack.build_ext (tag, data)
+    -- Extension type 0 with 1 byte of data: undefined
+    if tag == 0 and #data == 1 then
+        return messagepack.UNDEFINED
+    end
+    -- MessagePack Timestamp extension type is -1 (0xFF when unsigned)
+    if tag == -1 then
+        local n = #data
+        if n == 4 then
+            -- Timestamp 32: seconds in 32-bit unsigned int
+            local b1, b2, b3, b4 = data:byte(1, 4)
+            local seconds = ((b1 * 0x100 + b2) * 0x100 + b3) * 0x100 + b4
+            return { seconds = seconds, nanoseconds = 0 }
+        elseif n == 8 then
+            -- Timestamp 64: nanoseconds in upper 30 bits, seconds in lower 34 bits
+            local b1, b2, b3, b4, b5, b6, b7, b8 = data:byte(1, 8)
+            local hi = ((b1 * 0x100 + b2) * 0x100 + b3) * 0x100 + b4
+            local lo = ((b5 * 0x100 + b6) * 0x100 + b7) * 0x100 + b8
+            local nanoseconds = math.floor(hi / 4)  -- upper 30 bits
+            local seconds = (hi % 4) * 0x100000000 + lo  -- lower 34 bits
+            return { seconds = seconds, nanoseconds = nanoseconds }
+        elseif n == 12 then
+            -- Timestamp 96: nanoseconds in 32-bit, seconds in 64-bit signed
+            local b1, b2, b3, b4 = data:byte(1, 4)
+            local nanoseconds = ((b1 * 0x100 + b2) * 0x100 + b3) * 0x100 + b4
+            local b5, b6, b7, b8, b9, b10, b11, b12 = data:byte(5, 12)
+            local seconds
+            if b5 < 0x80 then
+                seconds = ((((((b5
+                    * 0x100 + b6)
+                    * 0x100 + b7)
+                    * 0x100 + b8)
+                    * 0x100 + b9)
+                    * 0x100 + b10)
+                    * 0x100 + b11)
+                    * 0x100 + b12
+            else
+                seconds = ((((((((b5 - 0xFF)
+                    * 0x100 + (b6 - 0xFF))
+                    * 0x100 + (b7 - 0xFF))
+                    * 0x100 + (b8 - 0xFF))
+                    * 0x100 + (b9 - 0xFF))
+                    * 0x100 + (b10 - 0xFF))
+                    * 0x100 + (b11 - 0xFF))
+                    * 0x100 + (b12 - 0xFF)) - 1
+            end
+            return { seconds = seconds, nanoseconds = nanoseconds }
+        end
+    end
+    return nil
+end
+
 local m = {}
 
 function m.concat(t, sep)
