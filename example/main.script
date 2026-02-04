@@ -186,8 +186,8 @@ function init(self)
 
     -- Join 3 room types
     join_my_room()
-    join_lobby_room()
-    join_queue_room()
+    -- join_lobby_room()
+    -- join_queue_room()
 
     -- Example of making an HTTP request to the server
     client.auth.token = "123"
