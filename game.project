@@ -7,7 +7,7 @@ dependencies#2 = https://github.com/Insality/druid/archive/refs/tags/1.1.6.zip
 dependencies#3 = https://github.com/Insality/defold-event/archive/refs/tags/12.zip
 
 [bootstrap]
-main_collection = /example/testsuite.collectionc
+main_collection = /example/main.collectionc
 
 [display]
 width = 1280
@@ -20,5 +20,5 @@ shared_state = 1
 include_dirs = colyseus
 
 [websocket]
-max_connections = 3
+max_connections = 4
 
