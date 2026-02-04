@@ -146,9 +146,13 @@ array_schema.__decode = function(decoder, bytes, it, ref, all_changes)
   elseif operation == OPERATION.ADD_BY_REFID then
     local ref_id = decode.number(bytes, it) + 1
     local item = decoder.refs:get(ref_id)
+
     if item ~= nil then
       index = ref:index_of(item)
-    else
+    end
+
+    -- fallback to use last index
+    if index == -1 or index == nil then
       index = ref:length() + 1
     end
 
@@ -160,7 +164,7 @@ array_schema.__decode = function(decoder, bytes, it, ref, all_changes)
 
   local value, previous_value = decoder:decode_value(decoder, operation, ref, index, field_type, bytes, it, all_changes)
 
-  if value ~= nil then
+  if value ~= nil and value ~= previous_value then
     ref:set_by_index(index, value, operation)
   end
 
@@ -326,9 +330,12 @@ function Decoder:decode_value(decoder, operation, ref, field_index, field_type, 
     local __refid = decode.number(bytes, it) + 1
     value = decoder.refs:get(__refid)
 
-    local value_ref = (decoder.refs:has(__refid))
-        and previous_value
-        or types.get_type(collection_type_id):new()     -- get 'map_schema'/'array_schema' constructor
+    local value_ref
+    if decoder.refs:has(__refid) then
+      value_ref = previous_value or decoder.refs:get(__refid)
+    else
+      value_ref = types.get_type(collection_type_id):new()     -- get 'map_schema'/'array_schema' constructor
+    end
 
     value = value_ref:clone()
     value.__refid = __refid

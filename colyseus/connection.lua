@@ -1,4 +1,5 @@
 local EventEmitter = require('colyseus.eventemitter')
+local utils = require('colyseus.utils.utils')
 
 ---@class Connection : EventEmitterInstance
 local Connection = {}
@@ -15,7 +16,6 @@ end
 
 function Connection:init()
   self.state = "CONNECTING"
-  self.is_html5 = sys.get_sys_info().system_name == "HTML5"
 end
 
 function Connection:send(data)
@@ -31,15 +31,45 @@ end
 function Connection:open(endpoint)
   -- skip if connection is already open
   if self.state == 'OPEN' then return end
-
   self.endpoint = endpoint
+  self:_connect(endpoint, {})
+end
 
+function Connection:reconnect(query_params)
+  local endpoint = self.endpoint
+
+  -- replace reconnectionToken and skipHandshake query params
+  endpoint = string.gsub(endpoint, "reconnectionToken=[^&]*", "")
+  endpoint = string.gsub(endpoint, "skipHandshake=[^&]*", "")
+  -- cleanup empty params
+  endpoint = string.gsub(endpoint, "[?&]+$", "")
+  endpoint = string.gsub(endpoint, "&&", "&")
+
+  local query_parts = {}
+  for k, v in pairs(query_params) do
+    table.insert(query_parts, k .. "=" .. v)
+  end
+
+  self:_connect(endpoint .. "&" .. utils.concat(query_parts, "&"), {})
+end
+
+function Connection:close(close_code)
+  self._force_close_code = close_code -- used for testing reconnection
+  self.state = "CLOSED"
+  websocket.disconnect(self.ws)
+  self.ws = nil
+end
+
+function Connection:_connect(endpoint, params)
   local this = self
-  local params = {}
-
   self.ws = websocket.connect(endpoint, params, function(self, conn, data)
     if data.event == websocket.EVENT_DISCONNECTED then
       this.state = "CLOSED"
+
+      if this._force_close_code ~= nil then
+        data.code = this._force_close_code
+        this._force_close_code = nil
+      end
 
       this:emit("close", data)
       this.ws = nil
@@ -57,12 +87,6 @@ function Connection:open(endpoint)
       this:emit("message", data.message)
     end
   end)
-end
-
-function Connection:close()
-  self.state = "CLOSED"
-  websocket.disconnect(self.ws)
-  self.ws = nil
 end
 
 return Connection

@@ -1,0 +1,209 @@
+script: "/example/main_gui.gui_script"
+fonts {
+  name: "system_font"
+  font: "/builtins/fonts/default.font"
+}
+nodes {
+  position {
+    x: 430.0
+    y: 230.0
+  }
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  type: TYPE_BOX
+  id: "button_add_bot"
+  inherit_alpha: true
+  size_mode: SIZE_MODE_AUTO
+}
+nodes {
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  color {
+    x: 0.0
+    y: 0.0
+    z: 0.0
+  }
+  type: TYPE_TEXT
+  text: "Add Bot"
+  font: "system_font"
+  id: "text_add_bot"
+  parent: "button_add_bot"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 430.0
+    y: 149.0
+  }
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  type: TYPE_BOX
+  id: "button_remove_bot"
+  inherit_alpha: true
+  size_mode: SIZE_MODE_AUTO
+}
+nodes {
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  color {
+    x: 0.0
+    y: 0.0
+    z: 0.0
+  }
+  type: TYPE_TEXT
+  text: "Remove Bot"
+  font: "system_font"
+  id: "text_remove_bot"
+  parent: "button_remove_bot"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 651.0
+    y: 230.0
+  }
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  type: TYPE_BOX
+  id: "button_add_item"
+  inherit_alpha: true
+  size_mode: SIZE_MODE_AUTO
+}
+nodes {
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  color {
+    x: 0.0
+    y: 0.0
+    z: 0.0
+  }
+  type: TYPE_TEXT
+  text: "Add Item"
+  font: "system_font"
+  id: "text_add_item"
+  parent: "button_add_item"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 651.0
+    y: 149.0
+  }
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  type: TYPE_BOX
+  id: "button_remove_item"
+  inherit_alpha: true
+  size_mode: SIZE_MODE_AUTO
+}
+nodes {
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  color {
+    x: 0.0
+    y: 0.0
+    z: 0.0
+  }
+  type: TYPE_TEXT
+  text: "Remove Item"
+  font: "system_font"
+  id: "text_remove_item"
+  parent: "button_remove_item"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 638.0
+    y: 297.0
+  }
+  size {
+    x: 200.0
+    y: 100.0
+  }
+  type: TYPE_TEXT
+  text: "Manipulate State / Schema"
+  font: "system_font"
+  id: "state_schema_title"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 1080.0
+    y: 150.0
+  }
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  type: TYPE_BOX
+  id: "drop_connection_item"
+  inherit_alpha: true
+  size_mode: SIZE_MODE_AUTO
+}
+nodes {
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  color {
+    x: 0.0
+    y: 0.0
+    z: 0.0
+  }
+  type: TYPE_TEXT
+  text: "Drop Connection\n"
+  "(Auto-reconnect)"
+  font: "system_font"
+  id: "text_drop_connection"
+  parent: "drop_connection_item"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 861.0
+    y: 230.0
+  }
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  type: TYPE_BOX
+  id: "send_move"
+  inherit_alpha: true
+  size_mode: SIZE_MODE_AUTO
+}
+nodes {
+  size {
+    x: 200.0
+    y: 60.0
+  }
+  color {
+    x: 0.0
+    y: 0.0
+    z: 0.0
+  }
+  type: TYPE_TEXT
+  text: "Move"
+  font: "system_font"
+  id: "text_send_move"
+  parent: "send_move"
+  inherit_alpha: true
+}
+material: "/builtins/materials/gui.material"
+adjust_reference: ADJUST_REFERENCE_PARENT

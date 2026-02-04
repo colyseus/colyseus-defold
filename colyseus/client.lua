@@ -1,3 +1,8 @@
+local os = require('os')
+
+local Connection = require('colyseus.connection')
+local Protocol = require('colyseus.protocol')
+
 local Room = require('colyseus.room')
 local Auth = require('colyseus.auth')
 local HTTP = require('colyseus.http')
@@ -107,11 +112,10 @@ end
 
 ---@param response table
 ---@param callback fun(err:table, room:Room)
----@param reuse_room_instance nil|Room
-function Client:consume_seat_reservation(response, callback, reuse_room_instance)
-  local room = Room.new(response.room.name)
+function Client:consume_seat_reservation(response, callback)
+  local room = Room.new(response.name)
 
-  room.room_id = response.room.roomId
+  room.room_id = response.roomId
   room.session_id = response.sessionId
 
   local options = { sessionId = room.session_id }
@@ -121,52 +125,106 @@ function Client:consume_seat_reservation(response, callback, reuse_room_instance
     options.reconnectionToken = response.reconnectionToken
   end
 
-  local target_room = (response.devMode and reuse_room_instance) or room
-
-  local _self = self
-  room:connect(self.http:_get_ws_endpoint(response.room, options), response.devMode and function()
-    print("[Colyseus devMode]: Re-establishing connection with room id '" .. room.room_id .. "'...")
-
-    local retry_count = 0
-    local max_retry_count = 8
-
-    local function retry_connection()
-      retry_count = retry_count + 1
-
-      -- async check
-      _self:consume_seat_reservation(response, function(err, room)
-        if err == nil and room ~= nil then
-          print("[Colyseus devMode]: Successfully re-established connection with room " .. room.room_id)
-        else
-          if retry_count < max_retry_count then
-            print("[Colyseus devMode]: retrying... (" .. retry_count .. " out of " .. max_retry_count .. ")")
-            timer.delay(2, false, retry_connection)
-          else
-            print("[Colyseus devMode]: Failed to reconnect. Is your server running? Please check server logs.")
-          end
-        end
-      end, target_room)
-    end
-
-    -- devMode: try to reconnect after 2 seconds.
-    timer.delay(2, false, retry_connection)
-  end or nil, target_room)
+  room:connect(self.http:_get_ws_endpoint(response, options), response)
 
   local on_join = nil
   local on_error = nil
 
   on_error = function(err)
-    target_room:off('join', on_join)
+    room:off('join', on_join)
     callback(err, nil)
   end
 
   on_join = function()
-    target_room:off('error', on_error)
-    callback(nil, target_room)
+    room:off('error', on_error)
+    callback(nil, room)
   end
 
-  target_room:once('error', on_error)
-  target_room:once('join', on_join)
+  room:once('error', on_error)
+  room:once('join', on_join)
+end
+
+--- Measures the latency of the connection to the server.
+---@param ping_count number
+---@param callback fun(err:string, latency:number)
+function Client:get_latency(ping_count, callback)
+  if type(ping_count) == "function" then
+    callback = ping_count
+    ping_count = 1
+  end
+
+  local conn = Connection.new()
+  local latencies = {}
+  local start_time = 0
+  local endpoint = self.http:_get_ws_endpoint()
+
+  local has_resolved = false
+  local resolve = function(err, latency)
+    if has_resolved then return end
+    has_resolved = true
+    conn:close()
+    callback(err, latency)
+  end
+
+  conn:on("open", function()
+    start_time = os.time()
+    conn:send(string.char(Protocol.PING))
+  end)
+
+  conn:on("message", function(message)
+    local now = os.time()
+    table.insert(latencies, (now - start_time))
+
+    if #latencies < ping_count then
+      start_time = os.time()
+      conn:send(string.char(Protocol.PING))
+    else
+      local sum = 0
+      for _, l in ipairs(latencies) do sum = sum + l end
+      resolve(nil, sum / #latencies)
+    end
+  end)
+
+  conn:on("error", function(err)
+    resolve("Failed to calculate latency for " .. endpoint)
+  end)
+
+  conn:open(endpoint)
+end
+
+--- Selects the best endpoint from a list of endpoints based on latency.
+---@param endpoints table<string> List of endpoints
+---@param callback fun(err:string, client:Client)
+function Client.select_by_latency(endpoints, callback)
+  local results = {}
+  local completed = 0
+  local total = #endpoints
+
+  if total == 0 then
+    callback("No endpoints provided", nil)
+    return
+  end
+
+  for i, endpoint in ipairs(endpoints) do
+    local client = Client(endpoint)
+    client:get_latency(function(err, latency)
+      completed = completed + 1
+      if not err then
+        table.insert(results, { client = client, latency = latency })
+        local settings = client.settings
+        print(string.format("🛜 Endpoint Latency: %dms - %s:%d%s", latency, settings.hostname, settings.port, settings.pathname))
+      end
+
+      if completed == total then
+        if #results == 0 then
+          callback("All endpoints failed to respond", nil)
+        else
+          table.sort(results, function(a, b) return a.latency < b.latency end)
+          callback(nil, results[1].client)
+        end
+      end
+    end)
+  end
 end
 
 ---@param endpoint_or_settings string|{hostname:string, port:number, use_ssl:boolean}

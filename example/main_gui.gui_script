@@ -1,0 +1,58 @@
+-- 
+-- This is a simple example of a GUI script using Druid
+-- https://github.com/Insality/druid
+--
+local druid = require("druid.druid")
+
+-- All component callbacks pass "self" as first argument
+-- This "self" is a context data passed in `druid.new(context)`
+local function on_button_callback(self)
+	self.text:set_to("The button clicked!")
+end
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+
+	self.druid = druid.new(self)
+
+	-- Buttons: add_bot, add_item, remove_item
+	self.druid:new_button("button_add_bot", function()
+		msg.post("/logo#example", "add_bot")
+	end)
+
+	self.druid:new_button("button_remove_bot", function()
+		msg.post("/logo#example", "remove_bot")
+	end)
+
+	self.druid:new_button("button_add_item", function()
+		msg.post("/logo#example", "add_item")
+	end)
+
+	self.druid:new_button("button_remove_item", function()
+		msg.post("/logo#example", "remove_item")
+	end)
+
+	self.druid:new_button("send_move", function()
+		msg.post("/logo#example", "move")
+	end)
+
+	self.druid:new_button("drop_connection_item", function()
+		msg.post("/logo#example", "drop_connection")
+	end)
+end
+
+function final(self)
+	self.druid:final()
+end
+
+function update(self, dt)
+	self.druid:update(dt)
+end
+
+function on_message(self, message_id, message, sender)
+	self.druid:on_message(message_id, message, sender)
+end
+
+function on_input(self, action_id, action)
+	return self.druid:on_input(action_id, action)
+end

@@ -1,0 +1,144 @@
+local Colyseus = require "colyseus.sdk"
+
+local client
+local room
+
+function init(self)
+    msg.post(".", "acquire_input_focus")
+
+    -- Add initialization code here
+    -- Remove this function if not needed
+    client = Colyseus.Client("ws://localhost:2567")
+    client.auth.token = "123"
+
+    client.http:get("/test", function(err, response)
+      if err then
+        print("ERROR =>")
+        pprint(err)
+      end
+      print("RESPONSE to GET /test =>")
+      pprint(response)
+    end)
+
+    -- join "demo" room
+    client:join_or_create("my_room", function(err, _room)
+      print("\n\nclient:join_or_create(), callback =>\n\n")
+      if (err) then
+        print("JOIN ERROR:")
+        pprint(err)
+        return
+      end
+
+      room = _room
+
+      -- allow the client to reconnect immediately
+      room.reconnection.min_uptime = 0;
+
+      local callbacks = Colyseus.callbacks(room)
+
+      print("============================================")
+      print("successfully joined '" .. room.name .. "'")
+      print("============================================")
+
+      callbacks:listen("currentTurn", function(current, previous)
+        print("turn changed, current: ", current, ", previous: ", previous)
+      end)
+
+      callbacks:on_add("players", function(player, sessionId)
+        -- callbacks:on_change(player, function() 
+        --   print("player changed!")
+        --   pprint(player)
+        -- end)
+
+        callbacks:listen(player, "x", function(value, prevous_value)
+          print("player.x has changed! value =>", value, "prevous_value =>", prevous_value)
+        end)
+
+        callbacks:listen(player, "y", function(value, prevous_value)
+          print("player.y has changed! value =>", value, "prevous_value =>", prevous_value)
+        end)
+
+        callbacks:on_add(player, "items", function(item, i)
+          print("item added to player " .. sessionId .. " =>")
+          pprint(item)
+        end)
+
+        callbacks:on_remove(player, "items", function(item, i)
+          print("item removed from player " .. sessionId .. " =>")
+          pprint(item)
+        end)
+      end)
+
+      room:on_message("weather", function(message)
+        -- print("colyseus-defold: 'weather' message received =>")
+        -- pprint(message)
+      end)
+
+      room:on("statechange", function(state)
+        -- print("STATE CHANGE")
+        -- pprint(state:to_json())
+      end)
+
+      room:on("drop", function()
+        print("connection dropped! '" .. room.name .. "'")
+      end)
+
+      room:on("reconnection", function()
+        print("reconnection successful! '" .. room.name .. "'")
+      end)
+
+      room:on("leave", function()
+        print("left '" .. room.name .. "'")
+      end)
+
+      room:send("add_item", { name = "helmet" })
+    end)
+
+end
+
+function final(self)
+    -- Add finalization code here
+    -- Remove this function if not needed
+    msg.post(".", "release_input_focus")
+end
+
+function update(self, dt)
+   -- Add update code here
+   -- Remove this function if not needed
+end
+
+function on_message(self, message_id, message, sender)
+    if not room then
+      return
+    end
+
+    if message_id == hash("add_bot") then
+      room:send("add_bot")
+
+    elseif message_id == hash("remove_bot") then
+      room:send("remove_bot")
+
+    elseif message_id == hash("add_item") then
+      local item_names = { "helmet", "armor", "sword", "shield" }
+      room:send("add_item", { name = item_names[math.random(1, #item_names)] })
+
+    elseif message_id == hash("remove_item") then
+      room:send("remove_item")
+
+    elseif message_id == hash("move") then
+      room:send("move", { x = math.random(100), y = math.random(100) })
+
+    elseif message_id == hash("drop_connection") then
+      room.connection:close(Colyseus.protocol.CLOSE_CODE.MAY_TRY_RECONNECT)
+    end
+end
+
+function on_input(self, action_id, action)
+  -- Add input-handling code here
+  -- Remove this function if not needed
+end
+
+function on_reload(self)
+   -- Add reload-handling code here
+   -- Remove this function if not needed
+end
