@@ -23,10 +23,10 @@
 In order to start a test server for this project, do the following:
 
 ```
-git clone https://github.com/colyseus/colyseus.git
-cd colyseus
-pnpm install
-pnpm run sdk-test-server
+git clone https://github.com/colyseus/sdks-test-server
+cd sdks-test-server
+npm install
+npm start
 ```
 
 ## Test suite
