@@ -33,9 +33,15 @@ end
 --   return #self.items
 -- end
 
--- length
+-- length (counts actual items, excluding nil holes)
 function ArraySchema:length()
-  return #self.items
+  local count = 0
+  for i, v in pairs(self.items) do
+    if type(i) == "number" and v ~= nil then
+      count = count + 1
+    end
+  end
+  return count
 end
 
 -- getter
@@ -59,7 +65,7 @@ function ArraySchema:__newindex(key, value)
 end
 
 function ArraySchema:index_of(value)
-  for i, v in ipairs(self.items) do
+  for i, v in pairs(self.items) do
     if v == value then
       return i
     end
@@ -90,8 +96,10 @@ function ArraySchema:delete_by_index(index)
 end
 
 function ArraySchema:each(cb)
-  for index, value in ipairs(self.items) do
-    cb(value, index)
+  for index, value in pairs(self.items) do
+    if type(index) == "number" then
+      cb(value, index)
+    end
   end
 end
 
@@ -122,10 +130,20 @@ end
 
 ---@package
 function ArraySchema:reverse()
-  local n = #self.items
+  -- first collect all items with their indices
+  local indices = {}
+  for i, v in pairs(self.items) do
+    if type(i) == "number" and v ~= nil then
+      table.insert(indices, i)
+    end
+  end
+  table.sort(indices)
+
+  -- reverse the values
+  local n = #indices
   local reversed = {}
   for i = 1, n do
-      reversed[i] = self.items[n - i + 1]
+    reversed[i] = self.items[indices[n - i + 1]]
   end
   self.items = reversed
 end
@@ -133,11 +151,18 @@ end
 ---@package
 function ArraySchema:__on_decode_end()
   local new_items = {}
-  -- filter out nil values
-  for i, v in ipairs(self.items) do
-    if v ~= nil then
-      table.insert(new_items, v)
+  -- collect all non-nil values with their indices for proper sorting
+  local indices = {}
+  for i, v in pairs(self.items) do
+    if type(i) == "number" and v ~= nil then
+      table.insert(indices, i)
     end
+  end
+  -- sort indices to maintain order
+  table.sort(indices)
+  -- rebuild compacted array
+  for _, i in ipairs(indices) do
+    table.insert(new_items, self.items[i])
   end
   self.items = new_items
 end
