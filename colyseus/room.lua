@@ -262,6 +262,7 @@ end
 function Room:_handle_reconnection()
   if (os.time() - self._joined_at_time) < (self.reconnection.min_uptime / 1000) then
      print(string.format("[Colyseus reconnection]: ❌ Room has not been up for long enough for automatic reconnection. (min uptime: %dms)", self.reconnection.min_uptime))
+     self:emit("leave", { code = protocol.CLOSE_CODE.ABNORMAL_CLOSURE })
      return
   end
 
@@ -275,6 +276,14 @@ end
 
 ---@private
 function Room:_retry_reconnection()
+  if self.reconnection.retry_count >= self.reconnection.max_retries then
+    -- No more retries
+    print(string.format("[Colyseus reconnection]: ❌ Reconnection failed after %d attempts.", self.reconnection.max_retries))
+    self.reconnection.is_reconnecting = false
+    self:emit("leave", { code = protocol.CLOSE_CODE.FAILED_TO_RECONNECT })
+    return
+  end
+
   self.reconnection.retry_count = self.reconnection.retry_count + 1
 
   local delay_ms = math.min(self.reconnection.max_delay, math.max(self.reconnection.min_delay, self.reconnection.backoff(self.reconnection.retry_count, self.reconnection.delay)))
@@ -289,14 +298,7 @@ function Room:_retry_reconnection()
 
   on_error = function(e)
     room.connection:off("error", on_error)
-
-    if room.reconnection.retry_count < room.reconnection.max_retries then
-      room:_retry_reconnection()
-    else
-      print("[Colyseus reconnection]: ❌ Failed to reconnect. Is your server running? Please check server logs.")
-      room.reconnection.is_reconnecting = false
-      room:emit("leave", { code = protocol.CLOSE_CODE.ABNORMAL_CLOSURE, reason = "reconnection failed" })
-    end
+    room:_retry_reconnection()
   end
 
   on_open = function()
@@ -305,7 +307,7 @@ function Room:_retry_reconnection()
   end
 
   timer.delay(delay_sec, false, function()
-    print(string.format("[Colyseus reconnection]: ░ Re-establishing sessionId '%s' with roomId '%s'... (attempt %d of %d)", room.session_id, room.room_id, room.reconnection.retry_count, room.reconnection.max_retries))
+    print(string.format("[Colyseus reconnection]: 🔄 Re-establishing sessionId '%s' with roomId '%s'... (attempt %d of %d)", room.session_id, room.room_id, room.reconnection.retry_count, room.reconnection.max_retries))
 
     room.connection:on("error", on_error)
     room.connection:on("open", on_open)

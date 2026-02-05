@@ -20,7 +20,7 @@ local function join_my_room()
         my_room = room
 
         -- allow the client to reconnect immediately
-        room.reconnection.min_uptime = 0
+        -- room.reconnection.min_uptime = 0
 
         print("[MyRoom] room_id: " .. room.room_id)
 
