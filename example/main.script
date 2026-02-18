@@ -38,11 +38,11 @@ local function join_my_room()
             end)
 
             callbacks:listen(player, "x", function(value, previous_value)
-                print("[MyRoom] player.x changed: " .. tostring(value) .. " => " .. tostring(previous_value))
+                print("[MyRoom] player.x changed: " .. tostring(previous_value) .. " => " .. tostring(value))
             end)
 
             callbacks:listen(player, "y", function(value, previous_value)
-                print("[MyRoom] player.y changed: " .. tostring(value) .. " => " .. tostring(previous_value))
+                print("[MyRoom] player.y changed: " .. tostring(previous_value) .. " => " .. tostring(value))
             end)
 
             callbacks:listen(player, "disconnected", function(value, previous_value)

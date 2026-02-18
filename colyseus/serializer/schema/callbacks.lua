@@ -208,9 +208,15 @@ function Callbacks:add_callback_or_wait_collection_available(instance, field_nam
   local remove_handler = function() end
   local remove_callback = function() remove_handler() end
   if instance[field_name] == nil then
-    remove_handler = _self:listen(instance, field_name, function(collection, _)
-      remove_handler = _self:add_callback(collection.__refid, operation, callback)
+    local remove_property_callback
+    remove_property_callback = _self:listen(instance, field_name, function(collection, _)
+      if collection ~= nil then
+        -- Remove the property listener now that collection is available
+        remove_property_callback()
+        remove_handler = _self:add_callback(collection.__refid, operation, callback)
+      end
     end)
+    remove_handler = remove_property_callback
     return remove_callback
   else
     -- immediately trigger callback for each item in the collection
