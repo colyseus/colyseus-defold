@@ -51,6 +51,7 @@ function Room:init(name)
   self.on_message_handlers = {}
 
   self.reconnection = {
+    enabled = true,
     retry_count = 0,
     max_retries = 15,
     delay = 100,
@@ -97,7 +98,7 @@ function Room:connect (endpoint, options)
       or e.code == protocol.CLOSE_CODE.MAY_TRY_RECONNECT
     ) then
       room:emit("drop", e)
-      room:_handle_reconnection()
+      room:_handle_reconnection(e.code)
 
     else
       room:emit("leave", e)
@@ -259,7 +260,12 @@ function Room:patch (binary_patch, it)
 end
 
 ---@private
-function Room:_handle_reconnection()
+function Room:_handle_reconnection(code)
+  if not self.reconnection.enabled then
+    self:emit("leave", { code = code })
+    return
+  end
+
   if (os.time() - self._joined_at_time) < (self.reconnection.min_uptime / 1000) then
      print(string.format("[Colyseus reconnection]: ❌ Room has not been up for long enough for automatic reconnection. (min uptime: %dms)", self.reconnection.min_uptime))
      self:emit("leave", { code = protocol.CLOSE_CODE.ABNORMAL_CLOSURE })
