@@ -89,10 +89,6 @@ map_schema.__decode = function(decoder, bytes, it, ref, all_changes)
     dynamic_index = ref:get_index(field_index)
   end
 
-  if bit.band(operation, OPERATION.DELETE) == OPERATION.DELETE then
-    print("[map_schema:decode] DELETE op=" .. operation .. " field_index=" .. tostring(field_index) .. " dynamic_index=" .. tostring(dynamic_index))
-  end
-
   local value, previous_value = decoder:decode_value(decoder, operation, ref, field_index, field_type, bytes, it, all_changes)
 
   if value ~= nil then
@@ -108,10 +104,6 @@ map_schema.__decode = function(decoder, bytes, it, ref, all_changes)
       value = value,
       previous_value = previous_value,
     })
-  else
-    if bit.band(operation, OPERATION.DELETE) == OPERATION.DELETE then
-      print("[map_schema:decode] DELETE change SKIPPED (value == previous_value) value=" .. tostring(value) .. " prev=" .. tostring(previous_value))
-    end
   end
 end
 
@@ -274,13 +266,6 @@ function Decoder:decode(bytes, it)
     until true end
 
     if ref['__on_decode_end'] ~= nil then ref:__on_decode_end() end
-
-    -- log DELETE changes before triggering
-    for _, change in pairs(all_changes) do
-      if bit.band(change.op, OPERATION.DELETE) == OPERATION.DELETE then
-        print("[decoder] DELETE change: refid=" .. tostring(change.__refid) .. " op=" .. change.op .. " dynamic_index=" .. tostring(change.dynamic_index) .. " prev=" .. tostring(change.previous_value))
-      end
-    end
 
     self:_trigger_changes(all_changes, self.refs)
 

@@ -140,8 +140,12 @@ function Callbacks:_trigger_changes(changes, refs)
         local field_callbacks = callbacks[change.field]
         if field_callbacks ~= nil then
           self.is_triggering = true
-          for _, callback in pairs(field_callbacks) do
-            callback(change.value, change.previous_value)
+          -- iterate over a snapshot to avoid skipping callbacks when
+          -- a listener removes itself (table.remove) during iteration
+          local snapshot = {}
+          for i, cb in ipairs(field_callbacks) do snapshot[i] = cb end
+          for _, cb in ipairs(snapshot) do
+            cb(change.value, change.previous_value)
           end
           self.is_triggering = false
         end
@@ -151,14 +155,11 @@ function Callbacks:_trigger_changes(changes, refs)
 
         if bit.band(change.op, OPERATION.DELETE) == OPERATION.DELETE then
           local delete_callbacks = callbacks[OPERATION.DELETE]
-          print("[callbacks] DELETE: refid=" .. tostring(ref_id) .. " prev=" .. tostring(change.previous_value) .. " has_callbacks=" .. tostring(delete_callbacks ~= nil) .. " dynamic_index=" .. tostring(change.dynamic_index))
           if change.previous_value ~= nil and delete_callbacks ~= nil then
             -- triger "on_remove"
             for _, callback in pairs(delete_callbacks) do
               callback(change.previous_value, change.dynamic_index or change.field)
             end
-          else
-            print("[callbacks] DELETE SKIPPED: prev_nil=" .. tostring(change.previous_value == nil) .. " no_callbacks=" .. tostring(delete_callbacks == nil))
           end
 
           if bit.band(change.op, OPERATION.ADD) == OPERATION.ADD then
