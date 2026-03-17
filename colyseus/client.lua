@@ -29,9 +29,11 @@ function Client:init(endpoint_or_settings)
       or ((parsed_url.scheme == "ws" or parsed_url.scheme == "http") and 80)
     self.settings.use_ssl = (parsed_url.scheme == "wss" or parsed_url.scheme == "https")
 
-    -- force SSL on HTML5 if running on HTTPS protocol
-    if info.system_name == "HTML5" then
-      self.settings.use_ssl = html5.run("window['location']['protocol']") == "https:"
+    -- On HTML5, use page protocol as fallback only when scheme is ambiguous (ws/http)
+    if info.system_name == "HTML5" and not self.settings.use_ssl then
+      if parsed_url.scheme == nil or parsed_url.scheme == "" then
+        self.settings.use_ssl = html5.run("window['location']['protocol']") == "https:"
+      end
     end
 
   else
