@@ -140,8 +140,12 @@ function Callbacks:_trigger_changes(changes, refs)
         local field_callbacks = callbacks[change.field]
         if field_callbacks ~= nil then
           self.is_triggering = true
-          for _, callback in pairs(field_callbacks) do
-            callback(change.value, change.previous_value)
+          -- iterate over a snapshot to avoid skipping callbacks when
+          -- a listener removes itself (table.remove) during iteration
+          local snapshot = {}
+          for i, cb in ipairs(field_callbacks) do snapshot[i] = cb end
+          for _, cb in ipairs(snapshot) do
+            cb(change.value, change.previous_value)
           end
           self.is_triggering = false
         end

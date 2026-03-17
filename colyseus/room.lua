@@ -82,7 +82,7 @@ function Room:connect (endpoint, options)
   local room = self
 
   self.connection:on("message", function(message)
-    room:_on_message(message, { offset = 1 })
+    room:_on_batch_message(message)
   end)
 
   self.connection:on("close", function(e)
