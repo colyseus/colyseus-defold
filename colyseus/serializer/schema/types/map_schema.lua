@@ -94,11 +94,50 @@ function MapSchema:clear(changes, refs)
   utils.remove_child_refs(self, changes, refs)
   self.indexes = {}
   self.items = {}
+  self.dynamic_indexes = {}
 end
 
 ---@return number
 function MapSchema:length()
-    return #self.indexes
+    -- dynamic_indexes is the dense key list; `indexes` can have interior
+    -- holes after deletes, where `#` is unreliable
+    return #self.dynamic_indexes
+end
+
+--
+-- Resync sweep (see Decoder:decode_resync): remove every entry whose KEY the
+-- snapshot did not visit — maps prune by string key, NOT wire index (the
+-- decoder-side `indexes` journal never evicts stale index→key mappings on
+-- re-indexing). Also scrubs ALL index→key rows of swept keys.
+--
+function MapSchema:__resync_prune(visited, prune, keep)
+  local deleted_keys = {}
+  local keys_snapshot = {}
+  for _, key in ipairs(self.dynamic_indexes) do
+    table.insert(keys_snapshot, key)
+  end
+
+  for _, key in ipairs(keys_snapshot) do
+    local value = self.items[key]
+    if visited[key] then
+      keep(value)
+    else
+      table.insert(deleted_keys, key)
+      prune(value, key)
+    end
+  end
+
+  for _, key in ipairs(deleted_keys) do
+    self.items[key] = nil
+    for i = #self.dynamic_indexes, 1, -1 do
+      if self.dynamic_indexes[i] == key then
+        table.remove(self.dynamic_indexes, i)
+      end
+    end
+    for i, k in pairs(self.indexes) do
+      if k == key then self.indexes[i] = nil end
+    end
+  end
 end
 
 ---@return table<string>

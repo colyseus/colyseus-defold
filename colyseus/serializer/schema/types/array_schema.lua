@@ -97,6 +97,27 @@ function ArraySchema:delete_by_index(index)
   self.items[index] = nil
 end
 
+--
+-- Resync sweep (see Decoder:decode_resync): remove every entry whose index
+-- the snapshot did not visit. `items` is hole-free here (decode-end
+-- compaction already ran; full-sync emits dense ADDs). Visited indexes may
+-- be sparse — ADD_BY_REFID resolves to the current client-side index.
+--
+function ArraySchema:__resync_prune(visited, prune, keep)
+  local removed = false
+  for i = 1, #self.items do
+    local value = self.items[i]
+    if visited[i] then
+      keep(value)
+    else
+      removed = true
+      prune(value, i)
+      self:delete_by_index(i)
+    end
+  end
+  if removed then self:__on_decode_end() end -- compact the holes
+end
+
 function ArraySchema:each(cb)
   for index, value in pairs(self.items) do
     if type(index) == "number" then

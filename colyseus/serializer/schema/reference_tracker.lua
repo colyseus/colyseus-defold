@@ -22,6 +22,12 @@ function reference_tracker:has(ref_id)
   return self.refs[ref_id] ~= nil
 end
 
+function reference_tracker:count()
+  local count = 0
+  for _ in pairs(self.refs) do count = count + 1 end
+  return count
+end
+
 function reference_tracker:get(ref_id)
   return self.refs[ref_id]
 end

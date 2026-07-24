@@ -19,7 +19,13 @@ function schema_serializer:get_state()
 end
 
 function schema_serializer:set_state(encoded_state, it)
-  self.decoder:decode(encoded_state, it)
+  if self.decoder.refs:count() > 1 then
+    -- rejoin over live state: reconcile ghosts (deletions that happened
+    -- while off the wire) instead of decoding additively
+    self.decoder:decode_resync(encoded_state, it)
+  else
+    self.decoder:decode(encoded_state, it)
+  end
 end
 
 function schema_serializer:patch(binary_patch, it)
