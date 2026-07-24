@@ -27,6 +27,8 @@ M.OPERATION = {
 
   -- ArraySchema operations
   REVERSE = 15,
+  MOVE = 32,
+  MOVE_AND_ADD = 160,
   DELETE_BY_REFID = 33,
   ADD_BY_REFID = 129,
 }

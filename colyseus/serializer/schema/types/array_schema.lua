@@ -75,8 +75,10 @@ end
 
 ---@package
 function ArraySchema:set_by_index(index, value, operation)
-  if index == 1 and operation == OPERATION.ADD and self.items[index] ~= nil then
-    table.insert(self.items, 1, value)
+  -- strict ADD only: MOVE_AND_ADD/DELETE_AND_ADD/ADD_BY_REFID must not insert
+  if operation == OPERATION.ADD and self.items[index] ~= nil then
+    -- ADD at an occupied index = insert: shift existing items up.
+    table.insert(self.items, index, value)
   elseif operation == OPERATION.DELETE_AND_MOVE then
     table.remove(self.items, index)
     self.items[index] = value

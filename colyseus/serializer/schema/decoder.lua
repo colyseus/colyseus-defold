@@ -129,10 +129,18 @@ array_schema.__decode = function(decoder, bytes, it, ref, all_changes)
   elseif operation == OPERATION.DELETE_BY_REFID then
     local ref_id = decode.number(bytes, it) + 1
     local item = decoder.refs:get(ref_id)
+
+    -- stale DELETE: ref_id unknown to this decoder (mid-tick joiner)
+    if item == nil then return end
+
+    -- ref-count decrement — must run even when the item is absent from
+    -- THIS array (view churn); this branch never reaches decode_value()
+    decoder.refs:remove(ref_id)
+
     local index = ref:index_of(item)
-    if index ~= -1 then
-      ref:delete_by_index(index)
-    end
+    if index == -1 then return end
+
+    ref:delete_by_index(index)
     table.insert(all_changes, {
       __refid = ref.__refid,
       op = OPERATION.DELETE,
