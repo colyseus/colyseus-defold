@@ -1,5 +1,6 @@
 local deftest = require "deftest.deftest"
 local schema_serializer = require "test.schema_serializer"
+local room_protocol = require "test.room_protocol"
 local fossil_delta = require "test.fossil_delta"
 local delta_container = require "test.delta_container"
 local client = require "test.client"
@@ -9,6 +10,7 @@ local http = require "test.http"
 function init(self)
 
   deftest.add(schema_serializer)
+  deftest.add(room_protocol)
   deftest.add(client)
   -- deftest.add(auth)
   -- deftest.add(http)

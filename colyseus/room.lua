@@ -1,4 +1,5 @@
 local os = require('os')
+local bit = require('colyseus.serializer.bit')
 local msgpack = require('colyseus.messagepack.MessagePack')
 
 local Connection = require('colyseus.connection')
@@ -12,6 +13,21 @@ local serialization = require('colyseus.serialization')
 
 local function exponential_backoff(attempt, delay)
   return math.floor(math.pow(2, attempt) * delay)
+end
+
+--- Writes a message type (string via the schema codec, or numeric code).
+local function write_message_type(initial_bytes, message_type, proto_name)
+  local mtype = type(message_type)
+
+  if mtype == "string" then
+    encode.string(initial_bytes, message_type)
+
+  elseif mtype == "number" then
+    encode.number(initial_bytes, message_type)
+
+  else
+    error("Protocol." .. proto_name .. ": message type not supported '" .. tostring(mtype) .. "'")
+  end
 end
 
 ---@class Room : EventEmitterInstance
@@ -64,6 +80,10 @@ function Room:init(name)
     is_reconnecting = false
   }
 
+  -- request/response (ROOM_REQUEST / ROOM_RESPONSE) correlation state
+  self._pending_requests = {}
+  self._next_request_id = 0
+
   local room = self
 
   -- remove all listeners on leave
@@ -86,6 +106,9 @@ function Room:connect (endpoint, options)
   end)
 
   self.connection:on("close", function(e)
+    -- in-flight requests can't be answered on a closed socket
+    room:_reject_all_pending_requests("connection closed before a response was received.")
+
     if (room._joined_at_time == nil) then
       print("Room connection closed before JOIN_ROOM")
       return
@@ -139,8 +162,20 @@ end
 function Room:_on_message (binary_string, it)
   local message = utils.string_to_byte_array(binary_string)
 
-  local code = message[it.offset]
+  -- Strip modifier bits (bits 5..7) so the dispatch below stays
+  -- modifier-agnostic; consume any modifier-attached prefix bytes here.
+  local raw_byte = message[it.offset]
   it.offset = it.offset + 1
+
+  local code = bit.band(raw_byte, protocol.CODE_MASK)
+
+  if bit.band(raw_byte, protocol.MODIFIER_TIMED) ~= 0 then
+    -- [uint32 sNow][uint32 inputSeq] — server time (ms since room start) +
+    -- last PROCESSED input seq. Consumed here; feeds the room clock + input
+    -- ack once the input layer is ported.
+    decode.uint32(message, it)
+    decode.uint32(message, it)
+  end
 
   if code == protocol.JOIN_ROOM then
     local reconnection_token = decode.string(message, it)
@@ -159,8 +194,29 @@ function Room:_on_message (binary_string, it)
       self.serializer = serializer:new()
     end
 
-    if #message > it.offset and self.serializer.handshake ~= nil then
-      self.serializer:handshake(message, it)
+    -- State reflection is length-prefixed: the schema handshake must not
+    -- read past it into the trailing tagged-section bytes. A zero length
+    -- means reconnect (the serializer already has state).
+    local state_reflection_len = decode.number(message, it)
+    if state_reflection_len > 0 and self.serializer.handshake ~= nil then
+      local reflection_end = it.offset + state_reflection_len
+      -- bounded slice — the reflection decoder reads until end-of-array
+      local reflection_bytes = {}
+      for i = 1, reflection_end - 1 do reflection_bytes[i] = message[i] end
+      self.serializer:handshake(reflection_bytes, it)
+      it.offset = reflection_end
+    else
+      it.offset = it.offset + state_reflection_len
+    end
+
+    -- Trailing tagged sections: [tag byte][length varint][payload].
+    -- Unknown tags are skipped via length (forward-compatible).
+    -- INPUT_REFLECTION / INPUT_OPTIONS are consumed by the input layer
+    -- once ported.
+    while it.offset <= #message do
+      it.offset = it.offset + 1 -- tag (see protocol.HANDSHAKE_SECTION)
+      local section_len = decode.number(message, it)
+      it.offset = it.offset + section_len
     end
 
     -- emit join OR reconnect event
@@ -237,6 +293,36 @@ function Room:_on_message (binary_string, it)
     end
 
     self:_dispatch_message(message_type, payload)
+
+  elseif code == protocol.ROOM_RESPONSE then
+    -- reply to a pending request()
+    local request_id = decode.number(message, it)
+    local status = message[it.offset]
+    it.offset = it.offset + 1
+
+    local payload = nil
+    if #binary_string >= it.offset then
+      local msgpack_cursor = {
+          s = binary_string,
+          i = it.offset,
+          j = #binary_string,
+          underflow = function() error "missing bytes" end,
+      }
+      payload = msgpack.unpack_cursor(msgpack_cursor)
+      it.offset = msgpack_cursor.i
+    end
+
+    local entry = self._pending_requests[request_id]
+    -- already answered (e.g. timed out) or unknown id — ignore
+    if entry ~= nil then
+      self._pending_requests[request_id] = nil
+      -- the ONE place the wire's three statuses collapse to (ok, payload, faulted):
+      entry.on_reply(
+        status == protocol.RESPONSE_STATUS.OK,
+        payload,
+        status == protocol.RESPONSE_STATUS.ERROR
+      )
+    end
 
   elseif code == protocol.PING then
     if self.ping_callback then
@@ -356,30 +442,9 @@ function Room:ping(callback)
   self.connection:send(utils.byte_array_to_string({ protocol.PING }))
 end
 
----@param message_type number|string
----@param message table|boolean|number|string
-function Room:send (message_type, message)
-  local initial_bytes = { protocol.ROOM_DATA }
-  local mtype = type(message_type)
-
-  if mtype == "string" then
-      encode.string(initial_bytes, message_type);
-
-  elseif mtype == "number" then
-      encode.number(initial_bytes, message_type);
-  else
-    error("Protocol.ROOM_DATA: message type not supported '" .. tostring(type) .. "'")
-  end
-
-  local encoded
-
-  if message ~= nil then
-    encoded = msgpack.pack(message)
-  else
-    encoded = ''
-  end
-
-  local data = utils.byte_array_to_string(initial_bytes) .. encoded
+---@private
+--- Transmits `data`, or buffers it while the connection is not open.
+function Room:_send_or_enqueue(data)
   if self.connection.state ~= "OPEN" then
     self:_enqueue_message(data)
   else
@@ -387,27 +452,109 @@ function Room:send (message_type, message)
   end
 end
 
+---@param message_type number|string
+---@param message table|boolean|number|string
+function Room:send (message_type, message)
+  local initial_bytes = { protocol.ROOM_DATA }
+  write_message_type(initial_bytes, message_type, "ROOM_DATA")
+
+  local encoded = (message ~= nil) and msgpack.pack(message) or ''
+
+  self:_send_or_enqueue(utils.byte_array_to_string(initial_bytes) .. encoded)
+end
+
 ---@param message_type string
 ---@param bytes table
 function Room:send_bytes (message_type, bytes)
-  local initial_bytes = { protocol.ROOM_DATA }
-  local mtype = type(message_type)
+  local initial_bytes = { protocol.ROOM_DATA_BYTES }
+  write_message_type(initial_bytes, message_type, "ROOM_DATA_BYTES")
 
-  if mtype == "string" then
-      encode.string(initial_bytes, message_type);
+  self:_send_or_enqueue(utils.byte_array_to_string(initial_bytes) .. utils.byte_array_to_string(bytes))
+end
 
-  elseif mtype == "number" then
-      encode.number(initial_bytes, message_type);
-  else
-    error("Protocol.ROOM_DATA_BYTES: message type not supported '" .. tostring(type) .. "'")
+--- Default request() timeout, in milliseconds.
+Room.default_request_timeout = 10000
+
+--- Send a message and await the server's reply — the value the server
+--- returns from its matching on_message handler.
+---
+--- The callback receives (response, err); exactly one is non-nil. `err` is
+--- set when the handler rejects (the authored reason) or throws
+--- ({name, message, code?}), when the connection closes first, or when no
+--- reply arrives within `timeout_ms` (default: Room.default_request_timeout).
+---@param message_type number|string
+---@param payload any
+---@param callback fun(response: any, err: any)
+---@param timeout_ms number|nil
+function Room:request(message_type, payload, callback, timeout_ms)
+  if self.connection == nil or self.connection.state ~= "OPEN" then
+    callback(nil, "cannot send request '" .. tostring(message_type) .. "': connection is not open.")
+    return
   end
 
-  local data = utils.byte_array_to_string(initial_bytes) .. utils.byte_array_to_string(bytes)
-  if self.connection.state ~= "OPEN" then
-    self:_enqueue_message(data)
-  else
-    self.connection:send(data)
+  -- the timer lives in this closure — the pending registry stays unaware of
+  -- timeouts; the reply callback and on_close both cancel it
+  local timer_handle = nil
+  local cancel_timer = function()
+    if timer_handle ~= nil then
+      timer.cancel(timer_handle)
+      timer_handle = nil
+    end
   end
+
+  local request_id = self:_send_request(message_type, payload,
+    function(ok, reply_payload, _faulted)
+      cancel_timer()
+      if ok then
+        callback(reply_payload, nil)
+      else
+        callback(nil, reply_payload)
+      end
+    end,
+    function(reason)
+      cancel_timer()
+      callback(nil, reason)
+    end)
+
+  -- Defold's `timer` is unavailable in headless/unit contexts — requests
+  -- then simply have no timeout
+  if timer ~= nil then
+    local ms = timeout_ms or Room.default_request_timeout
+    timer_handle = timer.delay(ms / 1000, false, function()
+      timer_handle = nil
+      self._pending_requests[request_id] = nil
+      callback(nil, "request '" .. tostring(message_type) .. "' timed out after " .. ms .. "ms.")
+    end)
+  end
+end
+
+---@private
+--- Low-level round-trip primitive: registers `on_reply` (called once with
+--- the decoded outcome when the server replies) and transmits a
+--- ROOM_REQUEST frame. `request()` wraps it with a timeout.
+function Room:_send_request(message_type, payload, on_reply, on_close)
+  local request_id = self._next_request_id
+  self._next_request_id = (self._next_request_id + 1) % 0x100000000 -- uint32 wrap
+
+  local initial_bytes = { protocol.ROOM_REQUEST }
+  encode.number(initial_bytes, request_id)
+  write_message_type(initial_bytes, message_type, "ROOM_REQUEST")
+
+  local encoded = (payload ~= nil) and msgpack.pack(payload) or ''
+
+  -- reliable + offline: buffer so it flushes on (re)connect
+  self:_send_or_enqueue(utils.byte_array_to_string(initial_bytes) .. encoded)
+
+  self._pending_requests[request_id] = { on_reply = on_reply, on_close = on_close }
+  return request_id
+end
+
+---@private
+function Room:_reject_all_pending_requests(reason)
+  for _, entry in pairs(self._pending_requests) do
+    if entry.on_close ~= nil then entry.on_close(reason) end
+  end
+  self._pending_requests = {}
 end
 
 ---@private
