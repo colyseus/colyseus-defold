@@ -1,4 +1,5 @@
 local bit = require 'colyseus.serializer.bit'
+local quantize = require 'colyseus.serializer.schema.quantize'
 local map_schema = require 'colyseus.serializer.schema.types.map_schema'
 local array_schema = require 'colyseus.serializer.schema.types.array_schema'
 local decode = require 'colyseus.serializer.schema.encoding.decode'
@@ -458,6 +459,15 @@ function Decoder:decode_value(decoder, operation, ref, field_index, field_type, 
     --
     -- Don't do anything...
     --
+  elseif type(field_type) == "table" and field_type.quantized ~= nil then
+    --
+    -- Quantized scalar: read the unsigned int of the descriptor's wire
+    -- width, then dequantize — the instance only ever holds the wire-exact
+    -- float64 (see quantize.lua).
+    --
+    local desc = field_type.quantized
+    value = quantize.dequantize(desc, decode[desc.wire](bytes, it))
+
   elseif field_type['_schema'] ~= nil then
     --
     -- Direct schema reference ("ref")

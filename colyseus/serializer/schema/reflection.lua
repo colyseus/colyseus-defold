@@ -1,6 +1,7 @@
 local schema = require 'colyseus.serializer.schema.schema'
 local type_context = require 'colyseus.serializer.schema.type_context'
 local Decoder = require 'colyseus.serializer.schema.decoder'
+local quantize = require 'colyseus.serializer.schema.quantize'
 
 local function reverse_table(t)
   local reversed = {}
@@ -10,15 +11,35 @@ local function reverse_table(t)
   return reversed
 end
 
+---@class QuantizedDescriptor : Schema
+---@field min number
+---@field max number
+---@field bits number
+---@field mode number 0 = clamp, 1 = wrap
+local QuantizedDescriptor = schema.define({
+    ["min"] = "float64",
+    ["max"] = "float64",
+    ["bits"] = "uint8",
+    ["mode"] = "uint8",
+    ["_fields_by_index"] = {"min", "max", "bits", "mode"}
+})
+
 ---@class ReflectionField : Schema
 ---@field name string
 ---@field type string
 ---@field referenced_type number
+---@field child_primitive string
+---@field quantized QuantizedDescriptor
 local ReflectionField = schema.define({
     ["name"] = "string",
     ["type"] = "string",
     ["referenced_type"] = "number",
-    ["_fields_by_index"] = {"name", "type", "referenced_type"}
+    -- primitive child of a collection — its own slot, replacing the
+    -- legacy "array:string" colon packing (gone in 5.0)
+    ["child_primitive"] = "string",
+    -- set only on t.quantized() fields; absence = "not quantized"
+    ["quantized"] = QuantizedDescriptor,
+    ["_fields_by_index"] = {"name", "type", "referenced_type", "child_primitive", "quantized"}
 })
 
 ---@class ReflectionType : Schema
@@ -65,18 +86,18 @@ local decode = function (bytes, it)
             local field = reflection_type.fields[i]
             local field_index = parent_field_index + i
 
-            if field.referenced_type ~= nil then
-                local referenced_type = context:get(field.referenced_type)
+            if field.quantized ~= nil then
+                -- schema-typed descriptor → resolved codec
+                local q = field.quantized
+                add_field(schema_type, field_index, field.name, {
+                    quantized = quantize.resolve({ min = q.min, max = q.max, bits = q.bits, mode = q.mode })
+                })
 
-                if referenced_type == nil then
-                    local child_type_index = string.find(field.type, ":")
-                    referenced_type = string.sub(
-                        field.type,
-                        child_type_index + 1,
-                        string.len(field.type)
-                    )
-                    field.type = string.sub(field.type, 1, child_type_index - 1)
-                end
+            elseif field.referenced_type ~= nil then
+                -- schema child by type id; a primitive child (referenced_type
+                -- -1) rides its own child_primitive slot (the 4.x colon
+                -- packing is gone in 5.0)
+                local referenced_type = context:get(field.referenced_type) or field.child_primitive
 
                 if field.type == "ref" then
                     add_field(schema_type, field_index, field.name, referenced_type)
