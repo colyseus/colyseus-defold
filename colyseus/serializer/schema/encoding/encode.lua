@@ -337,4 +337,5 @@ return {
   uint64 = uint64,
   float32 = float32,
   float64 = float64,
+  fround = float32_fields, -- (value) -> nearest-f32 value (+ sign, expo, mant)
 }
