@@ -218,6 +218,33 @@ return function()
       assert_equal(4, state.nums.items[4])
     end)
 
+    it("StaticClassQuantizedState", function()
+      -- same wire fixtures through a schema-codegen generated class
+      -- (locks the emitter's quantize.resolve define-table form)
+      local QState = require 'test.schema.Quantized.QState'
+      local Decoder = require 'colyseus.serializer.schema.decoder'
+
+      local state = QState:new()
+      local decoder = Decoder:new(state)
+
+      decoder:decode({ 128, 238, 50, 129, 187, 130, 55, 221, 154, 31, 131, 1, 132, 2, 133, 5, 134, 4, 135, 161, 113, 255, 1, 128, 0, 1, 128, 1, 202, 0, 0, 32, 64, 128, 2, 3, 255, 2, 128, 0, 161, 97, 161, 120, 255, 5, 128, 7, 255, 4, 128, 0, 6, 128, 1, 7, 255, 6, 128, 1, 255, 7, 128, 2 })
+
+      assert_equal(1.2500025945283118, state.yaw)
+      assert_equal(0.6999999999999997, state.pitch)
+      assert_equal(0.12345678897655028, state.precise)
+      assert_equal(2.5, state.nums.items[2])
+      assert_equal("x", state.tags.items["a"])
+      assert_equal(7, state.child.v)
+      assert_equal(2, state.items:length())
+      assert_equal("q", state.label)
+
+      decoder:decode({ 128, 250, 162, 129, 0, 255, 1, 128, 3, 4 })
+
+      assert_equal(4.000046652010295, state.yaw)
+      assert_equal(-1.5, state.pitch)
+      assert_equal(4, state.nums:length())
+    end)
+
   end)
 
 end
