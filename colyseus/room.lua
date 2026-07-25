@@ -132,7 +132,12 @@ function Room:connect (endpoint, options)
     room:emit("error", e)
   end)
 
-  -- TODO: support "?skipHandshake=1" option here!
+  -- local serializer already holding state means the server handshake is
+  -- redundant (mirrors the JS SDK's initial-connect rule)
+  if self.serializer ~= nil and self.serializer:get_state() ~= nil then
+    endpoint = endpoint .. "&skipHandshake=1"
+  end
+
   room.connection:open(endpoint)
 end
 
@@ -221,7 +226,7 @@ function Room:_on_message (binary_string, it)
 
     -- emit join OR reconnect event
     if self._joined_at_time == nil then
-      self._joined_at_time = os.time()
+      self._joined_at_time = socket.gettime()
       self:emit("join")
 
     else
@@ -326,8 +331,9 @@ function Room:_on_message (binary_string, it)
 
   elseif code == protocol.PING then
     if self.ping_callback then
-      local now = os.time()
-      self.ping_callback(math.floor((now - self.last_ping_time) + 0.5))
+      -- socket.gettime() is fractional seconds — deliver RTT in whole ms
+      local now = socket.gettime()
+      self.ping_callback(math.floor((now - self.last_ping_time) * 1000 + 0.5))
       self.ping_callback = nil
     end
   end
@@ -352,7 +358,7 @@ function Room:_handle_reconnection(code)
     return
   end
 
-  if (os.time() - self._joined_at_time) < (self.reconnection.min_uptime / 1000) then
+  if (socket.gettime() - self._joined_at_time) < (self.reconnection.min_uptime / 1000) then
      print(string.format("[Colyseus reconnection]: ❌ Room has not been up for long enough for automatic reconnection. (min uptime: %dms)", self.reconnection.min_uptime))
      self:emit("leave", { code = protocol.CLOSE_CODE.ABNORMAL_CLOSURE })
      return
@@ -437,7 +443,7 @@ function Room:ping(callback)
     return
   end
 
-  self.last_ping_time = os.time()
+  self.last_ping_time = socket.gettime()
   self.ping_callback = callback
   self.connection:send(utils.byte_array_to_string({ protocol.PING }))
 end
