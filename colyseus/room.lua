@@ -10,6 +10,10 @@ local utils = require('colyseus.utils.utils')
 local decode = require('colyseus.serializer.schema.encoding.decode')
 local encode = require('colyseus.serializer.schema.encoding.encode')
 local serialization = require('colyseus.serialization')
+local reflection = require('colyseus.serializer.schema.reflection')
+local RoomClock = require('colyseus.room_clock')
+local InputHandle = require('colyseus.input_handle')
+local InputEncoder = require('colyseus.serializer.schema.input_encoder')
 
 local function exponential_backoff(attempt, delay)
   return math.floor(math.pow(2, attempt) * delay)
@@ -65,6 +69,20 @@ function Room:init(name)
   self.name = name
   self.serializer = nil
   self.on_message_handlers = {}
+
+  -- server-time + RTT estimator, driven by the TIMED prefix servers emit
+  -- when the room called defineInput(). Always present; without TIMED
+  -- samples it reports server_now() == now() and zeros.
+  self.clock = RoomClock.new()
+
+  -- input layer — populated from the JOIN_ROOM handshake sections
+  self._input_handle = nil
+  self._input_class = nil
+  self._input_stamp_render = false
+  self._input_stamp_reckon = false
+  self._input_tick_rate = nil
+  self._input_patch_rate = nil
+  self._input_sub_steps = nil
 
   self.reconnection = {
     enabled = true,
@@ -176,10 +194,12 @@ function Room:_on_message (binary_string, it)
 
   if bit.band(raw_byte, protocol.MODIFIER_TIMED) ~= 0 then
     -- [uint32 sNow][uint32 inputSeq] — server time (ms since room start) +
-    -- last PROCESSED input seq. Consumed here; feeds the room clock + input
-    -- ack once the input layer is ported.
-    decode.uint32(message, it)
-    decode.uint32(message, it)
+    -- last PROCESSED input seq. The input ack goes to the handle (it owns
+    -- the round-trip); its RTT sample + sNow feed the time-only clock.
+    local s_now = decode.uint32(message, it)
+    local input_seq = decode.uint32(message, it)
+    local rtt_sample = (self._input_handle ~= nil) and self._input_handle:ack_input(input_seq) or -1
+    self.clock:sample(s_now, rtt_sample)
   end
 
   if code == protocol.JOIN_ROOM then
@@ -216,12 +236,38 @@ function Room:_on_message (binary_string, it)
 
     -- Trailing tagged sections: [tag byte][length varint][payload].
     -- Unknown tags are skipped via length (forward-compatible).
-    -- INPUT_REFLECTION / INPUT_OPTIONS are consumed by the input layer
-    -- once ported.
     while it.offset <= #message do
-      it.offset = it.offset + 1 -- tag (see protocol.HANDSHAKE_SECTION)
+      local tag = message[it.offset]
+      it.offset = it.offset + 1
       local section_len = decode.number(message, it)
-      it.offset = it.offset + section_len
+      local section_end = it.offset + section_len
+
+      if tag == protocol.HANDSHAKE_SECTION.INPUT_REFLECTION then
+        -- schema reflection of the input struct — synthesize its class so
+        -- room:input() works without an explicit type
+        local section_bytes = {}
+        for i = 1, section_len do section_bytes[i] = message[it.offset + i - 1] end
+        local input_decoder = reflection.decode(section_bytes)
+        self._input_class = getmetatable(input_decoder.state)
+
+      elseif tag == protocol.HANDSHAKE_SECTION.INPUT_OPTIONS then
+        -- [flags u8][varints in bit order]
+        local flags = message[it.offset]
+        it.offset = it.offset + 1
+        local F = protocol.INPUT_FLAGS
+        self._input_stamp_render = bit.band(flags, F.RENDER_TIME) ~= 0
+        self._input_stamp_reckon = bit.band(flags, F.RECKON_TIME) ~= 0
+        if bit.band(flags, F.FIXED_TIMESTEP) ~= 0 then self._input_tick_rate = decode.number(message, it) end
+        if bit.band(flags, F.PATCH_RATE) ~= 0 then self._input_patch_rate = decode.number(message, it) end
+        if bit.band(flags, F.SUB_STEPS) ~= 0 then self._input_sub_steps = decode.number(message, it) end
+      end
+
+      it.offset = section_end
+    end
+
+    -- hand the snapshot cadence to the clock once the loop has it
+    if self._input_patch_rate ~= nil then
+      self.clock:set_patch_interval(self._input_patch_rate)
     end
 
     -- emit join OR reconnect event
@@ -369,6 +415,13 @@ function Room:_handle_reconnection(code)
     self.reconnection.is_reconnecting = true
   end
 
+  -- the server allocates a FRESH input buffer for the reconnected client
+  -- (its consumed counter restarts at 0) — zero ours so post-reconnect seqs
+  -- line up. Observing controllers follow via the handle's `epoch`.
+  if self._input_handle ~= nil then
+    self._input_handle:reset()
+  end
+
   self:_retry_reconnection()
 end
 
@@ -446,6 +499,41 @@ function Room:ping(callback)
   self.last_ping_time = socket.gettime()
   self.ping_callback = callback
   self.connection:send(utils.byte_array_to_string({ protocol.PING }))
+end
+
+--- Lazily create (and thereafter return) the per-room input handle.
+--- Mutate `handle.data`, then call `handle:send()`.
+---
+--- `options.type` (a schema class) is optional when the server room called
+--- `defineInput()` — the class is then synthesized from the handshake's
+--- input reflection. Later calls return the same handle; their options are
+--- ignored (first call wins).
+---@param options table|nil {type, mode, history_size, render_delay, allow_rewind}
+function Room:input(options)
+  if self._input_handle ~= nil then
+    return self._input_handle
+  end
+  options = options or {}
+
+  local input_class = options.type or self._input_class
+  if input_class == nil then
+    error("room:input(): no input schema available. The server room must call " ..
+      "defineInput(YourInput), or pass {type = YourInput} explicitly.")
+  end
+
+  local instance = input_class:new()
+  local encoder = InputEncoder.new(instance, options.mode, options.history_size)
+  local room = self
+  self._input_handle = InputHandle.new(instance, encoder, {
+    stamp_render = self._input_stamp_render,
+    stamp_reckon = self._input_stamp_reckon,
+    render_delay = options.render_delay,
+    allow_rewind = options.allow_rewind,
+    tick_rate = self._input_tick_rate,
+    patch_rate = self._input_patch_rate,
+    sub_steps = self._input_sub_steps,
+  }, function() return room.connection end, function() return room.clock end)
+  return self._input_handle
 end
 
 ---@private

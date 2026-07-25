@@ -51,6 +51,16 @@ return {
     INPUT_OPTIONS = 2,    -- input feature flags + rates the client mirrors
   },
 
+  -- Bit flags in the leading byte of the INPUT_OPTIONS section. Some flags
+  -- imply a trailing varint in the section payload, appended in bit order.
+  INPUT_FLAGS = {
+    RENDER_TIME = 1,    -- reliable inputs carry the SNAPSHOT-timeline stamp
+    FIXED_TIMESTEP = 2, -- [tickRate varint] (Hz) follows
+    PATCH_RATE = 4,     -- [patchRate varint] (ms) follows
+    SUB_STEPS = 8,      -- [subSteps varint] follows
+    RECKON_TIME = 16,   -- reliable inputs carry the RECKON-timeline stamp
+  },
+
   CLOSE_CODE = {
     NORMAL_CLOSURE = 1000,
     GOING_AWAY = 1001,
