@@ -22,6 +22,20 @@ local BUFFER_HEADROOM = 1.5
 ---@param opts table {stamp_render, stamp_reckon, render_delay, allow_rewind, tick_rate, patch_rate, sub_steps}
 ---@param get_connection function -> connection (read at send time; survives reconnect)
 ---@param get_clock function -> RoomClock
+--- How far in the PAST this client draws remote entities, in ms. A
+--- lag-compensating server rewinds its targets by this much plus half the RTT,
+--- so it reads the world at the instant you actually saw — get it wrong and
+--- every shot misses by exactly the difference. `predict:make_reconciler()`
+--- binds it from the lerp delay you already attached with; set it yourself only
+--- to override.
+function InputHandle:render_delay()
+  return self._render_delay
+end
+
+function InputHandle:set_render_delay(ms)
+  self._render_delay = math.max(0, ms or 0)
+end
+
 function InputHandle.new(data, encoder, opts, get_connection, get_clock)
   local self = setmetatable({}, InputHandle)
   self.data = data

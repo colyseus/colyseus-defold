@@ -13,6 +13,7 @@ local RoomClock = require 'colyseus.room_clock'
 local Reconciler = require 'colyseus.predict.reconciler'
 local PredictedEventChannel = require 'colyseus.predict.predicted_event_channel'
 local PredictedSpawns = require 'colyseus.predict.predicted_spawns'
+local get_callbacks = require 'colyseus.serializer.schema.callbacks'
 
 local Predict = {}
 Predict.__index = Predict
@@ -55,6 +56,13 @@ end
 ---@param callbacks table the SDK callbacks object (from
 ---  `require('colyseus.serializer.schema.callbacks')(room_or_decoder)`)
 ---@param clock table RoomClock (the room's clock)
+--- The one-liner every caller wants: a Predict over a room's callbacks and
+--- clock. `Predict.new(get_callbacks(room), room.clock)` is the same two
+--- collaborators every time and no decision the caller is better placed to make.
+function Predict.for_room(room)
+  return Predict.new(get_callbacks(room), room.clock)
+end
+
 function Predict.new(callbacks, clock)
   local self = setmetatable({}, Predict)
   self._callbacks = callbacks
@@ -63,6 +71,7 @@ function Predict.new(callbacks, clock)
   self._slots_by_ref = {}   -- refid -> field -> slot
   self._sims_by_ref = {}    -- refid -> reckon sim state
   self._driven = {}
+  self._attachments = {}    -- every attach_all* detacher, so dispose can undo them
   self._fixed_step_ms = nil -- adopted from the first reconciler
   self._step_acc = 0
   self._last_frame_now = -1
@@ -198,9 +207,27 @@ end
 --- Attach prediction to every child of a root-level collection: wires
 --- on_add -> track(fields) and on_remove -> detach. Returns a detacher.
 function Predict:attach_all(collection, fields, options)
+  return self:_attach_each(collection, function(child)
+    for _, f in ipairs(fields) do self:track(child, f, options) end
+  end)
+end
+
+--- The reckon twin of attach_all: forward-simulate every child of a collection
+--- with the shared step instead of smoothing it toward the past. Same add/remove
+--- wiring, so a collection whose members come and go needs no bookkeeping from
+--- the caller.
+function Predict:attach_all_reckon(collection, opts)
+  return self:_attach_each(collection, function(child)
+    self:track_reckon(child, opts)
+  end)
+end
+
+---@private
+--- Shared add/remove wiring behind both attach_all flavours.
+function Predict:_attach_each(collection, attach)
   local tracked = {}
   local add_off = self._callbacks:on_add(collection, function(child, _key)
-    for _, f in ipairs(fields) do self:track(child, f, options) end
+    attach(child)
     table.insert(tracked, child)
   end, true)
   local remove_off = self._callbacks:on_remove(collection, function(child, _key)
@@ -212,12 +239,34 @@ function Predict:attach_all(collection, fields, options)
     end
     self:detach(child)
   end)
-  return function()
+  local off = function()
     if add_off ~= nil then add_off() end
     if remove_off ~= nil then remove_off() end
     for _, child in ipairs(tracked) do self:detach(child) end
     tracked = {}
   end
+  table.insert(self._attachments, off)
+  return off
+end
+
+--- Release everything this Predict registered: tracked fields, reckon sims,
+--- attach_all wiring and every driven child.
+---
+--- This matters more than it looks. Callbacks live on the ROOM, so a Predict
+--- that outlives its owner keeps firing handlers into freed state — attach and
+--- detach are not symmetric unless someone closes the loop, and the attach_all
+--- detachers are held here, not by the caller. This is that loop; call it when
+--- the screen using this goes away.
+function Predict:dispose()
+  for _, off in ipairs(self._attachments) do off() end
+  self._attachments = {}
+  self._slots_by_ref = {}
+  self._sims_by_ref = {}
+  for _, child in ipairs(self._driven) do
+    if child.dispose ~= nil then child:dispose() end
+  end
+  self._driven = {}
+  self._fixed_step_ms = nil
 end
 
 -- --- Factories ------------------------------------------------------------
@@ -225,10 +274,33 @@ end
 --- Spawn a driven Reconciler (clock injected, fixed step adopted).
 function Predict:make_reconciler(instance, opts)
   if opts.clock == nil then opts.clock = self._clock end
+  self:_bind_render_delay(opts.input)
   local recon = Reconciler.new(instance, opts)
   self:_adopt_fixed_step(recon.step_ms)
   table.insert(self._driven, recon)
   return recon
+end
+
+---@private
+--- Tell the input handle how far in the past this client draws, taken from the
+--- lerp delay already attached here.
+---
+--- Worth doing automatically because the failure is silent and expensive: a
+--- lag-compensating server rewinds to `server_now - (render_delay + rtt/2)`, so
+--- leaving render_delay at zero makes every rewound read land one full
+--- render-delay early, and shots miss by exactly that much with nothing in the
+--- logs to say so. An explicit `render_delay` on room:input() still wins.
+function Predict:_bind_render_delay(input)
+  if input == nil or input:render_delay() > 0 then return end
+  for _, per_ref in pairs(self._slots_by_ref) do
+    for _, slot in pairs(per_ref) do
+      local o = slot.opts
+      if o ~= nil and o.mode == "lerp" and (o.delay or 0) > 0 then
+        input:set_render_delay(o.delay)
+        return
+      end
+    end
+  end
 end
 
 --- Spawn a driven PredictedEventChannel.
