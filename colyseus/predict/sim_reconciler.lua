@@ -10,7 +10,7 @@
 -- replaced IN PLACE by mirrors the controller seeds, re-adopts on every ack, and
 -- poses — and every other entry is opaque and untouched.
 --
---   local sim = predict:sim_reconciler({
+--   local sim = predict:sim({
 --     input = input,
 --     world = { paddle = state.players[sid], puck = state.puck },
 --     step = function(ctx, w, cmd)

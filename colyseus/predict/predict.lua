@@ -278,7 +278,7 @@ end
 -- --- Factories ------------------------------------------------------------
 
 --- Spawn a driven Reconciler (clock injected, fixed step adopted).
-function Predict:make_reconciler(instance, opts)
+function Predict:reconciler(instance, opts)
   if opts.clock == nil then opts.clock = self._clock end
   self:_bind_render_delay(opts.input)
   local recon = Reconciler.new(instance, opts)
@@ -311,7 +311,7 @@ end
 
 --- Spawn a driven SimReconciler — the composite face, for a world of parts
 --- rather than one entity's fields.
-function Predict:sim_reconciler(opts)
+function Predict:sim(opts)
   if opts.clock == nil then opts.clock = self._clock end
   self:_bind_render_delay(opts.input)
   local recon = SimReconciler.new(opts)
