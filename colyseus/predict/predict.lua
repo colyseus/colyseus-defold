@@ -81,8 +81,11 @@ end
 
 -- --- Attach ---------------------------------------------------------------
 
+---@private
 --- Track one numeric field for smoothing. Returns an untrack function.
-function Predict:track(instance, field, options)
+--- Internal primitive under :attach() — see PORTING.md, which strips
+--- track/untrack/trackStepped from the published surface.
+function Predict:_track(instance, field, options)
   local opts = resolve_field_opts(options)
   local refid = instance.__refid
   local per_ref = self._slots_by_ref[refid]
@@ -118,10 +121,13 @@ function Predict:track(instance, field, options)
   return function() self:untrack(instance, field) end
 end
 
+---@private
 --- Dead-reckon fields of an instance with a step SHARED with the server.
+--- Internal primitive under :attach({ mode = "reckon", ... }) — named for the
+--- reference's `trackStepped`, and stripped from the published surface there.
 ---@param opts table {fields, step = fun(scratch, dt_seconds, elapsed_ms),
 ---  smoothing = 20 (0 = raw projection), substep = 16 (ms), snap = 0}
-function Predict:track_reckon(instance, opts)
+function Predict:_track_stepped(instance, opts)
   local refid = instance.__refid
   local scratch = getmetatable(instance):new()
   local copy_fields = {}
@@ -171,7 +177,7 @@ function Predict:track_reckon(instance, opts)
   -- each reckoned field gets a RECKON slot (sample mirror + fallback)
   local offs = {}
   for _, f in ipairs(opts.fields) do
-    table.insert(offs, self:track(instance, f, { mode = "reckon" }))
+    table.insert(offs, self:_track(instance, f, { mode = "reckon" }))
   end
   return function()
     for _, off in ipairs(offs) do off() end
@@ -210,21 +216,44 @@ function Predict:detach(instance)
   self._sims_by_ref[refid] = nil
 end
 
---- Attach prediction to every child of a root-level collection: wires
---- on_add -> track(fields) and on_remove -> detach. Returns a detacher.
-function Predict:attach_all(collection, fields, options)
-  return self:_attach_each(collection, function(child)
-    for _, f in ipairs(fields) do self:track(child, f, options) end
-  end)
+--- Attach prediction to ONE instance from a declarative config. Returns a
+--- detacher.
+---
+--- Two shapes, mirroring the reference:
+---
+---   -- per-field smoothing; each field picks its own mode
+---   predict:attach(boss, { x = "lerp", y = "lerp",
+---                          yaw = { mode = "damped", angle = true } })
+---
+---   -- dead reckoning, one step shared with the server across `fields`
+---   predict:attach(bot, { mode = "reckon", fields = { "x", "y" }, step = patrol })
+---
+--- Fields the instance's schema doesn't declare are DROPPED, not an error:
+--- one config can cover a heterogeneous collection, and a field that isn't
+--- there would otherwise subscribe to nothing (or, in the reckon scratch, read
+--- garbage).
+function Predict:attach(instance, config)
+  if config.mode == "reckon" then
+    return self:_track_stepped(instance, config)
+  end
+  local offs = {}
+  for field, spec in pairs(config) do
+    if instance[field] ~= nil then
+      local opts = (type(spec) == "string") and { mode = spec } or spec
+      table.insert(offs, self:_track(instance, field, opts))
+    end
+  end
+  return function()
+    for _, off in ipairs(offs) do off() end
+  end
 end
 
---- The reckon twin of attach_all: forward-simulate every child of a collection
---- with the shared step instead of smoothing it toward the past. Same add/remove
---- wiring, so a collection whose members come and go needs no bookkeeping from
---- the caller.
-function Predict:attach_all_reckon(collection, opts)
+--- Attach prediction to every child of a root-level collection: wires
+--- on_add -> attach(child, config) and on_remove -> detach. Same config shapes
+--- as :attach(), reckon included — there is no separate reckon flavour.
+function Predict:attach_all(collection, config)
   return self:_attach_each(collection, function(child)
-    self:track_reckon(child, opts)
+    self:attach(child, config)
   end)
 end
 
