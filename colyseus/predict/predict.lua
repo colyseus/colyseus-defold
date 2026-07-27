@@ -13,6 +13,7 @@ local RoomClock = require 'colyseus.room_clock'
 local Reconciler = require 'colyseus.predict.reconciler'
 local PredictedEventChannel = require 'colyseus.predict.predicted_event_channel'
 local PredictedSpawns = require 'colyseus.predict.predicted_spawns'
+local SimReconciler = require 'colyseus.predict.sim_reconciler'
 local get_callbacks = require 'colyseus.serializer.schema.callbacks'
 
 local Predict = {}
@@ -306,6 +307,17 @@ function Predict:_bind_render_delay(input)
       end
     end
   end
+end
+
+--- Spawn a driven SimReconciler — the composite face, for a world of parts
+--- rather than one entity's fields.
+function Predict:sim_reconciler(opts)
+  if opts.clock == nil then opts.clock = self._clock end
+  self:_bind_render_delay(opts.input)
+  local recon = SimReconciler.new(opts)
+  self:_adopt_fixed_step(recon.step_ms)
+  table.insert(self._driven, recon)
+  return recon
 end
 
 --- Spawn a driven PredictedEventChannel.
