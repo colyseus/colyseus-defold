@@ -122,6 +122,19 @@ function Reconciler:value(field)
   return p + (smoothed - p) * self:_render_alpha()
 end
 
+--- What `predict:value(instance, field)` needs to reach this controller's poses.
+--- Flat face: the pose key IS the field name, so the two lists match — but the
+--- registration keeps them separate to share one overlay path with the
+--- composite face, whose keys are "<worldKey>.<field>".
+function Reconciler:bound_registrations()
+  if #self._numeric_fields == 0 then return {} end
+  return { {
+    source = self._instance,
+    fields = self._numeric_fields,
+    pose_keys = self._numeric_fields,
+  } }
+end
+
 -- --- RollbackController hooks ---------------------------------------------
 
 function Reconciler:_smoothed_fields()

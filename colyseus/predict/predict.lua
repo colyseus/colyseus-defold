@@ -283,8 +283,58 @@ function Predict:reconciler(instance, opts)
   self:_bind_render_delay(opts.input)
   local recon = Reconciler.new(instance, opts)
   self:_adopt_fixed_step(recon.step_ms)
+  self:_install_bound_overlay(recon)
   table.insert(self._driven, recon)
   return recon
+end
+
+---@private
+--- Route `value(instance, field)` at every field a controller predicts, so ONE
+--- read idiom covers the whole render layer: passively-smoothed remotes and
+--- controller-owned entities alike, with the caller never naming a pose key.
+---
+--- Any passive slot already on that field is STASHED, not dropped — its
+--- listener keeps sampling, and dispose() puts it back.
+function Predict:_install_bound_overlay(ctrl)
+  if ctrl.bound_registrations == nil then return end
+  local offs = {}
+  for _, reg in ipairs(ctrl:bound_registrations()) do
+    local refid = reg.source ~= nil and reg.source.__refid or nil
+    if refid ~= nil then
+      local per_ref = self._slots_by_ref[refid]
+      if per_ref == nil then
+        per_ref = {}
+        self._slots_by_ref[refid] = per_ref
+      end
+      for k, field in ipairs(reg.fields) do
+        local stash = per_ref[field]
+        if stash ~= nil and stash.opts.mode == "bound" then
+          print("colyseus.predict: '" .. field .. "' is already bound to a controller — " ..
+            "the newer registration wins.")
+          stash = stash.stash
+        end
+        per_ref[field] = {
+          field = field,
+          instance = reg.source,
+          opts = { mode = "bound" },
+          ctrl = ctrl,
+          pose_key = reg.pose_keys[k],
+          stash = stash,
+        }
+        table.insert(offs, { per_ref = per_ref, field = field })
+      end
+    end
+  end
+  if #offs > 0 then
+    ctrl:on_disposed(function()
+      for _, o in ipairs(offs) do
+        local slot = o.per_ref[o.field]
+        if slot ~= nil and slot.opts.mode == "bound" then
+          o.per_ref[o.field] = slot.stash   -- nil when there was no passive slot
+        end
+      end
+    end)
+  end
 end
 
 ---@private
@@ -316,6 +366,7 @@ function Predict:sim(opts)
   self:_bind_render_delay(opts.input)
   local recon = SimReconciler.new(opts)
   self:_adopt_fixed_step(recon.step_ms)
+  self:_install_bound_overlay(recon)
   table.insert(self._driven, recon)
   return recon
 end
@@ -474,6 +525,9 @@ function Predict:value(instance, field)
   local slot = per_ref ~= nil and per_ref[field] or nil
   if slot == nil then return to_number(instance[field]) end
   local mode = slot.opts.mode
+  -- Controller-owned: a reconciler claimed this field, so the pose comes from
+  -- its rollback rather than from a smoothing curve over the server stream.
+  if mode == "bound" then return slot.ctrl:value(slot.pose_key) end
   if mode == "lerp" then return self:_compute_lerp(slot) end
   if mode == "damped" then return self:_compute_damped(slot) end
   if mode == "extrapolate" then return self:_compute_extrapolate(slot) end

@@ -93,7 +93,7 @@ function SimReconciler:_bind(key, source)
   -- Same as the flat face: the predicted state is a same-class schema mirror, so
   -- a step writes `w.paddle.vy = ...` against a real typed instance.
   local mirror = getmetatable(source):new()
-  local bound = { source = source, mirror = mirror, fields = {} }
+  local bound = { key = key, source = source, mirror = mirror, fields = {} }
 
   for _, field in ipairs(source._fields_by_index) do
     if is_scalar_type(source._schema[field]) then
@@ -144,6 +144,28 @@ end
 --- Every pose key this world exposes — useful when one reads nil.
 function SimReconciler:pose_keys()
   return self._pose_keys
+end
+
+--- What `predict:value(instance, field)` needs to reach this controller's poses:
+--- the ORIGINAL decoded instance per bound entry (not the mirror), its numeric
+--- fields, and the "<key>.<field>" each maps to. Keeps the composite key an
+--- internal detail — the render layer reads `predict:value(state.puck, "x")`.
+function SimReconciler:bound_registrations()
+  local out = {}
+  for _, b in ipairs(self._bound) do
+    local fields, keys = {}, {}
+    for _, f in ipairs(b.fields) do
+      local key = b.key .. "." .. f
+      if self._pose_of[key] ~= nil and type(b.mirror[f]) == "number" then
+        table.insert(fields, f)
+        table.insert(keys, key)
+      end
+    end
+    if #fields > 0 then
+      table.insert(out, { source = b.source, fields = fields, pose_keys = keys })
+    end
+  end
+  return out
 end
 
 -- --- RollbackController hooks ---------------------------------------------
