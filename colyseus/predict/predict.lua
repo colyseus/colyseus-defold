@@ -126,7 +126,12 @@ function Predict:track_reckon(instance, opts)
   local copy_fields = {}
   for _, f in ipairs(instance._fields_by_index) do
     local ft = instance._schema[f]
-    if type(ft) == "string" and ft ~= "string" then
+    -- Every primitive, strings included: the scratch is documented as a FULL
+    -- copy of the entity so the shared step can read descriptors it never
+    -- attached (a bot's `kind`). Dropping strings makes step functions that
+    -- branch on one silently take the default branch — and attach_all_reckon
+    -- gives the caller no live instance to fall back on.
+    if type(ft) == "string" then
       table.insert(copy_fields, f)
     elseif type(ft) == "table" and ft.quantized ~= nil then
       table.insert(copy_fields, f)
