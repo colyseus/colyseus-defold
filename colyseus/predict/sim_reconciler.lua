@@ -27,9 +27,13 @@
 -- short-circuit and always adopts, so the reference expects a little float noise
 -- in the correction rather than an exact zero.
 --
--- NOT ported (see PORTING.md): the custom `pose`/`interpolate` overlays that give
--- OPAQUE parts render smoothing, and the bound_registrations hook into
--- Predict:value — read poses through :value().
+-- Bound entries register into predict:value(), so the render layer reads them
+-- the same way it reads any other entity — predict:value(state.puck, "x") — and
+-- the "key.field" pose key stays an internal detail.
+--
+-- NOT ported (see PORTING.md): the custom `pose`/`interpolate` overlays that
+-- give OPAQUE parts render smoothing. Those have no decoded instance to key on,
+-- so :value(pose_key) remains the only way to read them.
 --
 local RollbackController = require 'colyseus.predict.rollback'
 
