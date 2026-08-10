@@ -29,6 +29,8 @@ function PredictedSpawns.new(opts, clock)
   self._size = 0
   self.dead = false
   self._on_disposed = nil
+  -- raw read until predict:spawns routes this at its reckon slots
+  self._read_server = function(server, field) return server[field] end
   return self
 end
 
@@ -180,6 +182,24 @@ end
 function PredictedSpawns:entry_for(server)
   if server == nil then return nil end
   return self._by_server[server]
+end
+
+--- Unified field read across the predicted -> authoritative handoff: pending
+--- entries read the stepped local, confirmed entries read the authoritative
+--- instance through the bound reader — predict:value() (reckoned, lead-aware)
+--- when created via predict:spawns(...) with `fields`, a raw field read
+--- otherwise. Render from this and the handoff is invisible: same id, same
+--- timeline, one code path.
+function PredictedSpawns:value(entry, field)
+  if entry.server ~= nil then return self._read_server(entry.server, field) end
+  if entry.local_state == nil then return nil end
+  return entry.local_state[field]
+end
+
+--- Route confirmed-entry value() reads (wired by predict:spawns to its reckon
+--- slots; standalone stores keep the raw default).
+function PredictedSpawns:bind_reader(read)
+  self._read_server = read
 end
 
 function PredictedSpawns:alive(id)

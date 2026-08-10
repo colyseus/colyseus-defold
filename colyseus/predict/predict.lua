@@ -409,17 +409,71 @@ end
 
 --- Spawn a driven PredictedSpawns store wired to a root-level collection's
 --- add/remove stream.
+---
+--- With `fields`, the store also owns the collection's MOTION (no separate
+--- attach_all needed): confirmed entities are dead-reckoned with the same
+--- `step` that advances pending locals, and store:value(entry, field) is one
+--- read path across the whole life of the entity.
+---
+---@param opts table PredictedSpawns opts plus optional reckon of the confirmed
+---  entities: {fields, smoothing = 0, substep = 16}
 function Predict:spawns(collection, opts)
+  opts = opts or {}
   local store = PredictedSpawns.new(opts, self._clock)
+
+  -- Reckon wiring (`fields` + `step`): every confirmed entity gets a reckon
+  -- attach whose horizon is snapshot age PLUS the entry's measured input lead —
+  -- 0 for a foreign entity (server-present, same as an attach_all reckon), the
+  -- exact per-spawn uplink for an owned one (see spawn_time). An owned
+  -- projectile thus keeps flying the shooter's timeline through the handoff.
+  local reckon = (opts.fields ~= nil and opts.step ~= nil)
+  local untrack = reckon and {} or nil
+  local clock = self._clock
+
   local add_off = self._callbacks:on_add(collection, function(server, _key)
     store:handle_add(server)
+    if not reckon or untrack[server] ~= nil then return end -- decoder re-fire
+    -- AFTER handle_add: the lead is only measured once the entry collapses.
+    local entry = store:entry_for(server)
+    local lead = (entry ~= nil) and (entry.lead_ms or 0) or 0
+    local off = self:_track_stepped(server, {
+      fields = opts.fields,
+      step = opts.step,
+      -- 0, not the reckon default 20: a deterministic constant-step projectile
+      -- rebases exactly, so smoothing here would only add lag.
+      smoothing = opts.smoothing or 0,
+      substep = opts.substep,
+    })
+    self:_bind_forward(server, function()
+      if clock == nil then return math.max(0, lead) end
+      local stamp = clock:last_server_time()
+      local age = (stamp > 0) and math.max(0, clock:server_now() - stamp) or 0
+      return math.max(0, age + lead)
+    end)
+    untrack[server] = off
   end, true)
+
   local remove_off = self._callbacks:on_remove(collection, function(server, _key)
+    if untrack ~= nil then
+      local off = untrack[server]
+      if off ~= nil then off() end
+      untrack[server] = nil
+    end
     store:handle_remove(server)
   end)
+
+  if reckon then
+    -- route store:value() confirmed reads through the reckon slots
+    store:bind_reader(function(server, field) return self:value(server, field) end)
+  end
+
   store._on_disposed = function()
     if add_off ~= nil then add_off() end
     if remove_off ~= nil then remove_off() end
+    if untrack ~= nil then
+      for _, off in pairs(untrack) do off() end
+      untrack = {}
+    end
   end
   table.insert(self._driven, store)
   return store
