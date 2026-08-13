@@ -498,7 +498,11 @@ end
 --- Call once per render frame. Returns the SEND BUDGET: how many fixed input
 --- steps are due — send exactly that many inputs, then read render values.
 --- 0 until a reconciler advertises the step.
+---@param now number|nil monotonic ms; omit to read the SDK clock, which is
+--- what the JS reference does with its `performance.now()` default. Omitting
+--- it keeps the caller off a platform clock of its own.
 function Predict:tick(now)
+  if now == nil then now = RoomClock.get_now() end
   self._render_time = now
 
   local steps = 0

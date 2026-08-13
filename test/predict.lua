@@ -225,6 +225,29 @@ return function()
       if not ok then error(err, 0) end
     end)
 
+    it("TickDefaultsToTheClock", function()
+      local NOW = 0
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local decoder = Decoder:new(PassiveEnt:new())
+        local predict = Predict.new(get_callbacks(decoder), RoomClock.new())
+        predict:_adopt_fixed_step(50)
+
+        -- The render time is what pins `now` to an axis; the send budget only
+        -- sees deltas, so a constant offset would cancel out of it unnoticed.
+        NOW = 1234
+        assert_equal(0, predict:tick())        -- first frame has no delta
+        assert_equal(1234, predict._render_time)
+
+        NOW = 1334
+        assert_equal(2, predict:tick())        -- 100ms of a 50ms step
+        assert_equal(1334, predict._render_time)
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
     it("ReckonValueAt", function()
       local NOW = 0
       local original_now = RoomClock.get_now
