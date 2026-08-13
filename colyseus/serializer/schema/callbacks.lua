@@ -264,7 +264,7 @@ end
 
 ---@param room_or_decoder Room|Decoder
 ---@return Callbacks
-return function(room_or_decoder)
+local function resolve(room_or_decoder)
   if room_or_decoder.room_id ~= nil then
     return Callbacks:new(room_or_decoder.serializer.decoder)
 
@@ -272,3 +272,12 @@ return function(room_or_decoder)
     return Callbacks:new(room_or_decoder)
   end
 end
+
+-- The module is callable (`callbacks(room)`, the released form) and exposes
+-- `callbacks.get(room)` — the same verb as `predict.get(room)` and the other
+-- SDKs' Callbacks.get.
+return setmetatable({ get = resolve }, {
+  __call = function(_, room_or_decoder)
+    return resolve(room_or_decoder)
+  end,
+})

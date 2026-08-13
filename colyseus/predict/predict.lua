@@ -60,7 +60,7 @@ end
 --- The one-liner every caller wants: a Predict over a room's callbacks and
 --- clock. `Predict.new(get_callbacks(room), room.clock)` is the same two
 --- collaborators every time and no decision the caller is better placed to make.
-function Predict.for_room(room)
+function Predict.get(room)
   return Predict.new(get_callbacks(room), room.clock)
 end
 
