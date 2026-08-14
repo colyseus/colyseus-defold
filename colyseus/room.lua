@@ -521,6 +521,12 @@ function Room:input(options)
       "defineInput(YourInput), or pass {type = YourInput} explicitly.")
   end
 
+  if options.mode == "unreliable" then
+    error('room:input(): mode "unreliable" is not supported yet — it needs a ' ..
+      'WebTransport datagram channel, and this SDK connects over WebSocket only. ' ..
+      'Use mode "reliable".')
+  end
+
   local instance = input_class:new()
   local encoder = InputEncoder.new(instance, options.mode, options.history_size)
   local room = self

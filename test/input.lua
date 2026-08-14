@@ -400,5 +400,16 @@ return function()
       assert_equal(750, room.clock:last_server_time())
     end)
 
+    it("RoomInputUnreliableModeIsRejected", function()
+      -- No datagram transport in this SDK yet — mode "unreliable" must fail
+      -- loudly at construction rather than silently ride the reliable channel.
+      local room = Room.new("phase0")
+      local ok, err = pcall(function()
+        room:input({ type = MoveInput, mode = "unreliable" })
+      end)
+      assert_equal(false, ok)
+      assert_equal(true, string.find(err, "unreliable", 1, true) ~= nil)
+    end)
+
   end)
 end
