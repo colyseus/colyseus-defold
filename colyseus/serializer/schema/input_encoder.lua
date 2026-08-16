@@ -18,6 +18,12 @@ local bit = require 'colyseus.serializer.bit'
 local encode = require 'colyseus.serializer.schema.encoding.encode'
 local quantize = require 'colyseus.serializer.schema.quantize'
 
+-- A field op packs as `operation | index`, so index 63 would emit 255 — the
+-- byte a decoder reads as SWITCH_TO_STRUCTURE. The server rejects the 64th
+-- field where the schema is defined; mirror it here, since this encoder
+-- assembles the op byte itself.
+local MAX_FIELDS = 63
+
 local InputEncoder = {}
 InputEncoder.__index = InputEncoder
 
@@ -38,6 +44,11 @@ function InputEncoder.new(instance, mode, history_size)
   self._slot_count = 0
 
   for i, field_name in ipairs(instance._fields_by_index) do
+    if i > MAX_FIELDS then -- `i` is 1-based; the wire index is i - 1
+      error("InputEncoder: field '" .. field_name .. "' is at index " .. (i - 1) ..
+        "; a Schema may only have " .. MAX_FIELDS .. " fields.")
+    end
+
     local field_type = instance._schema[field_name]
     if type(field_type) == "table" and field_type.quantized == nil then
       error("InputEncoder: non-primitive field '" .. field_name .. "' is not supported.")
