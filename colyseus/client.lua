@@ -26,6 +26,7 @@ function Client:init(endpoint_or_settings)
       or ((parsed_url.scheme == "wss" or parsed_url.scheme == "https") and 443)
       or ((parsed_url.scheme == "ws" or parsed_url.scheme == "http") and 80)
     self.settings.use_ssl = (parsed_url.scheme == "wss" or parsed_url.scheme == "https")
+    self.settings.pathname = parsed_url.path
 
     -- On HTML5, use page protocol as fallback only when scheme is ambiguous (ws/http)
     if info.system_name == "HTML5" and not self.settings.use_ssl then
@@ -41,6 +42,17 @@ function Client:init(endpoint_or_settings)
   -- ensure hostname does not end with "/"
   if string.sub(self.settings.hostname, -1) == "/" then
     self.settings.hostname = self.settings.hostname:sub(0, -2)
+  end
+
+  -- normalize pathname: no trailing "/", nil when empty (path-prefixed
+  -- endpoints, e.g. one server routing many apps by path)
+  if self.settings.pathname ~= nil then
+    if string.sub(self.settings.pathname, -1) == "/" then
+      self.settings.pathname = self.settings.pathname:sub(1, -2)
+    end
+    if self.settings.pathname == "" then
+      self.settings.pathname = nil
+    end
   end
 
   self.http = HTTP.new(self)

@@ -89,7 +89,8 @@ function HTTP:_get_ws_endpoint(room, query_params)
   -- build request endpoint
   local protocol = (self.client.settings.use_ssl and "wss") or "ws"
   local port = ((self.client.settings.port ~= 80 and self.client.settings.port ~= 443) and ":" .. self.client.settings.port) or ""
-  local public_address = (room ~= nil and room.publicAddress) or self.client.settings.hostname .. port
+  local public_address = (room ~= nil and room.publicAddress)
+    or (self.client.settings.hostname .. port .. (self.client.settings.pathname or ""))
 
   if room ~= nil then
     return protocol .. "://" .. public_address .. "/" .. room.processId .. "/" .. room.roomId .. "?" .. table.concat(params, "&")
@@ -110,7 +111,7 @@ function HTTP:_get_http_endpoint(segments, query_params)
   -- build request endpoint
   local protocol = (self.client.settings.use_ssl and "https") or "http"
   local port = ((self.client.settings.port ~= 80 and self.client.settings.port ~= 443) and ":" .. self.client.settings.port) or ""
-  local public_address = self.client.settings.hostname .. port
+  local public_address = self.client.settings.hostname .. port .. (self.client.settings.pathname or "")
 
   -- make sure segments start with "/"
   if string.sub(segments, 1, 1) ~= "/" then
