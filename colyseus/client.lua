@@ -1,5 +1,3 @@
-local os = require('os')
-
 local Connection = require('colyseus.connection')
 local Protocol = require('colyseus.protocol')
 
@@ -147,13 +145,20 @@ function Client:consume_seat_reservation(response, callback)
 end
 
 --- Measures the latency of the connection to the server.
----@param ping_count number
+---
+--- Always resolves: with the (average) latency, or with an error on connection
+--- failure, server-side close before all pongs arrive, or timeout.
+---@param ping_count number Number of pings to send (default: 1). Returns the average when > 1.
 ---@param callback fun(err:string, latency:number)
-function Client:get_latency(ping_count, callback)
+---@param timeout number Seconds to wait for the measurement before failing (default: 1.5).
+function Client:get_latency(ping_count, callback, timeout)
   if type(ping_count) == "function" then
+    -- get_latency(callback) or get_latency(callback, timeout)
+    timeout = callback
     callback = ping_count
     ping_count = 1
   end
+  timeout = timeout or 1.5
 
   local conn = Connection.new()
   local latencies = {}
@@ -161,24 +166,26 @@ function Client:get_latency(ping_count, callback)
   local endpoint = self.http:_get_ws_endpoint()
 
   local has_resolved = false
+  local timeout_handle = nil
   local resolve = function(err, latency)
     if has_resolved then return end
     has_resolved = true
+    if timeout_handle ~= nil then timer.cancel(timeout_handle) end
     conn:close()
     callback(err, latency)
   end
 
   conn:on("open", function()
-    start_time = os.time()
+    start_time = socket.gettime()
     conn:send(string.char(Protocol.PING))
   end)
 
   conn:on("message", function(message)
-    local now = os.time()
-    table.insert(latencies, (now - start_time))
+    local now = socket.gettime()
+    table.insert(latencies, (now - start_time) * 1000) -- seconds -> milliseconds
 
     if #latencies < ping_count then
-      start_time = os.time()
+      start_time = socket.gettime()
       conn:send(string.char(Protocol.PING))
     else
       local sum = 0
@@ -187,8 +194,18 @@ function Client:get_latency(ping_count, callback)
     end
   end)
 
+  -- server closed the socket before all pongs arrived (a clean close emits "close", not "error")
+  conn:on("close", function()
+    resolve("Connection closed while measuring latency for " .. endpoint)
+  end)
+
   conn:on("error", function(err)
     resolve("Failed to calculate latency for " .. endpoint)
+  end)
+
+  -- bound blackholed/unreachable hosts so a single endpoint can't stall select_by_latency
+  timeout_handle = timer.delay(timeout, false, function()
+    resolve("Timed out measuring latency for " .. endpoint)
   end)
 
   conn:open(endpoint)
@@ -197,7 +214,8 @@ end
 --- Selects the best endpoint from a list of endpoints based on latency.
 ---@param endpoints table<string> List of endpoints
 ---@param callback fun(err:string, client:Client)
-function Client.select_by_latency(endpoints, callback)
+---@param timeout number Per-endpoint latency timeout in seconds (default: 1.5), forwarded to get_latency().
+function Client.select_by_latency(endpoints, callback, timeout)
   local results = {}
   local completed = 0
   local total = #endpoints
@@ -209,12 +227,12 @@ function Client.select_by_latency(endpoints, callback)
 
   for i, endpoint in ipairs(endpoints) do
     local client = Client(endpoint)
-    client:get_latency(function(err, latency)
+    client:get_latency(1, function(err, latency)
       completed = completed + 1
       if not err then
         table.insert(results, { client = client, latency = latency })
         local settings = client.settings
-        print(string.format("🛜 Endpoint Latency: %dms - %s:%d%s", latency, settings.hostname, settings.port, settings.pathname))
+        print(string.format("🛜 Endpoint Latency: %dms - %s:%d%s", latency, settings.hostname, settings.port, settings.pathname or ""))
       end
 
       if completed == total then
@@ -225,15 +243,22 @@ function Client.select_by_latency(endpoints, callback)
           callback(nil, results[1].client)
         end
       end
-    end)
+    end, timeout)
   end
 end
 
+-- Make the Client table itself callable as the constructor, so it can expose both
+-- `Client(endpoint)` (construction) and statics like `Client.select_by_latency(...)`.
+-- (select_by_latency also constructs via `Client(endpoint)` internally.)
 ---@param endpoint_or_settings string|{hostname:string, port:number, use_ssl:boolean}
 ---@return Client
-return function (endpoint_or_settings)
-  local instance = EventEmitter:new()
-  setmetatable(instance, Client)
-  instance:init(endpoint_or_settings)
-  return instance
-end
+setmetatable(Client, {
+  __call = function(_, endpoint_or_settings)
+    local instance = EventEmitter:new()
+    setmetatable(instance, Client)
+    instance:init(endpoint_or_settings)
+    return instance
+  end
+})
+
+return Client
