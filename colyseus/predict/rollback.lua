@@ -47,19 +47,22 @@ end
 local RollbackController = {}
 RollbackController.__index = RollbackController
 
----@param opts table {input, clock, smoothing, snap, step_ms, step_seconds, sub_steps, on_reconcile, warn_on_divergence}
+---@param opts table {input, clock, smooth_ms, snap, step_ms, step_seconds, sub_steps, on_reconcile, warn_on_divergence}
 function RollbackController.init(self, opts)
   local input = opts.input
   assert(input ~= nil, "RollbackController: input handle required")
   self._input = input
   self._clock = opts.clock
 
-  local smoothing = opts.smoothing
-  if smoothing == nil then
-    smoothing = (input.patch_rate ~= nil and input.patch_rate > 0)
-      and (1000 / input.patch_rate) or 20
+  -- error-decay time constant (ms); 0 = hard snap. Default: the server's
+  -- correction cadence (one patch interval) so a correction fades before the
+  -- next one lands — else 50.
+  local smooth_ms = opts.smooth_ms
+  if smooth_ms == nil then
+    smooth_ms = (input.patch_rate ~= nil and input.patch_rate > 0)
+      and input.patch_rate or 50
   end
-  self._smoothing = smoothing
+  self._smooth_ms = smooth_ms
   self._snap_threshold = opts.snap or 0
 
   local step_ms = opts.step_ms or input.step_ms
@@ -144,7 +147,7 @@ function RollbackController:tick(now)
   self:_mark_dirty()
 
   if dt <= 0 then return end
-  local k = (self._smoothing <= 0) and 1 or (1 - math.exp(-self._smoothing * dt / 1000))
+  local k = (self._smooth_ms <= 0) and 1 or (1 - math.exp(-dt / self._smooth_ms))
   local err = self._error
   for _, f in ipairs(self:_smoothed_fields()) do
     err[f] = (err[f] or 0) * (1 - k)
@@ -232,7 +235,7 @@ function RollbackController:_reconcile(acked)
   self._predicted_seq = self._input.sent_count
 
   -- error rebase: what the player SAW minus the corrected result
-  local hard = self._smoothing <= 0
+  local hard = self._smooth_ms <= 0
   local mag = 0
   for _, f in ipairs(fields) do
     local correction = before[f] - self:_read_current(f)

@@ -49,6 +49,26 @@ return function()
     return clock
   end
 
+  --- Listener stub — tests push samples directly, no decoder bytes.
+  local function fake_callbacks()
+    local listeners = {}
+    local cb = {}
+    function cb:listen(instance, field, handler, immediate)
+      listeners[field] = handler
+      if immediate then handler(instance[field]) end
+      return function() listeners[field] = nil end
+    end
+    function cb:push(field, value) listeners[field](value) end
+    return cb
+  end
+
+  local function lerp_setup(x0)
+    local ent = { __refid = 1, a = x0 or 10 }
+    local cb = fake_callbacks()
+    local predict = Predict.new(cb, RoomClock.new())
+    return ent, cb, predict
+  end
+
   describe("predict layer", function()
 
     it("ReconcilerCore", function()
@@ -69,7 +89,7 @@ return function()
             s.vx = s.vx + cmd.ax * ctx.dt
             s.x = s.x + s.vx * ctx.dt
           end,
-          smoothing = 0,
+          smooth_ms = 0,
           step_ms = 50,
         })
 
@@ -141,7 +161,7 @@ return function()
             end)
             s.x = s.x + cmd.ax + (bonus or 0)
           end,
-          smoothing = 0,
+          smooth_ms = 0,
           step_ms = 50,
         })
 
@@ -185,7 +205,7 @@ return function()
 
         predict:track(ent, "a", { mode = "lerp" })
         predict:track(ent, "b", { mode = "damped" })
-        predict:track(ent, "c", { mode = "extrapolate", damping = 0 })
+        predict:track(ent, "c", { mode = "extrapolate", smooth_ms = 0 })
         predict:track(ent, "d", { mode = "raw" })
         predict:track(ent, "yaw", { mode = "lerp", angle = true })
 
@@ -263,7 +283,7 @@ return function()
         predict:track_reckon(ball, {
           fields = { "x" },
           step = function(s, dt, _elapsed) s.x = s.x + s.vx * dt end,
-          smoothing = 0,   -- raw projection
+          smooth_ms = 0,   -- raw projection
           substep = 10,
         })
 
@@ -283,6 +303,170 @@ return function()
         -- value_at: arbitrary instant raw; the past clamps to the snapshot
         assert_close(107.5, predict:value_at(ball, "x", 1150))
         assert_close(100, predict:value_at(ball, "x", 900))
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    -- Lerp + smooth_ms — the display-only output spring on the lerp result
+    -- (mirror of sdk test/predict-lerp-smoothing.test.ts). Default 0 (off):
+    -- the output stays the raw interpolant, bit-identical to a spring-less
+    -- lerp. Armed, it keeps rendered velocity continuous, trailing the raw
+    -- output by speed * smooth_ms during motion — frame-rate independently.
+
+    it("LerpSmoothMsDefaultOff", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        -- the GOTCHA this guards: 50 is the damped/extrapolate default —
+        -- lerp must NOT silently spring with it
+        local ent1, cb1, p1 = lerp_setup()
+        local ent2, cb2, p2 = lerp_setup()
+        p1:attach(ent1, { a = "lerp" })
+        p2:attach(ent2, { a = { mode = "lerp", smooth_ms = 0 } })
+
+        NOW = 1050; cb1:push("a", 20); cb2:push("a", 20)
+        NOW = 1130; p1:tick(NOW); p2:tick(NOW)   -- target 1030 -> u = 0.6
+        local v = p1:value(ent1, "a")
+        assert_close(16, v, 1e-12)
+        assert_equal(v, p2:value(ent2, "a"))
+
+        NOW = 1145; cb1:push("a", 35); cb2:push("a", 35)
+        NOW = 1170; p1:tick(NOW); p2:tick(NOW)
+        assert_equal(p2:value(ent2, "a"), p1:value(ent1, "a"))
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    it("LerpSmoothMsTrailsRaw", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local ent_r, cb_r, p_r = lerp_setup()
+        local ent_s, cb_s, p_s = lerp_setup()
+        p_r:attach(ent_r, { a = "lerp" })
+        p_s:attach(ent_s, { a = { mode = "lerp", smooth_ms = 30 } })
+
+        for t = 1050, 1400, 50 do
+          NOW = t
+          local x = 10 + (t - 1000) / 5
+          cb_r:push("a", x); cb_s:push("a", x)
+        end
+        for t = 1000, 1400, 10 do
+          NOW = t
+          p_r:tick(t); p_s:tick(t)
+          p_r:value(ent_r, "a"); p_s:value(ent_s, "a")
+        end
+        local v_raw = p_r:value(ent_r, "a")
+        local v_sm = p_s:value(ent_s, "a")
+        assert_equal(true, v_raw > 10)          -- raw is moving
+        assert_equal(true, v_sm < v_raw)        -- spring trails the raw output
+        assert_equal(true, v_sm > v_raw - 15)   -- bounded, not stuck
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    it("LerpSmoothMsFrameRateIndependent", function()
+      -- 200 u/s stream, smooth_ms 25 -> trail = 200 * 0.025 = 5 u; the exact
+      -- first-order-hold step holds it at ANY tick cadence
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local function run(tick_ms)
+          NOW = 1000
+          local ent, cb, p = lerp_setup()
+          p:attach(ent, { a = { mode = "lerp", smooth_ms = 25 } })
+          local v = 10
+          for t = 1000 + tick_ms, 2500, tick_ms do
+            NOW = t
+            if t % 50 == 0 then cb:push("a", 10 + (t - 1000) / 5) end
+            p:tick(t)
+            v = p:value(ent, "a")
+          end
+          local raw_at_2500 = 10 + (2500 - 100 - 1000) / 5   -- target = now - delay(100)
+          return raw_at_2500 - v
+        end
+        local trail_fine = run(10)
+        local trail_coarse = run(25)
+        assert_close(5, trail_fine, 1e-6)
+        assert_close(5, trail_coarse, 1e-6)
+        assert_equal(true, math.abs(trail_fine - trail_coarse) <= 1e-6)
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    it("LerpSmoothMsSnapPops", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local ent, cb, p = lerp_setup()
+        p:attach(ent, { a = { mode = "lerp", snap = 4, smooth_ms = 30 } })
+
+        NOW = 1050; cb:push("a", 10.2)   -- establish cadence
+        NOW = 3000; cb:push("a", 60)     -- teleport
+        NOW = 3060; p:tick(NOW)
+        assert_equal(60, p:value(ent, "a"))   -- spring popped with the ring
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    it("DampedSmoothMsDefault50", function()
+      -- lerp's 0 default must not leak into damped: unset smooth_ms chases
+      -- with damped's own 50 default rather than freezing
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local ent, cb, p = lerp_setup()
+        p:attach(ent, { a = "damped" })
+
+        NOW = 1050; cb:push("a", 60)
+        NOW = 1110; p:tick(NOW)
+        local v = p:value(ent, "a")
+        assert_equal(true, v > 10)   -- chasing
+        assert_equal(true, v < 60)   -- still mid-glide
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    it("DampedSmoothMsZeroSnaps", function()
+      -- the old rate-form 0 froze the output — 0 now means snap
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local ent, cb, p = lerp_setup()
+        p:attach(ent, { a = { mode = "damped", smooth_ms = 0 } })
+
+        NOW = 1050; cb:push("a", 60)
+        NOW = 1110; p:tick(NOW)
+        assert_equal(60, p:value(ent, "a"))
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    it("LerpSmoothMsSameFrameReRead", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local ent, cb, p = lerp_setup()
+        p:attach(ent, { a = { mode = "lerp", smooth_ms = 30 } })
+
+        NOW = 1050; cb:push("a", 20)
+        NOW = 1130; p:tick(NOW)
+        local v1 = p:value(ent, "a")
+        assert_equal(v1, p:value(ent, "a"))   -- spring advances once per frame
       end)
       RoomClock.get_now = original_now
       if not ok then error(err, 0) end

@@ -28,12 +28,14 @@ local MAX_STEPS_PER_FRAME = 5
 local FIELD_DEFAULTS = {
   mode = "lerp",
   delay = 100,            -- lerp render-time lag (ms)
-  damping = 15,           -- damped/extrapolate spring (1/s); 0 on extrapolate = raw projection
   max_extrapolate = 200,  -- extrapolate overshoot cap (ms)
   tick_interval = 0,      -- arrival-grid snap (ms); 0 off
   snap = 0,               -- value-space teleport threshold; 0 off
   angle = false,          -- radian angle — unwrap samples over the shortest arc
 }
+
+-- smooth_ms fallback for damped/extrapolate (lerp's output spring defaults 0)
+local DEFAULT_SMOOTH_MS = 50
 
 local function resolve_field_opts(options)
   local opts = {}
@@ -44,6 +46,9 @@ local function resolve_field_opts(options)
       opts[k] = v
     end
   end
+  -- smooth_ms (time constant, ms; 0 = off/snap) has no shared default: nil
+  -- resolves per mode at the read site — 50 on damped/extrapolate, 0 on lerp
+  if options ~= nil then opts.smooth_ms = options.smooth_ms end
   return opts
 end
 
@@ -107,7 +112,8 @@ function Predict:_track(instance, field, options)
     opts = opts,
     v1 = initial,
     aux_v = initial,
-    aux_t = 0,
+    aux_t = RoomClock.get_now(),
+    lerp_prev = initial,  -- previous frame's RAW lerp output (the spring's FOH slope)
     ring_t = {},
     ring_v = {},
     ring_head = 0,   -- 0-based; access via ring_t[phys + 1]
@@ -126,7 +132,7 @@ end
 --- Internal primitive under :attach({ mode = "reckon", ... }) — named for the
 --- reference's `trackStepped`, and stripped from the published surface there.
 ---@param opts table {fields, step = fun(scratch, dt_seconds, elapsed_ms),
----  smoothing = 20 (0 = raw projection), substep = 16 (ms), snap = 0}
+---  smooth_ms = 50 (0 = raw projection), substep = 16 (ms), snap = 0}
 function Predict:_track_stepped(instance, opts)
   local refid = instance.__refid
   local scratch = getmetatable(instance):new()
@@ -150,7 +156,7 @@ function Predict:_track_stepped(instance, opts)
     scratch = scratch,
     fields = opts.fields,
     step = opts.step,
-    smoothing = opts.smoothing or 20,
+    smooth_ms = opts.smooth_ms or 50,
     substep = (opts.substep ~= nil and opts.substep > 0) and opts.substep or 16,
     snap = opts.snap or 0,
     smoothed = {},
@@ -416,7 +422,7 @@ end
 --- read path across the whole life of the entity.
 ---
 ---@param opts table PredictedSpawns opts plus optional reckon of the confirmed
----  entities: {fields, smoothing = 0, substep = 16}
+---  entities: {fields, smooth_ms = 0, substep = 16}
 function Predict:spawns(collection, opts)
   opts = opts or {}
   local store = PredictedSpawns.new(opts, self._clock)
@@ -439,9 +445,9 @@ function Predict:spawns(collection, opts)
     local off = self:_track_stepped(server, {
       fields = opts.fields,
       step = opts.step,
-      -- 0, not the reckon default 20: a deterministic constant-step projectile
+      -- 0, not the reckon default 50: a deterministic constant-step projectile
       -- rebases exactly, so smoothing here would only add lag.
-      smoothing = opts.smoothing or 0,
+      smooth_ms = opts.smooth_ms or 0,
       substep = opts.substep,
     })
     self:_bind_forward(server, function()
@@ -559,6 +565,7 @@ function Predict:_on_sample(slot, current)
     head = 0
     count = 0
     slot.aux_v = current
+    slot.lerp_prev = current   -- lerp's output spring pops too
   end
 
   local last_t1 = nil
@@ -652,13 +659,45 @@ function Predict:_compute_damped(slot)
   local dt_frame = now - slot.aux_t
   slot.aux_t = now
   if dt_frame > 0 then
-    local k = 1 - math.exp(-slot.opts.damping * dt_frame / 1000)
+    local tau = slot.opts.smooth_ms or DEFAULT_SMOOTH_MS
+    local k = (tau > 0) and (1 - math.exp(-dt_frame / tau)) or 1   -- 0 = snap
     slot.aux_v = slot.aux_v + (slot.v1 - slot.aux_v) * k
   end
   return slot.aux_v
 end
 
 function Predict:_compute_lerp(slot)
+  local raw = self:_compute_lerp_raw(slot)
+  local tau = slot.opts.smooth_ms or 0   -- lerp's output spring defaults OFF
+  local now = self._render_time
+  if tau <= 0 then
+    -- Spring off (the default) — pin the state to the raw output so a
+    -- runtime smooth_ms enable starts from here instead of gliding in
+    -- from wherever the spring last rested.
+    slot.aux_v = raw
+    slot.lerp_prev = raw
+    slot.aux_t = now
+    return raw
+  end
+  local dt = now - slot.aux_t
+  if dt <= 0 then return slot.aux_v end   -- same-frame re-read
+  -- Exact first-order-hold step for a linearly-varying target (tau = smooth_ms):
+  --   y(dt) = u1 - s*tau + (y0 - u0 + s*tau) * e^(-dt/tau),  s = (u1 - u0)/dt
+  -- Frame-rate independent: a steady mover renders with a constant s*tau
+  -- trail at any fps (a per-frame EMA's trail varies with frame rate).
+  local u0 = slot.lerp_prev
+  local y0 = slot.aux_v
+  local kdt = dt / tau
+  local trail = (raw - u0) / kdt
+  local y = raw - trail + (y0 - u0 + trail) * math.exp(-kdt)
+  slot.aux_v = y
+  slot.lerp_prev = raw
+  slot.aux_t = now
+  return y
+end
+
+--- The undamped interpolant — _compute_lerp minus the output spring.
+function Predict:_compute_lerp_raw(slot)
   local count = slot.ring_count
   if count == 0 then return slot.v1 end
   local head = slot.ring_head
@@ -726,13 +765,14 @@ function Predict:_compute_extrapolate(slot)
 
   local last_t = slot.aux_t
   slot.aux_t = now
-  if slot.opts.damping <= 0 then
+  local tau = slot.opts.smooth_ms or DEFAULT_SMOOTH_MS
+  if tau <= 0 then
     slot.aux_v = raw
     return raw
   end
   local dt_frame = now - last_t
   if dt_frame > 0 then
-    local k = 1 - math.exp(-slot.opts.damping * dt_frame / 1000)
+    local k = 1 - math.exp(-dt_frame / tau)
     slot.aux_v = slot.aux_v + (raw - slot.aux_v) * k
   end
   return slot.aux_v
@@ -789,7 +829,7 @@ function Predict:_apply_simulation(sim)
   self:_advance(sim, forward, sim.out, present)
 
   local first = sim.last_apply_time == nil
-  if first or sim.smoothing <= 0 then
+  if first or sim.smooth_ms <= 0 then
     for k = 1, n do
       sim.offset[k] = 0
       sim.smoothed[k] = sim.out[k]
@@ -811,7 +851,7 @@ function Predict:_apply_simulation(sim)
         sim.frame_vel[k] = (sim.out[k] - sim.out_prev[k]) / dt_ms
       end
     end
-    local decay = math.exp(-sim.smoothing * dt_ms / 1000)
+    local decay = math.exp(-dt_ms / sim.smooth_ms)
     for k = 1, n do
       sim.offset[k] = sim.offset[k] * decay
       sim.smoothed[k] = sim.out[k] + sim.offset[k]
@@ -819,7 +859,7 @@ function Predict:_apply_simulation(sim)
   else
     -- no clock — plain EMA chase
     local dt_ms = math.max(0, math.min(now - sim.last_apply_time, 100))
-    local k2 = 1 - math.exp(-sim.smoothing * dt_ms / 1000)
+    local k2 = 1 - math.exp(-dt_ms / sim.smooth_ms)
     for k = 1, n do
       sim.smoothed[k] = sim.smoothed[k] + (sim.out[k] - sim.smoothed[k]) * k2
     end
