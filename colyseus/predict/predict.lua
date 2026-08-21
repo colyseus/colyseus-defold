@@ -37,18 +37,32 @@ local FIELD_DEFAULTS = {
 -- smooth_ms fallback for damped/extrapolate (lerp's output spring defaults 0)
 local DEFAULT_SMOOTH_MS = 50
 
-local function resolve_field_opts(options)
+local RECKON_DEFAULTS = {
+  smooth_ms = 50,  -- offset-decay time constant (ms); 0 = raw projection
+  substep = 16,    -- fixed sim step (ms)
+  snap = 0,        -- rebase teleport threshold; 0 off
+}
+
+--- Layered: FIELD_DEFAULTS, then the Predict's own defaults, then the
+--- per-field options.
+local function resolve_field_opts(defaults, options)
   local opts = {}
   for k, v in pairs(FIELD_DEFAULTS) do
     if options ~= nil and options[k] ~= nil then
       opts[k] = options[k]
+    elseif defaults[k] ~= nil then
+      opts[k] = defaults[k]
     else
       opts[k] = v
     end
   end
   -- smooth_ms (time constant, ms; 0 = off/snap) has no shared default: nil
   -- resolves per mode at the read site — 50 on damped/extrapolate, 0 on lerp
-  if options ~= nil then opts.smooth_ms = options.smooth_ms end
+  if options ~= nil and options.smooth_ms ~= nil then
+    opts.smooth_ms = options.smooth_ms
+  else
+    opts.smooth_ms = defaults.smooth_ms
+  end
   return opts
 end
 
@@ -59,20 +73,46 @@ local function to_number(value)
   return 0
 end
 
----@param callbacks table the SDK callbacks object (from
----  `require('colyseus.serializer.schema.callbacks')(room_or_decoder)`)
----@param clock table RoomClock (the room's clock)
 --- The one-liner every caller wants: a Predict over a room's callbacks and
 --- clock. `Predict.new(get_callbacks(room), room.clock)` is the same two
 --- collaborators every time and no decision the caller is better placed to make.
-function Predict.get(room)
-  return Predict.new(get_callbacks(room), room.clock)
+---
+--- `options` sets this Predict's DEFAULTS, so an attach only has to name what
+--- differs — `attach(e, { x = {}, y = {} })` under
+--- `Predict.get(room, { mode = "lerp", delay = 100 })`:
+---
+---   mode, delay, smooth_ms, max_extrapolate, tick_interval, snap, angle
+---   step, substep — the reckon step shared with the server
+---   clock         — overrides room.clock
+---   name          — label for debug tooling
+---@param room table
+---@param options nil|table
+function Predict.get(room, options)
+  options = options or {}
+  return Predict.new(get_callbacks(room), options.clock or room.clock, options)
 end
 
-function Predict.new(callbacks, clock)
+---@param callbacks table the SDK callbacks object (from
+---  `require('colyseus.serializer.schema.callbacks')(room_or_decoder)`)
+---@param clock table RoomClock (the room's clock)
+---@param options nil|table per-Predict defaults; see Predict.get
+function Predict.new(callbacks, clock, options)
   local self = setmetatable({}, Predict)
+  options = options or {}
   self._callbacks = callbacks
   self._clock = clock
+  self.name = options.name
+  self._defaults = options
+  -- `step`/`substep` mean one thing wherever they appear, so they are taken
+  -- unconditionally; `smooth_ms`/`snap` mean something different under a
+  -- smoothing mode, so reckon only claims them on a reckon-default Predict.
+  local reckon_default = (options.mode == "reckon")
+  self._reckon_defaults = {
+    step = options.step,
+    substep = options.substep or RECKON_DEFAULTS.substep,
+    smooth_ms = (reckon_default and options.smooth_ms) or RECKON_DEFAULTS.smooth_ms,
+    snap = (reckon_default and options.snap) or RECKON_DEFAULTS.snap,
+  }
   self._render_time = 0
   self._slots_by_ref = {}   -- refid -> field -> slot
   self._sims_by_ref = {}    -- refid -> reckon sim state
@@ -122,7 +162,7 @@ local function noop() end
 --- Internal primitive under :attach() — see PORTING.md, which strips
 --- track/untrack/trackStepped from the published surface.
 function Predict:_track(instance, field, options)
-  local opts = resolve_field_opts(options)
+  local opts = resolve_field_opts(self._defaults, options)
   local refid = instance.__refid
   local per_ref = self._slots_by_ref[refid]
   if per_ref == nil then
@@ -182,14 +222,16 @@ function Predict:_track_stepped(instance, opts)
     end
   end
   local n = #opts.fields
+  local defaults = self._reckon_defaults
+  local substep = opts.substep or defaults.substep
   local sim = {
     instance = instance,
     scratch = scratch,
     fields = opts.fields,
-    step = opts.step,
-    smooth_ms = opts.smooth_ms or 50,
-    substep = (opts.substep ~= nil and opts.substep > 0) and opts.substep or 16,
-    snap = opts.snap or 0,
+    step = opts.step or defaults.step,
+    smooth_ms = opts.smooth_ms or defaults.smooth_ms,
+    substep = (substep > 0) and substep or RECKON_DEFAULTS.substep,
+    snap = opts.snap or defaults.snap,
     smoothed = {},
     out = {},
     value_out = {},
@@ -274,10 +316,23 @@ end
 --- garbage).
 function Predict:attach(instance, config)
   if not names_a_field(config) then
-    self:_warn_empty_config(config)
+    self:_warn_config(config,
+      "colyseus.predict: attach config names no field, so nothing was " ..
+      "attached. List them under `fields` ({ mode = \"lerp\", fields = " ..
+      "{ \"x\", \"y\" } }) or key the config by field name ({ x = \"lerp\" }).")
     return noop
   end
-  if config.mode == "reckon" then
+  -- A reckon DEFAULT only claims the attach when the config is reckon-shaped:
+  -- the per-field shape has no `fields` list to hand the sim, and its fields
+  -- are naming their own modes anyway.
+  local mode = config.mode or (config.fields ~= nil and self._defaults.mode)
+  if mode == "reckon" then
+    if config.fields == nil or #config.fields == 0 then
+      self:_warn_config(config, "colyseus.predict: mode \"reckon\" needs a " ..
+        "`fields` list — { mode = \"reckon\", fields = { \"x\", \"y\" }, step = ... }. " ..
+        "Nothing was attached.")
+      return noop
+    end
     return self:_track_stepped(instance, config)
   end
   local offs = {}
@@ -303,15 +358,13 @@ function Predict:attach(instance, config)
 end
 
 ---@private
---- A config of nothing but option keys tracks nothing whatever the instance
---- looks like, so it is a mistake, not a heterogeneous-collection miss. Warned
---- once per config table — attach_all would otherwise print it per child.
-function Predict:_warn_empty_config(config)
+--- A config that can never track anything is a mistake, not a
+--- heterogeneous-collection miss. Warned once per config table — attach_all
+--- would otherwise print it per child.
+function Predict:_warn_config(config, message)
   if self._warned_configs[config] then return end
   self._warned_configs[config] = true
-  print("colyseus.predict: attach config names no field, so nothing was " ..
-    "attached. List them under `fields` ({ mode = \"lerp\", fields = " ..
-    "{ \"x\", \"y\" } }) or key the config by field name ({ x = \"lerp\" }).")
+  print(message)
 end
 
 --- Attach prediction to every child of a root-level collection: wires

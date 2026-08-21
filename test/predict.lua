@@ -508,6 +508,153 @@ return function()
       if not ok then error(err, 0) end
     end)
 
+    --- Predict-wide defaults: an attach then only has to NAME the fields.
+    it("PredictDefaultsFromOptions", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        -- delay 130 (not the 100 default) puts the render target on the first
+        -- sample, so an ignored option would read 16 here
+        local ent = { __refid = 1, a = 10 }
+        local cb = fake_callbacks()
+        local p = Predict.new(cb, RoomClock.new(), { mode = "lerp", delay = 130 })
+        p:attach(ent, { a = {} })
+
+        NOW = 1050; cb:push("a", 20)
+        NOW = 1130; p:tick(NOW)
+        assert_close(10, p:value(ent, "a"), 1e-12)
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    it("PredictDefaultsYieldToPerField", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local ent = { __refid = 1, a = 10 }
+        local cb = fake_callbacks()
+        local p = Predict.new(cb, RoomClock.new(), { mode = "lerp", delay = 130 })
+        p:attach(ent, { a = { delay = 100 } })
+
+        NOW = 1050; cb:push("a", 20)
+        NOW = 1130; p:tick(NOW)        -- target 1030 -> u = 0.6
+        assert_close(16, p:value(ent, "a"), 1e-12)
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    --- A reckon-default Predict carries the step, so the attach names fields
+    --- only — the shape the JS docs use ("requires `step` here or in Predict").
+    it("PredictDefaultsReckon", function()
+      local NOW = 0
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local decoder = Decoder:new(ReckonBall:new())
+        local clock = RoomClock.new()
+        local predict = Predict.new(get_callbacks(decoder), clock, {
+          mode = "reckon",
+          step = function(s, dt, _elapsed) s.x = s.x + s.vx * dt end,
+          smooth_ms = 0,
+          substep = 10,
+        })
+        local ball = decoder.state
+        predict:attach(ball, { fields = { "x" } })
+
+        NOW = 1000
+        clock:sample(1000, -1)
+        decoder:decode({ 128, 100, 129, 50 })
+
+        -- the ReckonValueAt fixture, reached through the Predict's defaults
+        for _, pair in ipairs({ { 1000, 100 }, { 1050, 102.5 }, { 1200, 110 } }) do
+          NOW = pair[1]
+          predict:tick(NOW)
+          assert_close(pair[2], predict:value(ball, "x"))
+        end
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    it("PredictGetAppliesOptions", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local decoder = Decoder:new(PassiveEnt:new())
+        local room_clock = RoomClock.new()
+        local room = { room_id = "r", serializer = { decoder = decoder }, clock = room_clock }
+
+        assert_equal(room_clock, Predict.get(room)._clock)
+
+        local own_clock = RoomClock.new()
+        local p = Predict.get(room, { mode = "lerp", delay = 130,
+                                      clock = own_clock, name = "remotes" })
+        assert_equal("remotes", p.name)
+        assert_equal(own_clock, p._clock)   -- the override, not room.clock
+
+        local ent = decoder.state
+        p:attach(ent, { a = {} })
+        NOW = 1000; room_clock:sample(1000, -1); decoder:decode({ 128, 10 })
+        NOW = 1050; room_clock:sample(1050, -1); decoder:decode({ 128, 20 })
+        NOW = 1130; p:tick(NOW)
+        assert_close(10, p:value(ent, "a"), 1e-12)   -- delay 130 reached the field
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    --- A reckon-default Predict must not swallow the per-field shape: it has
+    --- no `fields` list to hand the sim, and its fields name their own modes.
+    it("PredictReckonDefaultLeavesPerFieldAlone", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local ent = { __refid = 1, a = 10 }
+        local cb = fake_callbacks()
+        local p = Predict.new(cb, RoomClock.new(), {
+          mode = "reckon",
+          step = function(s, dt) s.a = s.a + dt end,
+        })
+        p:attach(ent, { a = { mode = "lerp" } })
+
+        NOW = 1050; cb:push("a", 20)
+        NOW = 1130; p:tick(NOW)        -- target 1030 -> u = 0.6
+        assert_close(16, p:value(ent, "a"), 1e-12)
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    it("ReckonWithoutFieldsWarns", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local original_print = print
+      local said = {}
+      _G.print = function(msg) table.insert(said, msg) end
+      local ok, err = pcall(function()
+        local ent = { __refid = 1, a = 10 }
+        local cb = fake_callbacks()
+        local p = Predict.new(cb, RoomClock.new())
+        -- reckon reads `fields`; naming one the per-field way used to reach
+        -- the sim and index a nil list
+        p:attach(ent, { mode = "reckon", a = {}, step = function() end })
+
+        assert_equal(1, #said)
+        assert_not_nil(string.find(said[1], "reckon", 1, true))
+        assert_equal(10, p:value(ent, "a"))   -- nothing tracked -> raw fallback
+      end)
+      _G.print = original_print
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
     it("ExtrapolateOvershootCap", function()
       local NOW = 1000
       local original_now = RoomClock.get_now
