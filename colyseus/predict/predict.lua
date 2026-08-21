@@ -78,6 +78,7 @@ function Predict.new(callbacks, clock)
   self._sims_by_ref = {}    -- refid -> reckon sim state
   self._driven = {}
   self._attachments = {}    -- every attach_all* detacher, so dispose can undo them
+  self._warned_configs = setmetatable({}, { __mode = "k" })
   self._fixed_step_ms = nil -- adopted from the first reconciler
   self._step_acc = 0
   self._last_frame_now = -1
@@ -85,6 +86,27 @@ function Predict.new(callbacks, clock)
 end
 
 -- --- Attach ---------------------------------------------------------------
+
+-- Keys that configure the attach itself rather than name a field. Used ONLY to
+-- recognise a config that names no field at all — the per-field shape still
+-- tries every key against the instance, so a schema field called `snap` keeps
+-- working.
+local CONFIG_KEYS = {
+  mode = true, fields = true, step = true, substep = true,
+  delay = true, max_extrapolate = true, tick_interval = true,
+  snap = true, smooth_ms = true, angle = true,
+}
+
+--- True when `config` names at least one candidate field, in either shape.
+local function names_a_field(config)
+  if config.fields ~= nil then return #config.fields > 0 end
+  for key in pairs(config) do
+    if not CONFIG_KEYS[key] then return true end
+  end
+  return false
+end
+
+local function noop() end
 
 ---@private
 --- Track one numeric field for smoothing. Returns an untrack function.
@@ -225,11 +247,14 @@ end
 --- Attach prediction to ONE instance from a declarative config. Returns a
 --- detacher.
 ---
---- Two shapes, mirroring the reference:
+--- Three shapes, mirroring the reference:
 ---
 ---   -- per-field smoothing; each field picks its own mode
 ---   predict:attach(boss, { x = "lerp", y = "lerp",
 ---                          yaw = { mode = "damped", angle = true } })
+---
+---   -- one mode and its options shared across `fields`
+---   predict:attach(boss, { mode = "lerp", fields = { "x", "y" }, delay = 100 })
 ---
 ---   -- dead reckoning, one step shared with the server across `fields`
 ---   predict:attach(bot, { mode = "reckon", fields = { "x", "y" }, step = patrol })
@@ -239,14 +264,28 @@ end
 --- there would otherwise subscribe to nothing (or, in the reckon scratch, read
 --- garbage).
 function Predict:attach(instance, config)
+  if not names_a_field(config) then
+    self:_warn_empty_config(config)
+    return noop
+  end
   if config.mode == "reckon" then
     return self:_track_stepped(instance, config)
   end
   local offs = {}
-  for field, spec in pairs(config) do
-    if instance[field] ~= nil then
-      local opts = (type(spec) == "string") and { mode = spec } or spec
-      table.insert(offs, self:_track(instance, field, opts))
+  if config.fields ~= nil then
+    -- shared shape: `config` is itself the per-field opts (`fields` is inert
+    -- to resolve_field_opts, so there is nothing to strip)
+    for _, field in ipairs(config.fields) do
+      if instance[field] ~= nil then
+        table.insert(offs, self:_track(instance, field, config))
+      end
+    end
+  else
+    for field, spec in pairs(config) do
+      if instance[field] ~= nil then
+        local opts = (type(spec) == "string") and { mode = spec } or spec
+        table.insert(offs, self:_track(instance, field, opts))
+      end
     end
   end
   return function()
@@ -254,9 +293,23 @@ function Predict:attach(instance, config)
   end
 end
 
+---@private
+--- A config of nothing but option keys tracks nothing whatever the instance
+--- looks like, so it is a mistake, not a heterogeneous-collection miss. Warned
+--- once per config table — attach_all would otherwise print it per child.
+function Predict:_warn_empty_config(config)
+  if self._warned_configs[config] then return end
+  self._warned_configs[config] = true
+  print("colyseus.predict: attach config names no field, so nothing was " ..
+    "attached. List them under `fields` ({ mode = \"lerp\", fields = " ..
+    "{ \"x\", \"y\" } }) or key the config by field name ({ x = \"lerp\" }).")
+end
+
 --- Attach prediction to every child of a root-level collection: wires
 --- on_add -> attach(child, config) and on_remove -> detach. Same config shapes
 --- as :attach(), reckon included — there is no separate reckon flavour.
+---
+---   predict:attach_all("players", { mode = "lerp", fields = { "x", "y" } })
 function Predict:attach_all(collection, config)
   return self:_attach_each(collection, function(child)
     self:attach(child, config)

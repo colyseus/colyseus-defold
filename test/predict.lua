@@ -62,6 +62,28 @@ return function()
     return cb
   end
 
+  --- Listener stub for the attach_all path: keyed per instance, and it hands
+  --- back the on_add handler so a test can add children itself.
+  local function collection_callbacks()
+    local adds, listeners = {}, {}
+    local cb = {}
+    function cb:listen(instance, field, handler, immediate)
+      local per = listeners[instance]
+      if per == nil then per = {}; listeners[instance] = per end
+      per[field] = handler
+      if immediate then handler(instance[field]) end
+      return function() per[field] = nil end
+    end
+    function cb:on_add(collection, handler, _immediate)
+      adds[collection] = handler
+      return function() adds[collection] = nil end
+    end
+    function cb:on_remove(_collection, _handler) return function() end end
+    function cb:add(collection, child, key) adds[collection](child, key) end
+    function cb:push(instance, field, value) listeners[instance][field](value) end
+    return cb
+  end
+
   local function lerp_setup(x0)
     local ent = { __refid = 1, a = x0 or 10 }
     local cb = fake_callbacks()
@@ -468,6 +490,142 @@ return function()
         local v1 = p:value(ent, "a")
         assert_equal(v1, p:value(ent, "a"))   -- spring advances once per frame
       end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    --- The JS-shaped config: one mode + opts shared across a `fields` list.
+    --- It used to name no field the loop recognised, so attach tracked NOTHING
+    --- and every read silently fell through to the raw instance.
+    it("AttachSharedFieldsConfig", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local shared_ent = { __refid = 1, x = 10, y = 20 }
+        local shared_cb = fake_callbacks()
+        local shared = Predict.new(shared_cb, RoomClock.new())
+        shared:attach(shared_ent, { mode = "lerp", fields = { "x", "y" } })
+
+        -- the same thing said the other way, as the equality oracle
+        local per_ent = { __refid = 1, x = 10, y = 20 }
+        local per_cb = fake_callbacks()
+        local per = Predict.new(per_cb, RoomClock.new())
+        per:attach(per_ent, { x = { mode = "lerp" }, y = { mode = "lerp" } })
+
+        NOW = 1050
+        shared_cb:push("x", 20); shared_cb:push("y", 40)
+        per_cb:push("x", 20); per_cb:push("y", 40)
+
+        NOW = 1130; shared:tick(NOW); per:tick(NOW)   -- target 1030 -> u = 0.6
+        assert_close(16, shared:value(shared_ent, "x"), 1e-12)
+        assert_close(32, shared:value(shared_ent, "y"), 1e-12)
+        assert_equal(per:value(per_ent, "x"), shared:value(shared_ent, "x"))
+        assert_equal(per:value(per_ent, "y"), shared:value(shared_ent, "y"))
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    --- Options next to `mode` are the field opts, not decoration.
+    it("AttachSharedFieldsCarriesOpts", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local ent = { __refid = 1, x = 10 }
+        local cb = fake_callbacks()
+        local p = Predict.new(cb, RoomClock.new())
+        -- delay 130 (not the 100 default) puts the render target on the FIRST
+        -- sample, so the default would read 16 here
+        p:attach(ent, { mode = "lerp", fields = { "x" }, delay = 130 })
+
+        NOW = 1050; cb:push("x", 20)
+        NOW = 1130; p:tick(NOW)
+        assert_close(10, p:value(ent, "x"), 1e-12)
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    --- Same drop rule as the per-field shape: a `fields` entry the instance
+    --- doesn't declare is skipped, so one config covers a mixed collection.
+    it("AttachSharedFieldsDropsUnknown", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local ent = { __refid = 1, x = 10 }
+        local cb = fake_callbacks()
+        local p = Predict.new(cb, RoomClock.new())
+        p:attach(ent, { mode = "lerp", fields = { "x", "z" } })
+
+        NOW = 1050; cb:push("x", 20)
+        NOW = 1130; p:tick(NOW)
+        assert_close(16, p:value(ent, "x"), 1e-12)
+        assert_equal(0, p:value(ent, "z"))     -- no slot -> raw fallback
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    --- attach_all hands the config to every child, so the shape has to survive
+    --- the trip.
+    it("AttachAllSharedFieldsConfig", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local cb = collection_callbacks()
+        local p = Predict.new(cb, RoomClock.new())
+        p:attach_all("players", { mode = "lerp", fields = { "x", "y" } })
+
+        local a = { __refid = 1, x = 10, y = 20 }
+        local b = { __refid = 2, x = 0, y = 0 }
+        cb:add("players", a, "a")
+        cb:add("players", b, "b")
+
+        NOW = 1050
+        cb:push(a, "x", 20); cb:push(a, "y", 40)
+        cb:push(b, "x", 10); cb:push(b, "y", 10)
+
+        NOW = 1130; p:tick(NOW)                      -- target 1030 -> u = 0.6
+        assert_close(16, p:value(a, "x"), 1e-12)
+        assert_close(32, p:value(a, "y"), 1e-12)
+        assert_close(6, p:value(b, "x"), 1e-12)
+        assert_close(6, p:value(b, "y"), 1e-12)
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    --- A config of nothing but option keys can never track anything, so it is
+    --- a mistake rather than a heterogeneous-collection miss: say so, once.
+    it("AttachConfigNamesNoField", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local original_print = print
+      local said = {}
+      print = function(msg) table.insert(said, msg) end
+      local ok, err = pcall(function()
+        local cb = collection_callbacks()
+        local p = Predict.new(cb, RoomClock.new())
+
+        local broken = { mode = "lerp", delay = 100 }
+        p:attach_all("players", broken)
+        local a = { __refid = 1, x = 10 }
+        local b = { __refid = 2, x = 10 }
+        cb:add("players", a, "a")
+        cb:add("players", b, "b")
+
+        assert_equal(1, #said)                 -- once per config, not per child
+        assert_equal(10, p:value(a, "x"))      -- nothing tracked -> raw fallback
+
+        p:attach(a, { fields = {} })           -- an empty list is just as empty
+        assert_equal(2, #said)
+      end)
+      print = original_print
       RoomClock.get_now = original_now
       if not ok then error(err, 0) end
     end)
