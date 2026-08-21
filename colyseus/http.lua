@@ -118,7 +118,8 @@ function HTTP:_get_http_endpoint(segments, query_params)
     segments = "/" .. segments
   end
 
-  return protocol .. "://" .. public_address .. segments .. "?" .. table.concat(params, "&")
+  local query = (#params > 0) and ("?" .. table.concat(params, "&")) or ""
+  return protocol .. "://" .. public_address .. segments .. query
 end
 
 ---@param method string
