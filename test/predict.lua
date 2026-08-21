@@ -5,6 +5,7 @@
 -- (self-verified against the JS reference). Contract:
 -- PORTING/sdk-ports-predict-layer.md.
 --
+local telescope = require 'deftest.telescope'
 local Decoder = require 'colyseus.serializer.schema.decoder'
 local get_callbacks = require 'colyseus.serializer.schema.callbacks'
 local InputEncoder = require 'colyseus.serializer.schema.input_encoder'
@@ -14,6 +15,19 @@ local Predict = require 'colyseus.predict.predict'
 local Reconciler = require 'colyseus.predict.reconciler'
 local PredictedEventChannel = require 'colyseus.predict.predicted_event_channel'
 local PredictedSpawns = require 'colyseus.predict.predicted_spawns'
+
+-- deftest injects its assertions into the `it` body's environment, so a helper
+-- defined out here can't reach them. Registering it as a real assertion also
+-- makes it count toward the test's assertion tally.
+telescope.make_assertion("close",
+  function(_, expected, actual, epsilon)
+    return telescope.assertion_message_prefix ..
+      ("'%s' to be within %s of '%s'"):format(
+        tostring(actual), tostring(epsilon or 1e-9), tostring(expected))
+  end,
+  function(expected, actual, epsilon)
+    return math.abs(expected - actual) <= (epsilon or 1e-9)
+  end)
 
 return function()
   local ReconState = require 'test.schema.Predict.ReconState'
@@ -34,12 +48,6 @@ return function()
       function() return stub end, function() return nil end)
   end
 
-  local function assert_close(expected, actual, epsilon)
-    if math.abs(expected - actual) > (epsilon or 1e-9) then
-      error(("assert_close failed: expected %s, got %s"):format(
-        tostring(expected), tostring(actual)), 2)
-    end
-  end
 
   --- Pin offset 0: one no-rtt sample at NOW == s_now makes
   --- server_now() == RoomClock.get_now().
@@ -631,7 +639,7 @@ return function()
       RoomClock.get_now = function() return NOW end
       local original_print = print
       local said = {}
-      print = function(msg) table.insert(said, msg) end
+      _G.print = function(msg) table.insert(said, msg) end   -- the SDK reads _G
       local ok, err = pcall(function()
         local cb = collection_callbacks()
         local p = Predict.new(cb, RoomClock.new())
@@ -649,7 +657,7 @@ return function()
         p:attach(a, { fields = {} })           -- an empty list is just as empty
         assert_equal(2, #said)
       end)
-      print = original_print
+      _G.print = original_print
       RoomClock.get_now = original_now
       if not ok then error(err, 0) end
     end)

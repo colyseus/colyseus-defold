@@ -6,6 +6,7 @@
 -- InputHandleImpl and RoomClockImpl). Contract:
 -- PORTING/sdk-ports-input-layer.md.
 --
+local telescope = require 'deftest.telescope'
 local schema = require 'colyseus.serializer.schema.schema'
 local InputEncoder = require 'colyseus.serializer.schema.input_encoder'
 local InputHandle = require 'colyseus.input_handle'
@@ -30,9 +31,18 @@ local function new_move_input()
   return instance
 end
 
-local function assert_bytes(expected, actual)
-  assert_equal(table.concat(expected, ","), table.concat(actual, ","))
-end
+-- deftest injects its assertions into the `it` body's environment, so a helper
+-- defined out here can't reach them. Registering it as a real assertion also
+-- makes it count toward the test's assertion tally.
+local function bytes_str(t) return "{" .. table.concat(t, ",") .. "}" end
+telescope.make_assertion("bytes",
+  function(_, expected, actual)
+    return telescope.assertion_message_prefix ..
+      ("%s to equal %s"):format(bytes_str(expected), bytes_str(actual))
+  end,
+  function(expected, actual)
+    return table.concat(expected, ",") == table.concat(actual, ",")
+  end)
 
 --- Stub connection capturing sent frames as byte arrays.
 local function stub_connection()

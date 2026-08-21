@@ -66,16 +66,24 @@ make testsuite BOB=/path/to/bob.jar
 `PLATFORM` defaults to `arm64-macos` — use `x86_64-macos` on Intel, or
 `x86_64-linux` on Linux.
 
-### Known failures
+### Writing assertions
 
-As of 0.18 the suite reports 13 errors before you change anything:
+deftest injects its assertions into the environment of the `it(...)` body only,
+so a helper defined at module level cannot call `assert_equal` — it will be nil
+there, and an assertion made any other way does not count toward the test's
+tally (deftest reports such a test as *unassertive*, not passed). Register
+shared checks as real assertions instead, as `test/predict.lua` and
+`test/input.lua` do:
 
-- `PassiveSmoothing` and `ReckonValueAt` call `predict:track()` and
-  `predict:track_reckon()`, which the declarative `attach(instance, config)`
-  refactor removed.
-- The `input` suite calls `assert_equal` from module-level helpers, outside the
-  environment deftest injects assertions into.
-- `MapSchemaTypes` and `Callbacks` fail inside `callbacks.lua`.
+```lua
+local telescope = require 'deftest.telescope'
+
+telescope.make_assertion("close",
+  function(_, expected, actual, epsilon) return "..." end,   -- failure message
+  function(expected, actual, epsilon)                        -- the predicate
+    return math.abs(expected - actual) <= (epsilon or 1e-9)
+  end)
+```
 
 ## Contributors
 
