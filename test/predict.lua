@@ -459,13 +459,16 @@ return function()
       RoomClock.get_now = function() return NOW end
       local ok, err = pcall(function()
         local ent, cb, p = lerp_setup()
+        local ent_50, cb_50, p_50 = lerp_setup()
         p:attach(ent, { a = "damped" })
+        p_50:attach(ent_50, { a = { mode = "damped", smooth_ms = 50 } })
 
-        NOW = 1050; cb:push("a", 60)
-        NOW = 1110; p:tick(NOW)
+        NOW = 1050; cb:push("a", 60); cb_50:push("a", 60)
+        NOW = 1110; p:tick(NOW); p_50:tick(NOW)
         local v = p:value(ent, "a")
         assert_equal(true, v > 10)   -- chasing
         assert_equal(true, v < 60)   -- still mid-glide
+        assert_equal(p_50:value(ent_50, "a"), v)   -- and the default IS 50
       end)
       RoomClock.get_now = original_now
       if not ok then error(err, 0) end
@@ -500,6 +503,27 @@ return function()
         NOW = 1130; p:tick(NOW)
         local v1 = p:value(ent, "a")
         assert_equal(v1, p:value(ent, "a"))   -- spring advances once per frame
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
+    it("ExtrapolateOvershootCap", function()
+      local NOW = 1000
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local ent, cb, p = lerp_setup()
+        p:attach(ent, { a = { mode = "extrapolate", smooth_ms = 0 } })
+
+        NOW = 1050; cb:push("a", 20)
+        NOW = 1100; cb:push("a", 30)   -- 3 samples -> 2-step lookback, slope 0.2/ms
+
+        NOW = 1200; p:tick(NOW)        -- 100ms ahead, inside the cap: projects in full
+        assert_close(50, p:value(ent, "a"), 1e-12)
+
+        NOW = 1500; p:tick(NOW)        -- 400ms ahead clamps to max_extrapolate 200
+        assert_close(70, p:value(ent, "a"), 1e-12)
       end)
       RoomClock.get_now = original_now
       if not ok then error(err, 0) end
