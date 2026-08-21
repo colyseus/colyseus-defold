@@ -10,6 +10,8 @@ LIBDIR  := $(DPREFIX)/share/lua/$(LUAVER)
 INSTALL := install
 
 
+.PHONY: luacheck testsuite clean-engine
+
 luacheck:
 	luacheck --std=max --codes colyseus
 
@@ -27,7 +29,14 @@ PLATFORM    ?= arm64-macos
 TEST_BUNDLE ?= .testsuite-bundle
 TEST_APP    ?= $(TEST_BUNDLE)/Colyseus Defold SDK.app/Contents/MacOS/ColyseusDefoldSDK
 
-testsuite:
+## bob caches the extender's engine at .internal/cache/<platform>/build.zip and
+## does NOT key it by --variant, so a desktop build followed by this gate would
+## bundle the windowed engine — which prints nothing headless and exits 0, a
+## false pass. Dropping both caches costs one extender round-trip.
+clean-engine:
+	rm -rf .internal/cache build/arm64-osx build/x86_64-osx build/x86_64-linux build/arm64-linux
+
+testsuite: clean-engine
 	"$(JAVA)" -jar "$(BOB)" --platform $(PLATFORM) --variant headless \
 		--settings test/testsuite.ini --archive \
 		resolve build bundle --bundle-output $(TEST_BUNDLE)
