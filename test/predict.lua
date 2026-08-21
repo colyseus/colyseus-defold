@@ -233,11 +233,13 @@ return function()
         local predict = Predict.new(callbacks, clock)
         local ent = decoder.state
 
-        predict:track(ent, "a", { mode = "lerp" })
-        predict:track(ent, "b", { mode = "damped" })
-        predict:track(ent, "c", { mode = "extrapolate", smooth_ms = 0 })
-        predict:track(ent, "d", { mode = "raw" })
-        predict:track(ent, "yaw", { mode = "lerp", angle = true })
+        predict:attach(ent, {
+          a = { mode = "lerp" },
+          b = { mode = "damped" },
+          c = { mode = "extrapolate", smooth_ms = 0 },
+          d = { mode = "raw" },
+          yaw = { mode = "lerp", angle = true },
+        })
 
         local function patch(s_now, bytes)
           NOW = s_now
@@ -310,7 +312,8 @@ return function()
         local predict = Predict.new(callbacks, clock)
         local ball = decoder.state
 
-        predict:track_reckon(ball, {
+        predict:attach(ball, {
+          mode = "reckon",
           fields = { "x" },
           step = function(s, dt, _elapsed) s.x = s.x + s.vx * dt end,
           smooth_ms = 0,   -- raw projection
