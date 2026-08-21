@@ -569,6 +569,30 @@ return function()
       if not ok then error(err, 0) end
     end)
 
+    --- Attaching before the first patch is the normal case (join, then wire up),
+    --- and a schema instance reads nil on every field until one lands — so the
+    --- "does it declare this?" gate cannot be a value check.
+    it("AttachBeforeFirstPatch", function()
+      local NOW = 0
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local decoder = Decoder:new(PassiveEnt:new())
+        local clock = RoomClock.new()
+        local predict = Predict.new(get_callbacks(decoder), clock)
+        local ent = decoder.state
+        assert_nil(ent.a)                        -- nothing has arrived yet
+        predict:attach(ent, { a = { mode = "lerp" } })
+
+        NOW = 1000; clock:sample(1000, -1); decoder:decode({ 128, 10 })
+        NOW = 1050; clock:sample(1050, -1); decoder:decode({ 128, 20 })
+        NOW = 1130; predict:tick(NOW)            -- target 1030 -> u = 0.6
+        assert_close(16, predict:value(ent, "a"), 1e-12)
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
     --- attach_all hands the config to every child, so the shape has to survive
     --- the trip.
     it("AttachAllSharedFieldsConfig", function()

@@ -106,6 +106,15 @@ local function names_a_field(config)
   return false
 end
 
+--- Does `instance` declare `field`? A schema instance answers from its schema:
+--- every field is nil until the first patch lands, so a value check would drop
+--- the lot. Plain tables (tests, hand-rolled entities) still answer by value.
+local function declares(instance, field)
+  local schema = instance._schema
+  if schema ~= nil then return schema[field] ~= nil end
+  return instance[field] ~= nil
+end
+
 local function noop() end
 
 ---@private
@@ -276,13 +285,13 @@ function Predict:attach(instance, config)
     -- shared shape: `config` is itself the per-field opts (`fields` is inert
     -- to resolve_field_opts, so there is nothing to strip)
     for _, field in ipairs(config.fields) do
-      if instance[field] ~= nil then
+      if declares(instance, field) then
         table.insert(offs, self:_track(instance, field, config))
       end
     end
   else
     for field, spec in pairs(config) do
-      if instance[field] ~= nil then
+      if declares(instance, field) then
         local opts = (type(spec) == "string") and { mode = spec } or spec
         table.insert(offs, self:_track(instance, field, opts))
       end
