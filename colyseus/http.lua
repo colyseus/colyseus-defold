@@ -7,6 +7,25 @@ local utils = require('colyseus.utils.utils')
 local HTTP = {}
 HTTP.__index = HTTP
 
+--- Every failure handed to a callback is one of these: `status` (0 when the
+--- request never reached a server, otherwise the HTTP status) and `message`.
+--- It concatenates and tostring()s to the message, so the documented
+--- `print("ERROR: " .. err)` reads the same on every path.
+---@class HTTPError
+---@field status number
+---@field message string
+local HTTPError = {}
+HTTPError.__index = HTTPError
+HTTPError.__tostring = function(self) return self.message end
+HTTPError.__concat = function(a, b)
+  local function str(v) return (type(v) == "table" and v.message) or tostring(v) end
+  return str(a) .. str(b)
+end
+
+local function http_error(status, message)
+  return setmetatable({ status = status, message = message }, HTTPError)
+end
+
 ---@param client Client
 ---@return HTTP
 function HTTP.new (client)
@@ -89,7 +108,8 @@ function HTTP:_get_ws_endpoint(room, query_params)
   -- build request endpoint
   local protocol = (self.client.settings.use_ssl and "wss") or "ws"
   local port = ((self.client.settings.port ~= 80 and self.client.settings.port ~= 443) and ":" .. self.client.settings.port) or ""
-  local public_address = (room ~= nil and room.publicAddress) or self.client.settings.hostname .. port
+  local public_address = (room ~= nil and room.publicAddress)
+    or (self.client.settings.hostname .. port .. (self.client.settings.pathname or ""))
 
   if room ~= nil then
     return protocol .. "://" .. public_address .. "/" .. room.processId .. "/" .. room.roomId .. "?" .. table.concat(params, "&")
@@ -110,14 +130,15 @@ function HTTP:_get_http_endpoint(segments, query_params)
   -- build request endpoint
   local protocol = (self.client.settings.use_ssl and "https") or "http"
   local port = ((self.client.settings.port ~= 80 and self.client.settings.port ~= 443) and ":" .. self.client.settings.port) or ""
-  local public_address = self.client.settings.hostname .. port
+  local public_address = self.client.settings.hostname .. port .. (self.client.settings.pathname or "")
 
   -- make sure segments start with "/"
   if string.sub(segments, 1, 1) ~= "/" then
     segments = "/" .. segments
   end
 
-  return protocol .. "://" .. public_address .. segments .. "?" .. table.concat(params, "&")
+  local query = (#params > 0) and ("?" .. table.concat(params, "&")) or ""
+  return protocol .. "://" .. public_address .. segments .. query
 end
 
 ---@param method string
@@ -148,13 +169,20 @@ function HTTP:request(method, segments, options, callback)
 
   local body = options.body and JSON.encode(options.body) or ""
 
-  http.request(self:_get_http_endpoint(segments), method, function(self, id, response)
+  local url = self:_get_http_endpoint(segments)
+
+  http.request(url, method, function(self, id, response)
     local data = response.response ~= '' and response.response
     local has_error = (response.status >= 400)
     local err = nil
 
+    -- status 0: the request never reached a server. Name the URL — the usual
+    -- cause is a dev server bound to ::1 only while this dials IPv4, and
+    -- "offline" on its own sends people looking in the wrong place.
     if response.status == 0 then
-      return callback("offline")
+      local detail = (response.error ~= nil and response.error ~= "")
+        and (" (" .. response.error .. ")") or ""
+      return callback(http_error(0, "offline: could not reach " .. url .. detail))
     end
 
     -- parse JSON response
@@ -162,11 +190,10 @@ function HTTP:request(method, segments, options, callback)
       data = json.decode(data)
     end
 
-    if has_error or data.error then
-      err = {
-        status = response.status,
-        message = (data and data.error) or response.error or response.response
-      }
+    -- an empty body leaves `data` false, so guard the index
+    if has_error or (type(data) == "table" and data.error) then
+      err = http_error(response.status,
+        (type(data) == "table" and data.error) or response.error or response.response)
     end
 
     callback(err, data)

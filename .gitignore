@@ -3,6 +3,7 @@
 .DS_Store
 .lock-wscript
 build
+.testsuite-bundle
 *.pyc
 .project
 .cproject

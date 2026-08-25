@@ -34,6 +34,57 @@ npm start
 This project uses [deftest](https://github.com/britzl/deftest) for testing, the
 assertion functions are documented by [@britzl](https://github.com/britzl) here: https://github.com/britzl/deftest#custom-asserts
 
+Tests live in `test/` and are registered in `example/testsuite.script`. The
+`auth` and `http` suites are commented out there because they need the test
+server from [Contributing](#contributing); the rest run offline.
+
+### From the editor
+
+Open the project in Defold and run `example/testsuite.collection`. Results print
+to the console.
+
+### Headless
+
+`make testsuite` builds the engine with `example/testsuite.collection` as the
+bootstrap collection (`test/testsuite.ini` supplies that override) and runs it.
+It exits non-zero when deftest reports a failure or an error, so it works as a
+CI gate.
+
+Two things are needed that Defold doesn't put on your `PATH`:
+
+- **A `bob.jar` matching your editor.** Read `engine_sha1` from
+  `/Applications/Defold.app/Contents/Resources/config`, then download
+  `https://d.defold.com/archive/stable/<engine_sha1>/bob/bob.jar`.
+- **A JDK 25 or newer.** The macOS editor bundles one, which the Makefile picks
+  up from `Defold.app` by default.
+
+```
+make testsuite BOB=/path/to/bob.jar
+```
+
+`BOB`, `JAVA`, `DEFOLD_APP`, `PLATFORM` and `TEST_BUNDLE` are all overridable.
+`PLATFORM` defaults to `arm64-macos` — use `x86_64-macos` on Intel, or
+`x86_64-linux` on Linux.
+
+### Writing assertions
+
+deftest injects its assertions into the environment of the `it(...)` body only,
+so a helper defined at module level cannot call `assert_equal` — it will be nil
+there, and an assertion made any other way does not count toward the test's
+tally (deftest reports such a test as *unassertive*, not passed). Register
+shared checks as real assertions instead, as `test/predict.lua` and
+`test/input.lua` do:
+
+```lua
+local telescope = require 'deftest.telescope'
+
+telescope.make_assertion("close",
+  function(_, expected, actual, epsilon) return "..." end,   -- failure message
+  function(expected, actual, epsilon)                        -- the predicate
+    return math.abs(expected - actual) <= (epsilon or 1e-9)
+  end)
+```
+
 ## Contributors
 
 Big thanks to [Björn Ritzl](https://github.com/britzl). Without his efforts on

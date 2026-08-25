@@ -75,8 +75,10 @@ end
 
 ---@package
 function ArraySchema:set_by_index(index, value, operation)
-  if index == 1 and operation == OPERATION.ADD and self.items[index] ~= nil then
-    table.insert(self.items, 1, value)
+  -- strict ADD only: MOVE_AND_ADD/DELETE_AND_ADD/ADD_BY_REFID must not insert
+  if operation == OPERATION.ADD and self.items[index] ~= nil then
+    -- ADD at an occupied index = insert: shift existing items up.
+    table.insert(self.items, index, value)
   elseif operation == OPERATION.DELETE_AND_MOVE then
     table.remove(self.items, index)
     self.items[index] = value
@@ -93,6 +95,27 @@ end
 ---@package
 function ArraySchema:delete_by_index(index)
   self.items[index] = nil
+end
+
+--
+-- Resync sweep (see Decoder:decode_resync): remove every entry whose index
+-- the snapshot did not visit. `items` is hole-free here (decode-end
+-- compaction already ran; full-sync emits dense ADDs). Visited indexes may
+-- be sparse — ADD_BY_REFID resolves to the current client-side index.
+--
+function ArraySchema:__resync_prune(visited, prune, keep)
+  local removed = false
+  for i = 1, #self.items do
+    local value = self.items[i]
+    if visited[i] then
+      keep(value)
+    else
+      removed = true
+      prune(value, i)
+      self:delete_by_index(i)
+    end
+  end
+  if removed then self:__on_decode_end() end -- compact the holes
 end
 
 function ArraySchema:each(cb)

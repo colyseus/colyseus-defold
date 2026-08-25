@@ -1,4 +1,5 @@
 local os = require('os')
+local bit = require('colyseus.serializer.bit')
 local msgpack = require('colyseus.messagepack.MessagePack')
 
 local Connection = require('colyseus.connection')
@@ -9,9 +10,28 @@ local utils = require('colyseus.utils.utils')
 local decode = require('colyseus.serializer.schema.encoding.decode')
 local encode = require('colyseus.serializer.schema.encoding.encode')
 local serialization = require('colyseus.serialization')
+local reflection = require('colyseus.serializer.schema.reflection')
+local RoomClock = require('colyseus.room_clock')
+local InputHandle = require('colyseus.input_handle')
+local InputEncoder = require('colyseus.serializer.schema.input_encoder')
 
 local function exponential_backoff(attempt, delay)
   return math.floor(math.pow(2, attempt) * delay)
+end
+
+--- Writes a message type (string via the schema codec, or numeric code).
+local function write_message_type(initial_bytes, message_type, proto_name)
+  local mtype = type(message_type)
+
+  if mtype == "string" then
+    encode.string(initial_bytes, message_type)
+
+  elseif mtype == "number" then
+    encode.number(initial_bytes, message_type)
+
+  else
+    error("Protocol." .. proto_name .. ": message type not supported '" .. tostring(mtype) .. "'")
+  end
 end
 
 ---@class Room : EventEmitterInstance
@@ -50,6 +70,20 @@ function Room:init(name)
   self.serializer = nil
   self.on_message_handlers = {}
 
+  -- server-time + RTT estimator, driven by the TIMED prefix servers emit
+  -- when the room called defineInput(). Always present; without TIMED
+  -- samples it reports server_now() == now() and zeros.
+  self.clock = RoomClock.new()
+
+  -- input layer — populated from the JOIN_ROOM handshake sections
+  self._input_handle = nil
+  self._input_class = nil
+  self._input_stamp_render = false
+  self._input_stamp_reckon = false
+  self._input_tick_rate = nil
+  self._input_patch_rate = nil
+  self._input_sub_steps = nil
+
   self.reconnection = {
     enabled = true,
     retry_count = 0,
@@ -63,6 +97,10 @@ function Room:init(name)
     enqueued_messages = {},
     is_reconnecting = false
   }
+
+  -- request/response (ROOM_REQUEST / ROOM_RESPONSE) correlation state
+  self._pending_requests = {}
+  self._next_request_id = 0
 
   local room = self
 
@@ -86,6 +124,9 @@ function Room:connect (endpoint, options)
   end)
 
   self.connection:on("close", function(e)
+    -- in-flight requests can't be answered on a closed socket
+    room:_reject_all_pending_requests("connection closed before a response was received.")
+
     if (room._joined_at_time == nil) then
       print("Room connection closed before JOIN_ROOM")
       return
@@ -109,7 +150,12 @@ function Room:connect (endpoint, options)
     room:emit("error", e)
   end)
 
-  -- TODO: support "?skipHandshake=1" option here!
+  -- local serializer already holding state means the server handshake is
+  -- redundant (mirrors the JS SDK's initial-connect rule)
+  if self.serializer ~= nil and self.serializer:get_state() ~= nil then
+    endpoint = endpoint .. "&skipHandshake=1"
+  end
+
   room.connection:open(endpoint)
 end
 
@@ -139,8 +185,22 @@ end
 function Room:_on_message (binary_string, it)
   local message = utils.string_to_byte_array(binary_string)
 
-  local code = message[it.offset]
+  -- Strip modifier bits (bits 5..7) so the dispatch below stays
+  -- modifier-agnostic; consume any modifier-attached prefix bytes here.
+  local raw_byte = message[it.offset]
   it.offset = it.offset + 1
+
+  local code = bit.band(raw_byte, protocol.CODE_MASK)
+
+  if bit.band(raw_byte, protocol.MODIFIER_TIMED) ~= 0 then
+    -- [uint32 sNow][uint32 inputSeq] — server time (ms since room start) +
+    -- last PROCESSED input seq. The input ack goes to the handle (it owns
+    -- the round-trip); its RTT sample + sNow feed the time-only clock.
+    local s_now = decode.uint32(message, it)
+    local input_seq = decode.uint32(message, it)
+    local rtt_sample = (self._input_handle ~= nil) and self._input_handle:ack_input(input_seq) or -1
+    self.clock:sample(s_now, rtt_sample)
+  end
 
   if code == protocol.JOIN_ROOM then
     local reconnection_token = decode.string(message, it)
@@ -159,13 +219,60 @@ function Room:_on_message (binary_string, it)
       self.serializer = serializer:new()
     end
 
-    if #message > it.offset and self.serializer.handshake ~= nil then
-      self.serializer:handshake(message, it)
+    -- State reflection is length-prefixed: the schema handshake must not
+    -- read past it into the trailing tagged-section bytes. A zero length
+    -- means reconnect (the serializer already has state).
+    local state_reflection_len = decode.number(message, it)
+    if state_reflection_len > 0 and self.serializer.handshake ~= nil then
+      local reflection_end = it.offset + state_reflection_len
+      -- bounded slice — the reflection decoder reads until end-of-array
+      local reflection_bytes = {}
+      for i = 1, reflection_end - 1 do reflection_bytes[i] = message[i] end
+      self.serializer:handshake(reflection_bytes, it)
+      it.offset = reflection_end
+    else
+      it.offset = it.offset + state_reflection_len
+    end
+
+    -- Trailing tagged sections: [tag byte][length varint][payload].
+    -- Unknown tags are skipped via length (forward-compatible).
+    while it.offset <= #message do
+      local tag = message[it.offset]
+      it.offset = it.offset + 1
+      local section_len = decode.number(message, it)
+      local section_end = it.offset + section_len
+
+      if tag == protocol.HANDSHAKE_SECTION.INPUT_REFLECTION then
+        -- schema reflection of the input struct — synthesize its class so
+        -- room:input() works without an explicit type
+        local section_bytes = {}
+        for i = 1, section_len do section_bytes[i] = message[it.offset + i - 1] end
+        local input_decoder = reflection.decode(section_bytes)
+        self._input_class = getmetatable(input_decoder.state)
+
+      elseif tag == protocol.HANDSHAKE_SECTION.INPUT_OPTIONS then
+        -- [flags u8][varints in bit order]
+        local flags = message[it.offset]
+        it.offset = it.offset + 1
+        local F = protocol.INPUT_FLAGS
+        self._input_stamp_render = bit.band(flags, F.RENDER_TIME) ~= 0
+        self._input_stamp_reckon = bit.band(flags, F.RECKON_TIME) ~= 0
+        if bit.band(flags, F.FIXED_TIMESTEP) ~= 0 then self._input_tick_rate = decode.number(message, it) end
+        if bit.band(flags, F.PATCH_RATE) ~= 0 then self._input_patch_rate = decode.number(message, it) end
+        if bit.band(flags, F.SUB_STEPS) ~= 0 then self._input_sub_steps = decode.number(message, it) end
+      end
+
+      it.offset = section_end
+    end
+
+    -- hand the snapshot cadence to the clock once the loop has it
+    if self._input_patch_rate ~= nil then
+      self.clock:set_patch_interval(self._input_patch_rate)
     end
 
     -- emit join OR reconnect event
     if self._joined_at_time == nil then
-      self._joined_at_time = os.time()
+      self._joined_at_time = socket.gettime()
       self:emit("join")
 
     else
@@ -238,10 +345,41 @@ function Room:_on_message (binary_string, it)
 
     self:_dispatch_message(message_type, payload)
 
+  elseif code == protocol.ROOM_RESPONSE then
+    -- reply to a pending request()
+    local request_id = decode.number(message, it)
+    local status = message[it.offset]
+    it.offset = it.offset + 1
+
+    local payload = nil
+    if #binary_string >= it.offset then
+      local msgpack_cursor = {
+          s = binary_string,
+          i = it.offset,
+          j = #binary_string,
+          underflow = function() error "missing bytes" end,
+      }
+      payload = msgpack.unpack_cursor(msgpack_cursor)
+      it.offset = msgpack_cursor.i
+    end
+
+    local entry = self._pending_requests[request_id]
+    -- already answered (e.g. timed out) or unknown id — ignore
+    if entry ~= nil then
+      self._pending_requests[request_id] = nil
+      -- the ONE place the wire's three statuses collapse to (ok, payload, faulted):
+      entry.on_reply(
+        status == protocol.RESPONSE_STATUS.OK,
+        payload,
+        status == protocol.RESPONSE_STATUS.ERROR
+      )
+    end
+
   elseif code == protocol.PING then
     if self.ping_callback then
-      local now = os.time()
-      self.ping_callback(math.floor((now - self.last_ping_time) + 0.5))
+      -- socket.gettime() is fractional seconds — deliver RTT in whole ms
+      local now = socket.gettime()
+      self.ping_callback(math.floor((now - self.last_ping_time) * 1000 + 0.5))
       self.ping_callback = nil
     end
   end
@@ -266,7 +404,7 @@ function Room:_handle_reconnection(code)
     return
   end
 
-  if (os.time() - self._joined_at_time) < (self.reconnection.min_uptime / 1000) then
+  if (socket.gettime() - self._joined_at_time) < (self.reconnection.min_uptime / 1000) then
      print(string.format("[Colyseus reconnection]: ❌ Room has not been up for long enough for automatic reconnection. (min uptime: %dms)", self.reconnection.min_uptime))
      self:emit("leave", { code = protocol.CLOSE_CODE.ABNORMAL_CLOSURE })
      return
@@ -275,6 +413,13 @@ function Room:_handle_reconnection(code)
   if not self.reconnection.is_reconnecting then
     self.reconnection.retry_count = 0
     self.reconnection.is_reconnecting = true
+  end
+
+  -- the server allocates a FRESH input buffer for the reconnected client
+  -- (its consumed counter restarts at 0) — zero ours so post-reconnect seqs
+  -- line up. Observing controllers follow via the handle's `epoch`.
+  if self._input_handle ~= nil then
+    self._input_handle:reset()
   end
 
   self:_retry_reconnection()
@@ -351,63 +496,165 @@ function Room:ping(callback)
     return
   end
 
-  self.last_ping_time = os.time()
+  self.last_ping_time = socket.gettime()
   self.ping_callback = callback
   self.connection:send(utils.byte_array_to_string({ protocol.PING }))
+end
+
+--- Lazily create (and thereafter return) the per-room input handle.
+--- Mutate `handle.data`, then call `handle:send()`.
+---
+--- `options.type` (a schema class) is optional when the server room called
+--- `defineInput()` — the class is then synthesized from the handshake's
+--- input reflection. Later calls return the same handle; their options are
+--- ignored (first call wins).
+---@param options table|nil {type, mode, history_size, render_delay, allow_rewind}
+function Room:input(options)
+  if self._input_handle ~= nil then
+    return self._input_handle
+  end
+  options = options or {}
+
+  local input_class = options.type or self._input_class
+  if input_class == nil then
+    error("room:input(): no input schema available. The server room must call " ..
+      "defineInput(YourInput), or pass {type = YourInput} explicitly.")
+  end
+
+  if options.mode == "unreliable" then
+    error('room:input(): mode "unreliable" is not supported yet — it needs a ' ..
+      'WebTransport datagram channel, and this SDK connects over WebSocket only. ' ..
+      'Use mode "reliable".')
+  end
+
+  local instance = input_class:new()
+  local encoder = InputEncoder.new(instance, options.mode, options.history_size)
+  local room = self
+  self._input_handle = InputHandle.new(instance, encoder, {
+    stamp_render = self._input_stamp_render,
+    stamp_reckon = self._input_stamp_reckon,
+    render_delay = options.render_delay,
+    allow_rewind = options.allow_rewind,
+    tick_rate = self._input_tick_rate,
+    patch_rate = self._input_patch_rate,
+    sub_steps = self._input_sub_steps,
+  }, function() return room.connection end, function() return room.clock end)
+  return self._input_handle
+end
+
+---@private
+--- Transmits `data`, or buffers it while the connection is not open.
+function Room:_send_or_enqueue(data)
+  if self.connection.state ~= "OPEN" then
+    self:_enqueue_message(data)
+  else
+    self.connection:send(data)
+  end
 end
 
 ---@param message_type number|string
 ---@param message table|boolean|number|string
 function Room:send (message_type, message)
   local initial_bytes = { protocol.ROOM_DATA }
-  local mtype = type(message_type)
+  write_message_type(initial_bytes, message_type, "ROOM_DATA")
 
-  if mtype == "string" then
-      encode.string(initial_bytes, message_type);
+  local encoded = (message ~= nil) and msgpack.pack(message) or ''
 
-  elseif mtype == "number" then
-      encode.number(initial_bytes, message_type);
-  else
-    error("Protocol.ROOM_DATA: message type not supported '" .. tostring(type) .. "'")
-  end
-
-  local encoded
-
-  if message ~= nil then
-    encoded = msgpack.pack(message)
-  else
-    encoded = ''
-  end
-
-  local data = utils.byte_array_to_string(initial_bytes) .. encoded
-  if self.connection.state ~= "OPEN" then
-    self:_enqueue_message(data)
-  else
-    self.connection:send(data)
-  end
+  self:_send_or_enqueue(utils.byte_array_to_string(initial_bytes) .. encoded)
 end
 
 ---@param message_type string
 ---@param bytes table
 function Room:send_bytes (message_type, bytes)
-  local initial_bytes = { protocol.ROOM_DATA }
-  local mtype = type(message_type)
+  local initial_bytes = { protocol.ROOM_DATA_BYTES }
+  write_message_type(initial_bytes, message_type, "ROOM_DATA_BYTES")
 
-  if mtype == "string" then
-      encode.string(initial_bytes, message_type);
+  self:_send_or_enqueue(utils.byte_array_to_string(initial_bytes) .. utils.byte_array_to_string(bytes))
+end
 
-  elseif mtype == "number" then
-      encode.number(initial_bytes, message_type);
-  else
-    error("Protocol.ROOM_DATA_BYTES: message type not supported '" .. tostring(type) .. "'")
+--- Default request() timeout, in milliseconds.
+Room.default_request_timeout = 10000
+
+--- Send a message and await the server's reply — the value the server
+--- returns from its matching on_message handler.
+---
+--- The callback receives (response, err); exactly one is non-nil. `err` is
+--- set when the handler rejects (the authored reason) or throws
+--- ({name, message, code?}), when the connection closes first, or when no
+--- reply arrives within `timeout_ms` (default: Room.default_request_timeout).
+---@param message_type number|string
+---@param payload any
+---@param callback fun(response: any, err: any)
+---@param timeout_ms number|nil
+function Room:request(message_type, payload, callback, timeout_ms)
+  if self.connection == nil or self.connection.state ~= "OPEN" then
+    callback(nil, "cannot send request '" .. tostring(message_type) .. "': connection is not open.")
+    return
   end
 
-  local data = utils.byte_array_to_string(initial_bytes) .. utils.byte_array_to_string(bytes)
-  if self.connection.state ~= "OPEN" then
-    self:_enqueue_message(data)
-  else
-    self.connection:send(data)
+  -- the timer lives in this closure — the pending registry stays unaware of
+  -- timeouts; the reply callback and on_close both cancel it
+  local timer_handle = nil
+  local cancel_timer = function()
+    if timer_handle ~= nil then
+      timer.cancel(timer_handle)
+      timer_handle = nil
+    end
   end
+
+  local request_id = self:_send_request(message_type, payload,
+    function(ok, reply_payload, _faulted)
+      cancel_timer()
+      if ok then
+        callback(reply_payload, nil)
+      else
+        callback(nil, reply_payload)
+      end
+    end,
+    function(reason)
+      cancel_timer()
+      callback(nil, reason)
+    end)
+
+  -- Defold's `timer` is unavailable in headless/unit contexts — requests
+  -- then simply have no timeout
+  if timer ~= nil then
+    local ms = timeout_ms or Room.default_request_timeout
+    timer_handle = timer.delay(ms / 1000, false, function()
+      timer_handle = nil
+      self._pending_requests[request_id] = nil
+      callback(nil, "request '" .. tostring(message_type) .. "' timed out after " .. ms .. "ms.")
+    end)
+  end
+end
+
+---@private
+--- Low-level round-trip primitive: registers `on_reply` (called once with
+--- the decoded outcome when the server replies) and transmits a
+--- ROOM_REQUEST frame. `request()` wraps it with a timeout.
+function Room:_send_request(message_type, payload, on_reply, on_close)
+  local request_id = self._next_request_id
+  self._next_request_id = (self._next_request_id + 1) % 0x100000000 -- uint32 wrap
+
+  local initial_bytes = { protocol.ROOM_REQUEST }
+  encode.number(initial_bytes, request_id)
+  write_message_type(initial_bytes, message_type, "ROOM_REQUEST")
+
+  local encoded = (payload ~= nil) and msgpack.pack(payload) or ''
+
+  -- reliable + offline: buffer so it flushes on (re)connect
+  self:_send_or_enqueue(utils.byte_array_to_string(initial_bytes) .. encoded)
+
+  self._pending_requests[request_id] = { on_reply = on_reply, on_close = on_close }
+  return request_id
+end
+
+---@private
+function Room:_reject_all_pending_requests(reason)
+  for _, entry in pairs(self._pending_requests) do
+    if entry.on_close ~= nil then entry.on_close(reason) end
+  end
+  self._pending_requests = {}
 end
 
 ---@private
