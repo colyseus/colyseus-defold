@@ -33,27 +33,27 @@ clamp8_0_10, 0.123456789, 3, 0.11764705882352941
 clamp8_0_10, NaN, 0, 0
 clamp8_0_10, Infinity, 255, 10
 clamp8_0_10, -Infinity, 0, 0
-clamp16_pitch, 0, 32768, 0.00002288853284504455
-clamp16_pitch, 1, 54613, 1.000022888532845
-clamp16_pitch, 10, 65535, 1.5
-clamp16_pitch, 0.0196078431372549, 33196, 0.01961547264820318
-clamp16_pitch, 5.5, 65535, 1.5
+clamp16_pitch, 0, 32767, 0
+clamp16_pitch, 1, 54612, 1.000015259254738
+clamp16_pitch, 10, 65534, 1.5
+clamp16_pitch, 0.0196078431372549, 33195, 0.019592883083590307
+clamp16_pitch, 5.5, 65534, 1.5
 clamp16_pitch, -1.5, 0, -1.5
-clamp16_pitch, 1.5, 65535, 1.5
-clamp16_pitch, 0.3, 39321, 0.2999999999999998
+clamp16_pitch, 1.5, 65534, 1.5
+clamp16_pitch, 0.3, 39320, 0.29998168889431454
 clamp16_pitch, -99, 0, -1.5
-clamp16_pitch, 99, 65535, 1.5
-clamp16_pitch, 3.141592653589793, 65535, 1.5
-clamp16_pitch, 6.283185307179586, 65535, 1.5
-clamp16_pitch, 7.283185307179586, 65535, 1.5
-clamp16_pitch, -1, 10923, -0.999977111467155
-clamp16_pitch, 360, 65535, 1.5
-clamp16_pitch, 720.5, 65535, 1.5
-clamp16_pitch, 1000000, 65535, 1.5
+clamp16_pitch, 99, 65534, 1.5
+clamp16_pitch, 3.141592653589793, 65534, 1.5
+clamp16_pitch, 6.283185307179586, 65534, 1.5
+clamp16_pitch, 7.283185307179586, 65534, 1.5
+clamp16_pitch, -1, 10922, -1.000015259254738
+clamp16_pitch, 360, 65534, 1.5
+clamp16_pitch, 720.5, 65534, 1.5
+clamp16_pitch, 1000000, 65534, 1.5
 clamp16_pitch, -1000000, 0, -1.5
-clamp16_pitch, 0.123456789, 35464, 0.12343785763332571
+clamp16_pitch, 0.123456789, 35464, 0.12346263008514669
 clamp16_pitch, NaN, 0, -1.5
-clamp16_pitch, Infinity, 65535, 1.5
+clamp16_pitch, Infinity, 65534, 1.5
 clamp16_pitch, -Infinity, 0, -1.5
 clamp32_unit, 0, 0, 0
 clamp32_unit, 1, 4294967295, 1
@@ -185,6 +185,27 @@ return function()
       assert_equal(132, rows)
     end)
 
+    it("SymmetricRangeCarriesExactZero", function()
+      -- 2^bits-1 intervals is odd, so on [-m, m] zero sits on a step boundary
+      -- and half-up rounding lifts it to +1 quantum: a released input axis or
+      -- a resting velocity never read back as 0. An even span puts min, 0 and
+      -- max all on steps.
+      for _, case in ipairs({ { -1, 1, 8 }, { -150, 150, 16 }, { -1.55, 1.55, 16 }, { -1, 1, 32 } }) do
+        local min, max, bits = case[1], case[2], case[3]
+        local desc = quantize.resolve({ min = min, max = max, bits = bits })
+        assert_equal(2 ^ bits - 2, desc.span)
+        assert_equal(0, quantize.snap(desc, 0))
+        assert_equal(min, quantize.snap(desc, min))
+        assert_equal(max, quantize.snap(desc, max))
+      end
+
+      -- only symmetric clamped ranges give up a code
+      assert_equal(255, quantize.resolve({ min = 0, max = 1, bits = 8 }).span)
+      local wrap = quantize.resolve({ min = -1, max = 1, bits = 8, mode = "wrap" })
+      assert_equal(256, wrap.span)
+      assert_equal(0, quantize.snap(wrap, 0))
+    end)
+
     it("ReflectionAndQuantizedState", function()
       -- 5.0 reflection handshake: quantized descriptors, childPrimitive
       -- collection slots (no colon packing), schema refs
@@ -193,10 +214,10 @@ return function()
       local state = decoder.state
 
       -- full state
-      decoder:decode({ 128, 238, 50, 129, 187, 130, 55, 221, 154, 31, 131, 1, 132, 2, 133, 5, 134, 4, 135, 161, 113, 255, 1, 128, 0, 1, 128, 1, 202, 0, 0, 32, 64, 128, 2, 3, 255, 2, 128, 0, 161, 97, 161, 120, 255, 5, 128, 7, 255, 4, 128, 0, 6, 128, 1, 7, 255, 6, 128, 1, 255, 7, 128, 2 })
+      decoder:decode({ 128, 238, 50, 129, 186, 130, 55, 221, 154, 31, 131, 1, 132, 2, 133, 5, 134, 4, 135, 161, 113, 255, 1, 128, 0, 1, 128, 1, 202, 0, 0, 32, 64, 128, 2, 3, 255, 2, 128, 0, 161, 97, 161, 120, 255, 5, 128, 7, 255, 4, 128, 0, 6, 128, 1, 7, 255, 6, 128, 1, 255, 7, 128, 2 })
 
       assert_equal(1.2500025945283118, state.yaw)
-      assert_equal(0.6999999999999997, state.pitch)
+      assert_equal(0.6968503937007875, state.pitch)
       assert_equal(0.12345678897655028, state.precise)
       assert_equal(3, state.nums:length())
       assert_equal(1, state.nums.items[1])
@@ -227,10 +248,10 @@ return function()
       local state = QState:new()
       local decoder = Decoder:new(state)
 
-      decoder:decode({ 128, 238, 50, 129, 187, 130, 55, 221, 154, 31, 131, 1, 132, 2, 133, 5, 134, 4, 135, 161, 113, 255, 1, 128, 0, 1, 128, 1, 202, 0, 0, 32, 64, 128, 2, 3, 255, 2, 128, 0, 161, 97, 161, 120, 255, 5, 128, 7, 255, 4, 128, 0, 6, 128, 1, 7, 255, 6, 128, 1, 255, 7, 128, 2 })
+      decoder:decode({ 128, 238, 50, 129, 186, 130, 55, 221, 154, 31, 131, 1, 132, 2, 133, 5, 134, 4, 135, 161, 113, 255, 1, 128, 0, 1, 128, 1, 202, 0, 0, 32, 64, 128, 2, 3, 255, 2, 128, 0, 161, 97, 161, 120, 255, 5, 128, 7, 255, 4, 128, 0, 6, 128, 1, 7, 255, 6, 128, 1, 255, 7, 128, 2 })
 
       assert_equal(1.2500025945283118, state.yaw)
-      assert_equal(0.6999999999999997, state.pitch)
+      assert_equal(0.6968503937007875, state.pitch)
       assert_equal(0.12345678897655028, state.precise)
       assert_equal(2.5, state.nums.items[2])
       assert_equal("x", state.tags.items["a"])

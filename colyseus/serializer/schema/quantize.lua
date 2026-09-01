@@ -38,8 +38,9 @@ function M.resolve(opts)
     wire = WIRE_BY_BITS[bits],
     range = max - min,
     -- wrapping spreads 2^bits steps across [min,max) (top ≡ bottom);
-    -- clamped maps the endpoints onto 0 and 2^bits-1 inclusive
-    span = wrap and steps or (steps - 1),
+    -- clamped maps the endpoints onto 0 and 2^bits-1 inclusive — one fewer
+    -- on a range symmetric about zero so zero lands on a step too
+    span = wrap and steps or ((min == -max) and (steps - 2) or (steps - 1)),
   }
 end
 
