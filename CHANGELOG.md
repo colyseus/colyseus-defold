@@ -14,6 +14,11 @@ All notable changes to the Colyseus Defold SDK are documented in this file.
   in the platform's own error where there is one. A dev server bound to `::1`
   only (the default for `vite`, `next dev`, and others) while the SDK dials IPv4
   used to report just `offline`.
+- `t.quantized()` fields on a range symmetric about zero (`min = -1, max = 1`) now
+  decode an exact `0`. A released input axis or a resting velocity arrived as one
+  quantum above zero, so an `== 0` check never fired and anything integrating the
+  value drifted. Requires a server on @colyseus/schema 5.0.27 — the wire mapping
+  for these fields changed.
 
 ## 0.17.5
 
