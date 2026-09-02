@@ -2,7 +2,7 @@
 
 All notable changes to the Colyseus Defold SDK are documented in this file.
 
-## 0.18
+## 0.18.0
 
 - **Breaking:** a failed matchmaking call now always hands the callback a table
   with `status` and `message`. It previously passed the bare string `"offline"`
