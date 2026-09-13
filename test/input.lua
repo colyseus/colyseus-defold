@@ -12,6 +12,7 @@ local InputEncoder = require 'colyseus.serializer.schema.input_encoder'
 local InputHandle = require 'colyseus.input_handle'
 local RoomClock = require 'colyseus.room_clock'
 local Room = require 'colyseus.room'
+local protocol = require 'colyseus.protocol'
 local utils = require 'colyseus.utils.utils'
 
 local MoveInput = schema.define({
@@ -410,15 +411,19 @@ return function()
       assert_equal(750, room.clock:last_server_time())
     end)
 
-    it("RoomInputUnreliableModeIsRejected", function()
-      -- No datagram transport in this SDK yet — mode "unreliable" must fail
-      -- loudly at construction rather than silently ride the reliable channel.
+    it("RoomInputUnreliableRidesTheWebSocket", function()
+      -- no datagram channel: like the JS SDK, the unreliable ring falls back
+      -- to the reliable socket (the server decodes it from any transport)
       local room = Room.new("phase0")
-      local ok, err = pcall(function()
-        room:input({ type = MoveInput, mode = "unreliable" })
-      end)
-      assert_equal(false, ok)
-      assert_equal(true, string.find(err, "unreliable", 1, true) ~= nil)
+      local stub = stub_connection()
+      room.connection = stub
+      local handle = room:input({ type = MoveInput, mode = "unreliable" })
+      handle.data.vx = 1.5
+      assert_equal(1, handle:send())
+      assert_equal(2, handle:send())
+      assert_equal(2, #stub.sent)
+      assert_equal(protocol.ROOM_INPUT_UNRELIABLE, stub.sent[1][1])
+      assert_equal(protocol.ROOM_INPUT_UNRELIABLE, stub.sent[2][1])
     end)
 
   end)

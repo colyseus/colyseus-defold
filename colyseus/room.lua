@@ -513,6 +513,9 @@ end
 --- `defineInput()` — the class is then synthesized from the handshake's
 --- input reflection. Later calls return the same handle; their options are
 --- ignored (first call wins).
+---
+--- `mode = "unreliable"` sends the redundancy ring over the WebSocket: this
+--- SDK has no datagram channel, and falls back the way the JS SDK does.
 ---@param options table|nil {type, mode, history_size, render_delay, allow_rewind}
 function Room:input(options)
   if self._input_handle ~= nil then
@@ -524,12 +527,6 @@ function Room:input(options)
   if input_class == nil then
     error("room:input(): no input schema available. The server room must call " ..
       "defineInput(YourInput), or pass {type = YourInput} explicitly.")
-  end
-
-  if options.mode == "unreliable" then
-    error('room:input(): mode "unreliable" is not supported yet — it needs a ' ..
-      'WebTransport datagram channel, and this SDK connects over WebSocket only. ' ..
-      'Use mode "reliable".')
   end
 
   local instance = input_class:new()
