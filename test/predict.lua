@@ -220,6 +220,49 @@ return function()
       if not ok then error(err, 0) end
     end)
 
+    it("ReconcilerMemoFalseReplays", function()
+      local NOW = 0
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local truth = ReconState:new()
+        truth.x = 0
+        local command = AccelInput:new()
+        command.ax = 0
+        local handle = make_handle(command)
+        local compute_runs = 0
+        local me = Reconciler.new(truth, {
+          input = handle,
+          fields = { "x" },
+          step = function(ctx, s, cmd)
+            local blocked = ctx:memo(function()
+              compute_runs = compute_runs + 1
+              return false
+            end)
+            -- a replay that loses the memo (nil) takes the other branch
+            if blocked == false then s.x = s.x + cmd.ax else s.x = s.x - 100 end
+          end,
+          smooth_ms = 0,
+          step_ms = 50,
+        })
+
+        NOW = 0; me:tick(NOW)
+        command.ax = 1; handle:send()
+        command.ax = 1; handle:send()
+        assert_equal(2, me.state.x)
+        assert_equal(2, compute_runs)
+
+        -- ack 1 with matching truth -> adopt + replay 2 from the memo
+        truth.x = 1
+        handle:ack_input(1)
+        NOW = 50; me:tick(NOW)
+        assert_equal(2, me.state.x)
+        assert_equal(2, compute_runs)
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
     it("ReconcilerWireRoundKeepsSign", function()
       -- truth arrives wire-rounded, so a matching prediction must round to the
       -- SAME negative value: a sign-dropping round made every negative

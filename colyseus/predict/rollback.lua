@@ -271,7 +271,8 @@ end
 function RollbackController:_memo_run(key, is_replay, tick, compute)
   if is_replay then
     local slot = self._memos[tick]
-    return slot ~= nil and slot[key] or nil
+    if slot == nil then return nil end
+    return slot[key] -- not `and/or`: a memoized false must replay as false
   end
   local value = compute()
   if value ~= nil then
