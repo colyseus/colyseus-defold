@@ -72,6 +72,22 @@ function MapSchema:get_by_index(index)
   return self.items[self.indexes[index]]
 end
 
+--- Value stored under `key`, or nil. `map[key]` resolves methods and
+--- internal fields first, so a key such as "keys", "length" or "items" needs
+--- this (or `each`) to reach its value.
+---@param key string
+---@return any
+function MapSchema:get(key)
+  return self.items[key]
+end
+
+--- Whether `key` is present. See `get` for why not `map[key] ~= nil`.
+---@param key string
+---@return boolean
+function MapSchema:has(key)
+  return self.items[key] ~= nil
+end
+
 function MapSchema:delete_by_index(index)
   local dynamic_index = self.indexes[index]
 
