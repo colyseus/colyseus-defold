@@ -182,7 +182,12 @@ function HTTP:request(method, segments, options, callback)
     if response.status == 0 then
       local detail = (response.error ~= nil and response.error ~= "")
         and (" (" .. response.error .. ")") or ""
-      return callback(http_error(0, "offline: could not reach " .. url .. detail))
+      -- a browser (HTML5) tries ::1 too; native builds resolve localhost to IPv4
+      local hint = ""
+      if url:match("^%a+://localhost[:/]") and not (sys and sys.get_sys_info().system_name == "HTML5") then
+        hint = " — Defold dials localhost over IPv4 (127.0.0.1); if the server listens on ::1 only, bind it to 127.0.0.1"
+      end
+      return callback(http_error(0, "offline: could not reach " .. url .. detail .. hint))
     end
 
     -- parse JSON response

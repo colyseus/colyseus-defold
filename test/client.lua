@@ -109,6 +109,22 @@ return function()
             assert_not_nil(string.find(err.message, "connection refused", 1, true))
         end)
 
+        --- dev servers (vite, next dev) often bind localhost to ::1 only
+        it("unreachable localhost points at IPv4", function()
+            local client = Client("http://localhost:5173")
+            local err
+            with_response(client, { status = 0, response = "", headers = {} }, function()
+                client.http:request('POST', "matchmake/joinOrCreate/x", {}, function(e) err = e end)
+            end)
+            assert_not_nil(string.find(err.message, "127.0.0.1", 1, true))
+
+            client = Client("http://127.0.0.1:5173")
+            with_response(client, { status = 0, response = "", headers = {} }, function()
+                client.http:request('POST', "matchmake/joinOrCreate/x", {}, function(e) err = e end)
+            end)
+            assert_nil(string.find(err.message, "::1", 1, true))
+        end)
+
         it("http error surfaces the server's message, same shape", function()
             local client = Client("http://localhost:2567")
             local err
