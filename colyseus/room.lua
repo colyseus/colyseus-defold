@@ -124,6 +124,8 @@ function Room:connect (endpoint, options)
   end)
 
   self.connection:on("close", function(e)
+    room._leaving = nil -- this close answers any leave in flight
+
     -- in-flight requests can't be answered on a closed socket
     room:_reject_all_pending_requests("connection closed before a response was received.")
 
@@ -479,7 +481,10 @@ end
 
 ---@param consented nil|boolean
 function Room:leave(consented)
+  -- already leaving: the pending close emits the one "leave"
+  if self._leaving then return end
   if self.connection.state == "OPEN" then
+    self._leaving = true
     if consented or consented == nil then
       self.connection:send(utils.byte_array_to_string({ protocol.LEAVE_ROOM, 0 }))
     else

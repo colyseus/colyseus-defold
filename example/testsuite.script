@@ -9,6 +9,7 @@ local delta_container = require "test.delta_container"
 local client = require "test.client"
 local encoding = require "test.encoding"
 local collections = require "test.collections"
+local room_lifecycle = require "test.room_lifecycle"
 local auth = require "test.auth"
 local http = require "test.http"
 
@@ -22,6 +23,7 @@ function init(self)
   deftest.add(client)
   deftest.add(encoding)
   deftest.add(collections)
+  deftest.add(room_lifecycle)
   -- deftest.add(auth)
   -- deftest.add(http)
 

@@ -2,6 +2,7 @@ local EventEmitter = require('colyseus.eventemitter')
 local utils = require('colyseus.utils.utils')
 
 ---@class Connection : EventEmitterInstance
+---@field state "CONNECTING"|"OPEN"|"CLOSING"|"CLOSED"
 local Connection = {}
 Connection.config = { connect_timeout = 10 }
 Connection.__index = Connection
@@ -20,10 +21,16 @@ end
 
 function Connection:send(data)
   if self.state ~= "OPEN" then
-    print("[Colyseus] connection hasn't been established. You shouldn't be sending messages yet.")
+    if self.state == "CONNECTING" then
+      print("[Colyseus] connection hasn't been established. You shouldn't be sending messages yet.")
+    end
     return
   end
-  websocket.send(self.ws, data)
+  -- the socket can close before its DISCONNECTED event reaches Lua, and the
+  -- extension throws on a send in that window
+  if not pcall(websocket.send, self.ws, data) then
+    self.state = "CLOSING"
+  end
 end
 
 ---@function
