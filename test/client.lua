@@ -152,4 +152,38 @@ return function()
         end)
 
     end)
+
+    describe("colyseus.client outside the engine", function()
+        local ENGINE_GLOBALS = { "sys", "html5", "websocket", "http", "json", "socket",
+                                 "msg", "timer", "hash", "vmath", "go", "gui", "crypt", "zlib" }
+
+        --- plain-Lua tooling (sim runners, CI) must be able to load the SDK
+        it("requires and constructs without engine globals", function()
+            local saved_globals, saved_loaded = {}, {}
+            for k, v in pairs(_G) do saved_globals[k] = v end
+            for name, mod in pairs(package.loaded) do
+                if name:find("^colyseus") then saved_loaded[name] = mod end
+            end
+            for name in pairs(saved_loaded) do package.loaded[name] = nil end
+            for _, name in ipairs(ENGINE_GLOBALS) do _G[name] = nil end
+
+            local ok, err = pcall(function()
+                local FreshClient = require('colyseus.client')
+                local client = FreshClient("ws://localhost:2567")
+                if client.settings.port ~= 2567 then error("bad port") end
+            end)
+
+            for name in pairs(package.loaded) do
+                if name:find("^colyseus") then package.loaded[name] = nil end
+            end
+            for name, mod in pairs(saved_loaded) do package.loaded[name] = mod end
+            for k in pairs(_G) do
+                if saved_globals[k] == nil then _G[k] = nil end
+            end
+            for k, v in pairs(saved_globals) do _G[k] = v end
+
+            if not ok then error(err, 0) end
+            assert_true(ok)
+        end)
+    end)
 end

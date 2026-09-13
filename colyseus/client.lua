@@ -8,8 +8,6 @@ local HTTP = require('colyseus.http')
 local EventEmitter = require('colyseus.eventemitter')
 local URL = require('colyseus.utils.url')
 
-local info = sys.get_sys_info()
-
 ---@class Client : EventEmitterInstance
 ---@field auth Auth
 ---@field http HTTP
@@ -28,8 +26,9 @@ function Client:init(endpoint_or_settings)
     self.settings.use_ssl = (parsed_url.scheme == "wss" or parsed_url.scheme == "https")
     self.settings.pathname = parsed_url.path
 
-    -- On HTML5, use page protocol as fallback only when scheme is ambiguous (ws/http)
-    if info.system_name == "HTML5" and not self.settings.use_ssl then
+    -- On HTML5, use page protocol as fallback only when scheme is ambiguous (ws/http).
+    -- `sys` is read here, not at require: it's an engine global.
+    if not self.settings.use_ssl and sys ~= nil and sys.get_sys_info().system_name == "HTML5" then
       if parsed_url.scheme == nil or parsed_url.scheme == "" then
         self.settings.use_ssl = html5.run("window['location']['protocol']") == "https:"
       end
