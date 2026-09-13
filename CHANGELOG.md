@@ -7,9 +7,6 @@ All notable changes to the Colyseus Defold SDK are documented in this file.
 - `room:leave()` called again before the first leave completes is now a no-op;
   it used to throw "Connection isn't connected". A send that races the socket
   closing no longer throws either.
-- `room:input({ mode = "unreliable" })` now works: it sends over the WebSocket,
-  the same fallback the JS SDK uses when there is no datagram channel. It used
-  to raise an error.
 - MapSchema has `get(key)` and `has(key)`. `map[key]` returns the method for
   keys such as `"keys"`, `"length"` or `"items"`.
 - ArraySchema `each()` and `index_of()` now go in index order, and `length()`
