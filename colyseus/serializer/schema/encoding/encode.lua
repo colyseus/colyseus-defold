@@ -58,12 +58,19 @@ end
 --- Round `value` to the nearest float32 (the value an IEEE 754 single would
 --- hold) — used by the number codec's precision check and by float32().
 --- Returns the rounded value plus its (sign, expo, mant) fields.
+-- IEEE round-to-nearest, ties to even (what Math.fround / a float32 store does)
+local function round_half_even(x)
+  local r = mfloor(x + 0.5)
+  if r - x == 0.5 and r % 2 == 1 then r = r - 1 end
+  return r
+end
+
 local function float32_fields(value)
   local sign = 0
   if value < 0 then sign = 1; value = -value end
 
   if value ~= value then return 0 / 0, sign, 255, 4194304 end -- nan (quiet)
-  if value == mhuge then return mhuge, sign, 255, 0 end
+  if value == mhuge then return sign == 1 and -mhuge or mhuge, sign, 255, 0 end
   if value == 0 then return 0, sign, 0, 0 end
 
   local mant, expo = mfrexp(value)  -- value = mant * 2^expo, mant in [0.5, 1)
@@ -76,15 +83,15 @@ local function float32_fields(value)
   local m
   if expo <= 0 then
     -- subnormal: mantissa scaled by the denormal exponent, no implicit bit
-    m = mfloor(mant * 2 ^ (expo + 23) + 0.5)
+    m = round_half_even(mant * 2 ^ (expo + 23))
     expo = 0
     if m >= 8388608 then expo = 1; m = 0 end -- rounding carried into normal range
   else
-    m = mfloor((mant * 2 - 1) * 8388608 + 0.5) -- 2^23
+    m = round_half_even((mant * 2 - 1) * 8388608) -- 2^23
     if m >= 8388608 then                        -- rounding carry
       m = 0
       expo = expo + 1
-      if expo >= 255 then return mhuge, sign, 255, 0 end
+      if expo >= 255 then return sign == 1 and -mhuge or mhuge, sign, 255, 0 end
     end
   end
 
@@ -94,7 +101,8 @@ local function float32_fields(value)
   else
     rounded = (1 + m / 8388608) * 2 ^ (expo - 127)
   end
-  return rounded, sign, expo, m
+  -- Math.fround keeps the sign
+  return sign == 1 and -rounded or rounded, sign, expo, m
 end
 
 local function float32(bytes, value)

@@ -406,17 +406,28 @@ packers['float'] = function (buffer, n)
             buffer[#buffer+1] = char(0xCA,      -- -inf
                                      0xFF, 0x80, 0x00, 0x00)
         end
-    elseif (mant == 0.0 and expo == 0) or expo < -0x7E then
+    elseif mant == 0.0 then
         buffer[#buffer+1] = char(0xCA,  -- zero
                                  sign, 0x00, 0x00, 0x00)
     else
         expo = expo + 0x7E
-        mant = floor((mant * 2.0 - 1.0) * ldexp(0.5, 24))
+        if expo <= 0 then
+            mant = ldexp(n, 149)        -- subnormal: no implicit bit
+            expo = 0
+        else
+            mant = (mant * 2.0 - 1.0) * ldexp(0.5, 24)
+        end
+        -- round to nearest-even like a float32 store; a carry ripples into
+        -- the exponent (up to inf)
+        local f = floor(mant)
+        local r = mant - f
+        if r > 0.5 or (r == 0.5 and f % 2 == 1) then f = f + 1 end
+        local bits = expo * 0x800000 + f
         buffer[#buffer+1] = char(0xCA,
-                                 sign + floor(expo / 0x2),
-                                 (expo % 0x2) * 0x80 + floor(mant / 0x10000),
-                                 floor(mant / 0x100) % 0x100,
-                                 mant % 0x100)
+                                 sign + floor(bits / 0x1000000),
+                                 floor(bits / 0x10000) % 0x100,
+                                 floor(bits / 0x100) % 0x100,
+                                 bits % 0x100)
     end
 end
 
@@ -438,12 +449,17 @@ packers['double'] = function (buffer, n)
             buffer[#buffer+1] = char(0xCB,      -- -inf
                                      0xFF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00)
         end
-    elseif (mant == 0.0 and expo == 0) or expo < -0x3FE then
+    elseif mant == 0.0 then
         buffer[#buffer+1] = char(0xCB,  -- zero
                                  sign, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00)
     else
         expo = expo + 0x3FE
-        mant = floor((mant * 2.0 - 1.0) * ldexp(0.5, 53))
+        if expo <= 0 then
+            mant = ldexp(n, 1074)       -- subnormal: no implicit bit
+            expo = 0
+        else
+            mant = floor((mant * 2.0 - 1.0) * ldexp(0.5, 53))
+        end
         buffer[#buffer+1] = char(0xCB,
                                  sign + floor(expo / 0x10),
                                  (expo % 0x10) * 0x10 + floor(mant / 0x1000000000000),
@@ -596,6 +612,8 @@ local function unpack_float (c)
         else
             n = 0.0/0.0
         end
+    elseif expo == 0 then
+        n = sign * ldexp(mant, -149)    -- subnormal: no implicit bit
     else
         n = sign * ldexp(1.0 + mant / 0x800000, expo - 0x7F)
     end
@@ -633,6 +651,8 @@ local function unpack_double (c)
         else
             n = 0.0/0.0
         end
+    elseif expo == 0 then
+        n = sign * ldexp(mant, -1074)   -- subnormal: no implicit bit
     else
         n = sign * ldexp(1.0 + mant / 4503599627370496.0, expo - 0x3FF)
     end

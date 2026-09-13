@@ -220,6 +220,61 @@ return function()
       if not ok then error(err, 0) end
     end)
 
+    it("ReconcilerWireRoundKeepsSign", function()
+      -- truth arrives wire-rounded, so a matching prediction must round to the
+      -- SAME negative value: a sign-dropping round made every negative
+      -- fractional field diverge (adopt + replay on each ack)
+      local schema = require 'colyseus.serializer.schema.schema'
+      local WireState = schema.define({
+        ["x"] = "float32",
+        ["vx"] = "number",
+        ["_fields_by_index"] = { "x", "vx" },
+      })
+      local NOW = 0
+      local original_now = RoomClock.get_now
+      RoomClock.get_now = function() return NOW end
+      local ok, err = pcall(function()
+        local truth = WireState:new()
+        truth.x = 0
+        truth.vx = 0
+        local command = AccelInput:new()
+        command.ax = 0
+        local handle = make_handle(command)
+        local replays = 0
+        local me = Reconciler.new(truth, {
+          input = handle,
+          fields = { "x", "vx" },
+          step = function(ctx, s, cmd)
+            if ctx.is_replay then replays = replays + 1 end
+            s.vx = cmd.ax
+            s.x = s.x + cmd.ax
+          end,
+          smooth_ms = 0,
+          step_ms = 50,
+        })
+
+        NOW = 0; me:tick(NOW)
+        command.ax = -0.3; handle:send()
+        command.ax = -0.3; handle:send()
+        assert_equal(-0.6, me.state.x)
+
+        -- input 1 as the wire delivers it: Math.fround(-0.3) for both fields
+        -- ("number" rides as float32 when that loses < 1e-4)
+        truth.x = -0.30000001192092896
+        truth.vx = -0.30000001192092896
+        handle:ack_input(1)
+        NOW = 50; me:tick(NOW)
+
+        -- matched to wire precision: own full-precision state kept, no replay
+        assert_equal(0, replays)
+        assert_equal(0, me.last_correction_mag)
+        assert_equal(-0.6, me.state.x)
+        assert_equal(-0.3, me.state.vx)
+      end)
+      RoomClock.get_now = original_now
+      if not ok then error(err, 0) end
+    end)
+
     it("PassiveSmoothing", function()
       local NOW = 0
       local original_now = RoomClock.get_now

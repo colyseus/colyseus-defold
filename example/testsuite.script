@@ -7,6 +7,7 @@ local predict = require "test.predict"
 local fossil_delta = require "test.fossil_delta"
 local delta_container = require "test.delta_container"
 local client = require "test.client"
+local encoding = require "test.encoding"
 local auth = require "test.auth"
 local http = require "test.http"
 
@@ -18,6 +19,7 @@ function init(self)
   deftest.add(input)
   deftest.add(predict)
   deftest.add(client)
+  deftest.add(encoding)
   -- deftest.add(auth)
   -- deftest.add(http)
 
