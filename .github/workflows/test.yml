@@ -1,0 +1,34 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  testsuite:
+    name: Test suite (headless engine)
+    runs-on: ubuntu-latest
+    env:
+      # bob builds this engine version; keep it in step with the editor's engine_sha1 (README: Headless)
+      DEFOLD_SHA1: 574678c7d44be490d874fbed2d0ae6211feec4d9 # 1.13.1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Download bob
+        run: curl -fsSL -o bob.jar "https://d.defold.com/archive/stable/$DEFOLD_SHA1/bob/bob.jar"
+
+      # extension-websocket is native: bob builds the engine on Defold's build server
+      - name: Run the test suite
+        run: make testsuite PLATFORM=x86_64-linux
+
+      - name: List the bundle
+        if: failure()
+        run: find .testsuite-bundle -maxdepth 3 2>/dev/null | head -50

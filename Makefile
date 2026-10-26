@@ -21,13 +21,18 @@ luacheck:
 # (Keep testsuite.ini free of comments; bob's settings parser rejects them.)
 #
 # BOB must match your editor's engine_sha1 (see README), and JAVA must be 25+ —
-# the macOS editor bundles one, which is what the default picks up.
+# the macOS editor bundles one, which is what the default picks up (else `java`
+# on PATH).
 DEFOLD_APP  ?= /Applications/Defold.app
-JAVA        ?= $(shell ls -d "$(DEFOLD_APP)"/Contents/Resources/packages/jdk-*/bin/java 2>/dev/null | tail -1)
+JAVA        ?= $(or $(shell ls -d "$(DEFOLD_APP)"/Contents/Resources/packages/jdk-*/bin/java 2>/dev/null | tail -1),java)
 BOB         ?= bob.jar
 PLATFORM    ?= arm64-macos
 TEST_BUNDLE ?= .testsuite-bundle
+ifneq (,$(findstring linux,$(PLATFORM)))
+TEST_APP    ?= $(TEST_BUNDLE)/Colyseus Defold SDK/ColyseusDefoldSDK.$(firstword $(subst -, ,$(PLATFORM)))
+else
 TEST_APP    ?= $(TEST_BUNDLE)/Colyseus Defold SDK.app/Contents/MacOS/ColyseusDefoldSDK
+endif
 
 ## bob caches the extender's engine at .internal/cache/<platform>/build.zip and
 ## does NOT key it by --variant, so a desktop build followed by this gate would
