@@ -9,6 +9,8 @@ All notable changes to the Colyseus Defold SDK are documented in this file.
   failed.
 - On devices, a connection that drops without a close frame now reconnects;
   the room used to leave with code 0.
+- `off(event, fn)` with a function that isn't registered no longer removes
+  another listener.
 
 ## 0.18.1
 
