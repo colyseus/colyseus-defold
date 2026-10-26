@@ -214,6 +214,22 @@ return function()
       end)
     end)
 
+    it("leaving unhooks every listener", function()
+      with_websocket(function(ws, fire)
+        local room = joined_room(ws, fire)
+        local leaves = 0
+        for _ = 1, 2 do
+          room:on("statechange", function() end)
+          room:on("leave", function() leaves = leaves + 1 end)
+        end
+
+        fire(ws.EVENT_DISCONNECTED, { code = 4321 })
+        assert_equal(2, leaves)
+        assert_equal(0, #room:listeners("statechange"))
+        assert_equal(0, #room:listeners("leave"))
+      end)
+    end)
+
   end)
 
   describe("room leave while the connection is down", function()

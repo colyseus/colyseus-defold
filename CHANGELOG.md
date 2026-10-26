@@ -11,6 +11,8 @@ All notable changes to the Colyseus Defold SDK are documented in this file.
   the room used to leave with code 0.
 - `off(event, fn)` with a function that isn't registered no longer removes
   another listener.
+- `off(event)` now removes every listener of that event, so a room that has
+  left no longer keeps most of its listeners.
 
 ## 0.18.1
 

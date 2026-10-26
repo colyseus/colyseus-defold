@@ -33,5 +33,26 @@ return function()
       assert_equal("b", fired())
     end)
 
+    it("off(event) removes every listener of that event", function()
+      local e, _, fired = emitter("a", "b", "c")
+      e:on("y", function() end)
+
+      e:off("x")
+      assert_equal("", fired())
+      assert_equal(1, #e:listeners("y"))
+
+      e:off("z") -- no listener on "z" at all
+    end)
+
+    it("off() removes every listener", function()
+      local e, _, fired = emitter("a", "b")
+      e:on("y", function() end)
+      e:on("y", function() end)
+
+      e:off()
+      assert_equal("", fired())
+      assert_equal(0, #e:listeners("y"))
+    end)
+
   end)
 end
