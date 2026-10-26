@@ -49,9 +49,12 @@ function EventEmitter:new(object)
       -- clear from "once"
       self._once[event] = nil
       if not listener then
-        table.remove(self._on[event])
+        self._on[event] = nil
       else
-        table.remove(self._on[event], table_find(self._on[event], listener))
+        local listeners = self._on[event]
+        local index = listeners and table_find(listeners, listener)
+        -- not registered: table.remove(t, nil) would pop the last listener
+        if index then table.remove(listeners, index) end
       end
     else
       for event, listener in pairs(self._on) do

@@ -10,6 +10,7 @@ local client = require "test.client"
 local encoding = require "test.encoding"
 local collections = require "test.collections"
 local room_lifecycle = require "test.room_lifecycle"
+local eventemitter = require "test.eventemitter"
 local auth = require "test.auth"
 local http = require "test.http"
 
@@ -24,6 +25,7 @@ function init(self)
   deftest.add(encoding)
   deftest.add(collections)
   deftest.add(room_lifecycle)
+  deftest.add(eventemitter)
   -- deftest.add(auth)
   -- deftest.add(http)
 

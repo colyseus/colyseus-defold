@@ -102,6 +102,8 @@ function Room:init(name)
   self._pending_requests = {}
   self._next_request_id = 0
 
+  self._left = false -- a real field, so the per-frame check skips Room.__index
+
   local room = self
 
   -- remove all listeners on leave
@@ -123,11 +125,21 @@ function Room:connect (endpoint, options)
     room:_on_batch_message(message)
   end)
 
-  self.connection:on("close", function(e)
-    room._leaving = nil -- this close answers any leave in flight
-
+  self.connection:on("close", function(e, opened)
     -- in-flight requests can't be answered on a closed socket
     room:_reject_all_pending_requests("connection closed before a response was received.")
+
+    local leaving = room._leaving
+    room._leaving = nil -- this close answers any leave in flight, even one from a callback above
+
+    -- already left: an aborted or failed reconnection attempt closing
+    if room._left then return end
+
+    -- a reconnection attempt that never opened: try the next one
+    if not opened and room.reconnection.is_reconnecting then
+      room:_retry_reconnection()
+      return
+    end
 
     if (room._joined_at_time == nil) then
       print("Room connection closed before JOIN_ROOM")
@@ -140,15 +152,22 @@ function Room:connect (endpoint, options)
       or e.code == protocol.CLOSE_CODE.GOING_AWAY
       or e.code == protocol.CLOSE_CODE.MAY_TRY_RECONNECT
     ) then
+      -- a consented leave is pending: a drop ends the room instead of reconnecting
+      if leaving == "consented" then
+        room:_finish({ code = protocol.CLOSE_CODE.CONSENTED })
+        return
+      end
+
       room:emit("drop", e)
       room:_handle_reconnection(e.code)
 
     else
-      room:emit("leave", e)
+      room:_finish(e)
     end
   end)
 
   room.connection:on("error", function(e)
+    if room._left then return end -- a room that has left ignores its socket
     room:emit("error", e)
   end)
 
@@ -176,6 +195,7 @@ end
 
 ---@private
 function Room:_on_batch_message(binary_string)
+  if self._left then return end -- a frame already queued on a socket being closed
   local total_bytes = #binary_string
   local cursor = { offset = 1 }
   while cursor.offset <= total_bytes do
@@ -401,14 +421,18 @@ end
 
 ---@private
 function Room:_handle_reconnection(code)
+  -- a "drop" listener may have called leave()
+  if self._leaving == "consented" then self:_finish({ code = protocol.CLOSE_CODE.CONSENTED }) end
+  if self._left then return end
+
   if not self.reconnection.enabled then
-    self:emit("leave", { code = code })
+    self:_finish({ code = code })
     return
   end
 
   if (socket.gettime() - self._joined_at_time) < (self.reconnection.min_uptime / 1000) then
      print(string.format("[Colyseus reconnection]: ❌ Room has not been up for long enough for automatic reconnection. (min uptime: %dms)", self.reconnection.min_uptime))
-     self:emit("leave", { code = protocol.CLOSE_CODE.ABNORMAL_CLOSURE })
+     self:_finish({ code = protocol.CLOSE_CODE.ABNORMAL_CLOSURE })
      return
   end
 
@@ -432,8 +456,7 @@ function Room:_retry_reconnection()
   if self.reconnection.retry_count >= self.reconnection.max_retries then
     -- No more retries
     print(string.format("[Colyseus reconnection]: ❌ Reconnection failed after %d attempts.", self.reconnection.max_retries))
-    self.reconnection.is_reconnecting = false
-    self:emit("leave", { code = protocol.CLOSE_CODE.FAILED_TO_RECONNECT })
+    self:_finish({ code = protocol.CLOSE_CODE.FAILED_TO_RECONNECT })
     return
   end
 
@@ -446,24 +469,10 @@ function Room:_retry_reconnection()
 
   local room = self
 
-  local on_error = nil
-  local on_open = nil
-
-  on_error = function(e)
-    room.connection:off("error", on_error)
-    room:_retry_reconnection()
-  end
-
-  on_open = function()
-    room.connection:off("open", on_open)
-    room.connection:off("error", on_error)
-  end
-
-  timer.delay(delay_sec, false, function()
+  self._retry_timer = timer.delay(delay_sec, false, function()
+    room._retry_timer = nil
     print(string.format("[Colyseus reconnection]: 🔄 Re-establishing sessionId '%s' with roomId '%s'... (attempt %d of %d)", room.session_id, room.room_id, room.reconnection.retry_count, room.reconnection.max_retries))
 
-    room.connection:on("error", on_error)
-    room.connection:on("open", on_open)
     room.connection:reconnect({
       reconnectionToken = room.reconnection_token.reconnection_token,
       skipHandshake = 1 -- we already applied the handshake on first join
@@ -479,20 +488,59 @@ function Room:_enqueue_message(message)
   end
 end
 
+--- Leave the room. "leave" fires once the room has left.
+---
+--- If the connection has dropped, the room leaves right away, without waiting
+--- for the server, and automatic reconnection stops. A consented leave (the
+--- default) then fires "leave" with `CLOSE_CODE.CONSENTED`. If the server is
+--- already closing the connection, "leave" fires with the server's code.
+---
+--- `leave(false)` closes the connection without consent.
+---
+--- Calling it on a room that has already left does nothing: "leave" doesn't
+--- fire again.
 ---@param consented nil|boolean
 function Room:leave(consented)
+  if self._left then return end
   -- already leaving: the pending close emits the one "leave"
   if self._leaving then return end
-  if self.connection.state == "OPEN" then
-    self._leaving = true
-    if consented or consented == nil then
-      self.connection:send(utils.byte_array_to_string({ protocol.LEAVE_ROOM, 0 }))
+
+  if consented == false then
+    if self.connection.state == "OPEN" then
+      self._leaving = "closing"
     else
-      self.connection:close()
+      self:_finish(nil)
     end
-  else
-    self:emit("leave")
+    self.connection:close() -- also aborts an attempt still connecting
+    return
   end
+
+  self._leaving = "consented" -- from here on, the socket's close ends the room
+
+  if self.reconnection.is_reconnecting or self._joined_at_time == nil then
+    -- dropped or not joined yet: no session to tell the server about, so stop here
+    self:_finish({ code = protocol.CLOSE_CODE.CONSENTED })
+    self.connection:close() -- aborts an attempt still connecting
+
+  elseif self.connection.state == "OPEN" then
+    self.connection:send(utils.byte_array_to_string({ protocol.LEAVE_ROOM, 0 }))
+  end
+  -- otherwise a close is already on its way and ends the room
+end
+
+---@private
+--- Every way the room ends goes through here: "leave" fires once and
+--- reconnection stops.
+function Room:_finish(e)
+  if self._left then return end
+  self._left = true
+
+  if self._retry_timer ~= nil then
+    timer.cancel(self._retry_timer)
+    self._retry_timer = nil
+  end
+  self.reconnection.is_reconnecting = false
+  self:emit("leave", e)
 end
 
 function Room:ping(callback)

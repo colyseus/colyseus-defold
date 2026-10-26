@@ -2,6 +2,18 @@
 
 All notable changes to the Colyseus Defold SDK are documented in this file.
 
+## 0.18.2
+
+- `room:leave()` while the room is reconnecting now stops the reconnection and
+  leaves right away with `CONSENTED`, instead of only once every retry has
+  failed. [colyseus/react-tools#15](https://github.com/colyseus/react-tools/issues/15)
+- On devices, a connection that drops without a close frame now reconnects;
+  the room used to leave with code 0.
+- `off(event, fn)` with a function that isn't registered no longer removes
+  another listener.
+- `off(event)` now removes every listener of that event, so a room that has
+  left no longer keeps most of its listeners.
+
 ## 0.18.1
 
 - `room:leave()` called again before the first leave completes is now a no-op;

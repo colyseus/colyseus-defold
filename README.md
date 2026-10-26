@@ -56,7 +56,7 @@ Two things are needed that Defold doesn't put on your `PATH`:
   `/Applications/Defold.app/Contents/Resources/config`, then download
   `https://d.defold.com/archive/stable/<engine_sha1>/bob/bob.jar`.
 - **A JDK 25 or newer.** The macOS editor bundles one, which the Makefile picks
-  up from `Defold.app` by default.
+  up from `Defold.app` by default; elsewhere it runs `java` from your `PATH`.
 
 ```
 make testsuite BOB=/path/to/bob.jar
