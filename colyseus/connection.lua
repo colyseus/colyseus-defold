@@ -1,4 +1,5 @@
 local EventEmitter = require('colyseus.eventemitter')
+local protocol = require('colyseus.protocol')
 local utils = require('colyseus.utils.utils')
 
 ---@class Connection : EventEmitterInstance
@@ -75,6 +76,10 @@ function Connection:_connect(endpoint, params)
   self.state = "CONNECTING"
   self.ws = websocket.connect(endpoint, params, function(self, conn, data)
     if data.event == websocket.EVENT_DISCONNECTED then
+      -- the extension reports a drop with no close frame as 0; our own close() keeps it
+      if data.code == 0 and this.state ~= "CLOSED" then
+        data.code = protocol.CLOSE_CODE.ABNORMAL_CLOSURE
+      end
       this.state = "CLOSED"
 
       if this._force_close_code ~= nil then

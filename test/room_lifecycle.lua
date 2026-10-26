@@ -182,6 +182,23 @@ return function()
       end)
     end)
 
+    it("a drop without a close frame reconnects", function()
+      with_websocket(function(ws, fire, flush)
+        local room, seen = joined_room(ws, fire)
+
+        -- native reports a lost connection as an error, then a close with code 0
+        fire(ws.EVENT_ERROR)
+        fire(ws.EVENT_DISCONNECTED, { code = 0 })
+        assert_equal(0, #seen.leave)
+        assert_equal(1, #seen.drop)
+        assert_equal(protocol.CLOSE_CODE.ABNORMAL_CLOSURE, seen.drop[1].code)
+
+        flush()
+        assert_equal(2, #ws.sockets)
+        assert_equal(true, room.reconnection.is_reconnecting)
+      end)
+    end)
+
   end)
 
   describe("room leave while the connection is down", function()
