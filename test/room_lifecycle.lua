@@ -182,6 +182,21 @@ return function()
       end)
     end)
 
+    it("a socket reported open twice opens once", function()
+      with_websocket(function(ws, fire)
+        local conn = Connection.new()
+        local opens = 0
+        conn:on("open", function() opens = opens + 1 end)
+        conn:open("ws://localhost:2567/x")
+
+        -- HTML5 reports it from onopen, then again on the next update
+        fire(ws.EVENT_CONNECTED)
+        fire(ws.EVENT_CONNECTED)
+        assert_equal(1, opens)
+        assert_equal("OPEN", conn.state)
+      end)
+    end)
+
     it("a drop without a close frame reconnects", function()
       with_websocket(function(ws, fire, flush)
         local room, seen = joined_room(ws, fire)

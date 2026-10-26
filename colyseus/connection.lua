@@ -91,6 +91,7 @@ function Connection:_connect(endpoint, params)
       this:emit("close", data, opened)
 
     elseif data.event == websocket.EVENT_CONNECTED then
+      if opened then return end -- HTML5 reports it twice: from onopen, then on the next update
       -- closed while connecting: HTML5 can't abort a connecting socket, so close it now
       if this.state == "CLOSED" then
         websocket.disconnect(conn)
