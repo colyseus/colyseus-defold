@@ -63,12 +63,16 @@ end
 function Connection:close(close_code)
   self._force_close_code = close_code -- used for testing reconnection
   self.state = "CLOSED"
+  -- socket already gone: closed, or between reconnection attempts
+  if self.ws == nil then return end
   websocket.disconnect(self.ws)
   self.ws = nil
 end
 
 function Connection:_connect(endpoint, params)
   local this = self
+  local opened = false
+  self.state = "CONNECTING"
   self.ws = websocket.connect(endpoint, params, function(self, conn, data)
     if data.event == websocket.EVENT_DISCONNECTED then
       this.state = "CLOSED"
@@ -78,10 +82,16 @@ function Connection:_connect(endpoint, params)
         this._force_close_code = nil
       end
 
-      this:emit("close", data)
-      this.ws = nil
+      this.ws = nil -- before emitting: a "close" listener may call close()
+      this:emit("close", data, opened)
 
     elseif data.event == websocket.EVENT_CONNECTED then
+      -- closed while connecting: HTML5 can't abort a connecting socket, so close it now
+      if this.state == "CLOSED" then
+        websocket.disconnect(conn)
+        return
+      end
+      opened = true
       print("[Colyseus] websocket connected ")
       this.state = "OPEN"
       this:emit("open")

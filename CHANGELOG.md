@@ -2,6 +2,12 @@
 
 All notable changes to the Colyseus Defold SDK are documented in this file.
 
+## 0.18.2
+
+- `room:leave()` while the room is reconnecting now stops the reconnection and
+  leaves right away with `CONSENTED`, instead of only once every retry has
+  failed.
+
 ## 0.18.1
 
 - `room:leave()` called again before the first leave completes is now a no-op;
