@@ -636,6 +636,142 @@ return function()
     end)
 
     --
+    -- remove + insert in the same patch (schema-5.0 PR #247). Snapshot then
+    -- patch1 into one state; refs count matches the JS decoder.
+    --
+
+    it("ArraySchemaRemoveInsertUnshiftShift", function()
+      -- [Item(1), Item(2)] -> unshift(shift())
+      local state = ArraySchemaInsertOps:new()
+      local decoder = Decoder:new(state)
+      decoder:decode({ 128, 1, 129, 2, 130, 3, 255, 2, 128, 0, 4, 128, 1, 5, 255, 4, 128, 1, 255, 5, 128, 2 })
+      decoder:decode({ 255, 2, 33, 4, 128, 1, 4, 255, 4, 128, 1 })
+
+      assert_equal(0, state.numbers:length())
+      assert_equal(2, state.items:length())
+      assert_equal(1, state.items.items[1].value)
+      assert_equal(2, state.items.items[2].value)
+      assert_equal(6, count_refs(decoder))
+    end)
+
+    it("ArraySchemaRemoveInsertUnshiftPop", function()
+      -- [Item(1), Item(2), Item(3)] -> unshift(pop())
+      local state = ArraySchemaInsertOps:new()
+      local decoder = Decoder:new(state)
+      decoder:decode({ 128, 1, 129, 2, 130, 3, 255, 2, 128, 0, 4, 128, 1, 5, 128, 2, 6, 255, 4, 128, 1, 255, 5, 128, 2, 255, 6, 128, 3 })
+      decoder:decode({ 255, 2, 128, 0, 6, 64, 3, 255, 6, 128, 3 })
+
+      assert_equal(0, state.numbers:length())
+      assert_equal(3, state.items:length())
+      assert_equal(3, state.items.items[1].value)
+      assert_equal(1, state.items.items[2].value)
+      assert_equal(2, state.items.items[3].value)
+      assert_equal(7, count_refs(decoder))
+    end)
+
+    it("ArraySchemaRemoveInsertSpliceReinsert", function()
+      -- [Item(1), Item(2), Item(3)] -> splice(2, 1); splice(0, 0, removed)
+      local state = ArraySchemaInsertOps:new()
+      local decoder = Decoder:new(state)
+      decoder:decode({ 128, 1, 129, 2, 130, 3, 255, 2, 128, 0, 4, 128, 1, 5, 128, 2, 6, 255, 4, 128, 1, 255, 5, 128, 2, 255, 6, 128, 3 })
+      decoder:decode({ 255, 2, 128, 0, 6, 64, 3, 255, 6, 128, 3 })
+
+      assert_equal(0, state.numbers:length())
+      assert_equal(3, state.items:length())
+      assert_equal(3, state.items.items[1].value)
+      assert_equal(1, state.items.items[2].value)
+      assert_equal(2, state.items.items[3].value)
+      assert_equal(7, count_refs(decoder))
+    end)
+
+    it("ArraySchemaRemoveInsertNumbersUnshiftShift", function()
+      -- [1, 2] -> unshift(3); unshift(4); shift()
+      local state = ArraySchemaInsertOps:new()
+      local decoder = Decoder:new(state)
+      decoder:decode({ 128, 1, 129, 2, 130, 3, 255, 1, 128, 0, 1, 128, 1, 2 })
+      decoder:decode({ 255, 1, 128, 0, 3 })
+
+      assert_equal(3, state.numbers:length())
+      assert_equal(3, state.numbers.items[1])
+      assert_equal(1, state.numbers.items[2])
+      assert_equal(2, state.numbers.items[3])
+      assert_equal(0, state.items:length())
+      assert_equal(4, count_refs(decoder))
+    end)
+
+    it("ArraySchemaRemoveInsertNumbersSpliceAppend", function()
+      -- [1, 2] -> splice(0, 1); splice(1, 0, 3)
+      local state = ArraySchemaInsertOps:new()
+      local decoder = Decoder:new(state)
+      decoder:decode({ 128, 1, 129, 2, 130, 3, 255, 1, 128, 0, 1, 128, 1, 2 })
+      decoder:decode({ 255, 1, 64, 0, 128, 2, 3 })
+
+      assert_equal(2, state.numbers:length())
+      assert_equal(2, state.numbers.items[1])
+      assert_equal(3, state.numbers.items[2])
+      assert_equal(0, state.items:length())
+      assert_equal(4, count_refs(decoder))
+    end)
+
+    it("ArraySchemaRemoveInsertReplaceThenPop", function()
+      -- [Item(1), Item(2)] -> splice(1, 1, Item(3)); pop()
+      local state = ArraySchemaInsertOps:new()
+      local decoder = Decoder:new(state)
+      decoder:decode({ 128, 1, 129, 2, 130, 3, 255, 2, 128, 0, 4, 128, 1, 5, 255, 4, 128, 1, 255, 5, 128, 2 })
+      decoder:decode({ 255, 2, 33, 5 })
+
+      assert_equal(0, state.numbers:length())
+      assert_equal(1, state.items:length())
+      assert_equal(1, state.items.items[1].value)
+      assert_equal(5, count_refs(decoder))
+    end)
+
+    it("ArraySchemaRemoveInsertReplaceInsertDelete", function()
+      -- [Item(1), Item(2), Item(3)] -> splice(1, 1, Item(4)); unshift(Item(5)); splice(2, 1)
+      local state = ArraySchemaInsertOps:new()
+      local decoder = Decoder:new(state)
+      decoder:decode({ 128, 1, 129, 2, 130, 3, 255, 2, 128, 0, 4, 128, 1, 5, 128, 2, 6, 255, 4, 128, 1, 255, 5, 128, 2, 255, 6, 128, 3 })
+      decoder:decode({ 255, 2, 128, 0, 8, 33, 5, 255, 8, 128, 5 })
+
+      assert_equal(0, state.numbers:length())
+      assert_equal(3, state.items:length())
+      assert_equal(5, state.items.items[1].value)
+      assert_equal(1, state.items.items[2].value)
+      assert_equal(3, state.items.items[3].value)
+      assert_equal(7, count_refs(decoder))
+    end)
+
+    it("ArraySchemaRemoveInsertDuplicatePop", function()
+      -- [shared, Item(2), shared] -> pop(); unshift(Item(3))
+      local state = ArraySchemaInsertOps:new()
+      local decoder = Decoder:new(state)
+      decoder:decode({ 128, 1, 129, 2, 130, 3, 255, 2, 128, 0, 4, 128, 1, 5, 128, 2, 4, 255, 4, 128, 1, 255, 5, 128, 2 })
+      decoder:decode({ 255, 2, 128, 0, 6, 64, 3, 255, 6, 128, 3 })
+
+      assert_equal(0, state.numbers:length())
+      assert_equal(3, state.items:length())
+      assert_equal(3, state.items.items[1].value)
+      assert_equal(1, state.items.items[2].value)
+      assert_equal(2, state.items.items[3].value)
+      assert_equal(7, count_refs(decoder))
+    end)
+
+    it("ArraySchemaRemoveInsertShiftUnshiftMore", function()
+      -- [Item(1), Item(2)] -> shift(); unshift(Item(3), Item(4))
+      local state = ArraySchemaInsertOps:new()
+      local decoder = Decoder:new(state)
+      decoder:decode({ 128, 1, 129, 2, 130, 3, 255, 2, 128, 0, 4, 128, 1, 5, 255, 4, 128, 1, 255, 5, 128, 2 })
+      decoder:decode({ 255, 2, 33, 4, 128, 1, 6, 128, 2, 7, 255, 6, 128, 3, 255, 7, 128, 4 })
+
+      assert_equal(0, state.numbers:length())
+      assert_equal(3, state.items:length())
+      assert_equal(3, state.items.items[1].value)
+      assert_equal(4, state.items.items[2].value)
+      assert_equal(2, state.items.items[3].value)
+      assert_equal(7, count_refs(decoder))
+    end)
+
+    --
     -- decode_resync fixtures below generated by schema-5.0
     -- test-external/generate-resync-fixtures.ts (self-verified against the
     -- 5.0 JS Decoder). Contract: PORTING_RESYNC.md / test/ResyncSweep.test.ts.
