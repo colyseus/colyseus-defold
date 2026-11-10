@@ -7,10 +7,15 @@ local utils = require('colyseus.utils.utils')
 local HTTP = {}
 HTTP.__index = HTTP
 
---- Every failure handed to a callback is one of these: `status` (0 when the
---- request never reached a server, otherwise the HTTP status) and `message`.
+--- Every failure handed to a callback is one of these: `status` and `message`.
 --- It concatenates and tostring()s to the message, so the documented
 --- `print("ERROR: " .. err)` reads the same on every path.
+---
+--- `status` is 0 when the request never reached a server. From matchmaking
+--- (`join_or_create`, `create`, `join`, `join_by_id`, `reconnect`) it is the
+--- server's error code, such as 520 (no handler), 525 (onAuth failed) or a
+--- custom `ServerError` code, whichever HTTP status carried it. Any other
+--- request (`client.http`, `client.auth`) gets the HTTP status.
 ---@class HTTPError
 ---@field status number
 ---@field message string

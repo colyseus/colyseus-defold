@@ -167,6 +167,59 @@ return function()
             assert_not_nil(string.find(err.message, "offline", 1, true))
         end)
 
+        --- with matchMaker.controller.standardHttpStatus the server sends a
+        --- standard status and keeps the ErrorCode in the body (colyseus#999)
+        it("matchmaking reports the body's error code, not the HTTP status", function()
+            local cases = {
+                { "join_or_create", 404, '{"code":520,"error":"provided room name \\"nope\\" not defined"}', 520, 'provided room name "nope" not defined' },
+                { "join",           401, '{"code":525,"error":"onAuth failed"}', 525, "onAuth failed" },
+                -- a custom ServerError(4000) from static onAuth/onCreate arrives as 500
+                { "create",         500, '{"code":4000,"error":"banned"}', 4000, "banned" },
+                -- without the flag the status already is the code
+                { "join_by_id",     520, '{"code":520,"error":"no handler"}', 520, "no handler" },
+            }
+            for _, case in ipairs(cases) do
+                local method, status, body, code, message = unpack(case)
+                local client = Client("http://localhost:2567")
+                local err
+                with_response(client, {
+                    status = status,
+                    response = body,
+                    headers = { ["content-type"] = "application/json" },
+                }, function()
+                    client[method](client, "nope", {}, function(e) err = e end)
+                end)
+                assert_equal(code, err.status)
+                assert_equal(message, err.message)
+            end
+        end)
+
+        it("matchmaking falls back to the HTTP status when the body has no code", function()
+            local client = Client("http://localhost:2567")
+            local err
+            with_response(client, {
+                status = 502,
+                response = "<html>Bad Gateway</html>",
+                headers = { ["content-type"] = "text/html" },
+            }, function()
+                client:join_or_create("x", {}, function(e) err = e end)
+            end)
+            assert_equal(502, err.status)
+        end)
+
+        it("client.http keeps the HTTP status", function()
+            local client = Client("http://localhost:2567")
+            local err
+            with_response(client, {
+                status = 404,
+                response = '{"code":520,"error":"not found"}',
+                headers = { ["content-type"] = "application/json" },
+            }, function()
+                client.http:post("/find_match", function(e) err = e end)
+            end)
+            assert_equal(404, err.status)
+        end)
+
     end)
 
     describe("colyseus.client outside the engine", function()

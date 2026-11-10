@@ -110,7 +110,13 @@ function Client:create_matchmake_request(method, room_name, options_or_callback,
   end
 
   self.http:request('POST', "matchmake/" .. method .. "/" .. room_name, { body = options, }, function(err, response)
-    if (err) then return callback(err) end
+    if (err) then
+      -- the body carries the ErrorCode; the status may be a standard one (colyseus#999)
+      if type(response) == "table" and type(response.code) == "number" then
+        err.status = response.code
+      end
+      return callback(err)
+    end
 
     -- forward reconnection token during "reconnect" methods.
     if method == "reconnect" then
